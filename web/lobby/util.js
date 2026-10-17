@@ -143,7 +143,7 @@ export function textSprite(text, { size = 0.5, color = '#ffffff', width = 6, bol
   c.width = 1024
   c.height = 128 * lines.length
   const ctx = c.getContext('2d')
-  ctx.font = `${bold ? '700 ' : ''}96px "Atkinson Hyperlegible", system-ui, sans-serif`
+  ctx.font = `${bold ? '700 ' : ''}96px "Fredoka", "Atkinson Hyperlegible", system-ui, sans-serif`
   ctx.fillStyle = color
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'

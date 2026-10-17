@@ -3,7 +3,7 @@
 // Like trace.py: velocity-controlled cursor, lane tolerance, % on path. Port of the Blender version.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
-import { record, resultLines, starText } from './scores.js'
+import { record } from './scores.js'
 import { RETURN_DELAY, TAU, blob, box, catmull, choice, clamp, shuffle, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, setSegment, sphere, torus, uniform, unitCyl } from './util.js'
 
 const WY0 = 2 // water-plane origin (world y)
@@ -411,7 +411,7 @@ export class FishGame {
     this.state = 'done'
     this.timer = 0
     this.rec = record('fish', { score: this.points(), stars: this.stars() })
-    this.bigText = ['Harbour Fishing complete!', `Fish caught ${this.caught}   On the lane ${this.avgPct()}%`, ...resultLines(this.points(), this.stars(), this.rec)].join('\n')
+    this.bigText = ''
     this.lure.material = this.matOn
   }
 
@@ -431,9 +431,25 @@ export class FishGame {
   }
 
   ui() {
-    let header
-    if (this.state === 'done') header = `Harbour Fishing done - ${this.caught} fish caught   Score ${this.points()} ${starText(this.stars())}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
-    else header = `Harbour Fishing   Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}   Caught ${this.caught}   ${this.side === 'left' ? 'LEFT stick' : 'RIGHT stick'}: trace the fish along the glowing lane   |   O: back`
-    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Fish caught ${this.caught}    Score ${this.points()}`, big: this.bigText }
+    const chips = [
+      { k: 'Round', v: `${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}` },
+      { k: 'Caught', v: this.caught },
+      { k: 'Score', v: this.points(), tone: 'gold' },
+    ]
+    if (this.state === 'trace') chips.unshift({ k: 'Hand', v: this.side === 'left' ? 'LEFT' : 'RIGHT', tone: this.side === 'left' ? 'red' : 'blue' })
+    const hint = 'Left stick traces the first fish  ·  Right stick the second  ·  stay on the glowing lane  ·  O: back'
+    if (this.state === 'done') {
+      return {
+        hint, chips, banner: null,
+        result: {
+          title: 'Fishing complete!',
+          rows: [{ k: 'Fish caught', v: this.caught }, { k: 'On the lane', v: this.avgPct() + '%' }],
+          score: this.points(), stars: this.stars(), isNewBest: this.rec.isNewBest, best: this.rec.best,
+          secs: Math.max(0, RETURN_DELAY - this.timer), total: RETURN_DELAY,
+        },
+      }
+    }
+    const lines = this.bigText ? this.bigText.split('\n') : []
+    return { hint, chips, banner: lines.length ? { title: lines[0], lines: lines.slice(1) } : null }
   }
 }

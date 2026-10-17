@@ -2,7 +2,7 @@
 // apple to grab it, drag it over the basket and it drops in. 15 seconds. Port of the Blender version.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
-import { MAX_STARS, record, resultLines, starText } from './scores.js'
+import { MAX_STARS, record } from './scores.js'
 import { RETURN_DELAY, blob, box, clamp, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, sphere, torus, uniform, choice } from './util.js'
 
 const APPLE_TIME = 15, COUNTDOWN = 3
@@ -172,8 +172,7 @@ export class AppleGame {
     else if (this.phase === 'done') {
       // save once the last apple has landed in the basket, so the score is final
       if (!this.rec && !this.apples.some((a) => a.state === 'fall')) this.rec = record('apple', { score: this.points(), stars: this.stars() })
-      const s = this.score
-      this.big = `Time's up!\nRed ${s.red}   Blue ${s.blue}` + (this.rec ? '\n' + resultLines(this.points(), this.stars(), this.rec).join('\n') : '')
+      this.big = ''
     }
 
     if (this.phase === 'play') {
@@ -243,13 +242,25 @@ export class AppleGame {
     return this.phase === 'done' && this.t - APPLE_TIME >= RETURN_DELAY
   }
 
-  ui(pad) {
+  ui() {
     const s = this.score
-    let header
-    if (this.phase === 'countdown') header = 'Apple Picking - get ready!   Left stick = RED hand   Right stick = BLUE hand'
-    else if (this.phase === 'play') header = `Apple Picking   Time ${Math.max(0, APPLE_TIME - this.t).toFixed(1)}s   Red ${s.red}   Blue ${s.blue}   |   O: back`
-    else header = `Time's up!  Red ${s.red}  Blue ${s.blue}  Score ${this.points()} ${starText(this.stars())}   |   returning to the lobby in ${Math.max(0, RETURN_DELAY - (this.t - APPLE_TIME)).toFixed(0)}s   |   O: back now`
     const left = this.phase === 'countdown' ? APPLE_TIME : Math.max(0, Math.ceil(APPLE_TIME - this.t))
-    return { header, hud: `${left}s    Red ${s.red}   Blue ${s.blue}    Score ${this.points()}`, big: this.big }
+    const chips = [
+      { k: 'Time', v: left + 's', tone: this.phase === 'play' && left <= 5 ? 'hot' : '' },
+      { k: 'Red', v: s.red, tone: 'red' },
+      { k: 'Blue', v: s.blue, tone: 'blue' },
+      { k: 'Score', v: this.points(), tone: 'gold' },
+    ]
+    const hint = 'Left stick: red glove  ·  Right stick: blue glove  ·  O: back'
+    if (this.phase === 'done') {
+      const result = this.rec && {
+        title: "Time's up!",
+        rows: [{ k: 'Red apples', v: s.red }, { k: 'Blue apples', v: s.blue }, { k: 'Wrong-colour touches', v: this.wrong }],
+        score: this.points(), stars: this.stars(), isNewBest: this.rec.isNewBest, best: this.rec.best,
+        secs: Math.max(0, RETURN_DELAY - (this.t - APPLE_TIME)), total: RETURN_DELAY,
+      }
+      return { hint, chips, banner: result ? null : { title: "Time's up!", lines: [] }, result: result || null }
+    }
+    return { hint, chips, banner: this.big ? { title: this.big, lines: [] } : null }
   }
 }
