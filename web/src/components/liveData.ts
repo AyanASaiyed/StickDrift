@@ -44,6 +44,10 @@ const LEVEL_NAMES: Record<string, string> = {
   butterfly_left: "Butterfly (left)",
   butterfly_right: "Butterfly (right)",
   water: "Watering",
+  lobby: "Lobby",
+  apple: "Apple Picking",
+  fish: "Harbour Fishing",
+  rat: "Rat Catching",
 };
 export const levelName = (lv: string | null | undefined) =>
   lv ? (LEVEL_NAMES[lv] ?? lv) : "";

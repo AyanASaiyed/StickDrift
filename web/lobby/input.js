@@ -65,6 +65,7 @@ export class Input {
     const look = stick(rx, ry)
     return {
       source,
+      raw: [lx, ly, rx, ry], // unprocessed sticks, for the caregiver's live view
       move: stick(lx, ly),
       look: [look[0] * look[2], look[1] * look[2]],
       enter: edge(enter, 'enter'),

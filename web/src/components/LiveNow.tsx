@@ -17,7 +17,11 @@ const SHORT: Record<LiveStatus, string> = {
   failed: 'Could not judge',
   stopped: 'Closed early',
   lost: 'Connection lost',
+  ended: 'Finished',
 }
+
+/** Garden sessions have 4 chapters; the lobby lists 'lobby' plus its games. */
+const chapterCount = (levels: string[]) => levels.filter((l) => l !== 'lobby').length || 4
 
 function topPattern(b: LiveBrief) {
   if (!b.tcn_scores) return null
@@ -77,10 +81,10 @@ export function LiveNow({ participantId, compact }: { participantId?: string; co
         <Link key={b.live_id} className="live-card" to={`/caregiver/live/${b.live_id}`}>
           <span className="pulse" aria-hidden />
           <span className="live-card-text">
-            <strong>{b.name} is in the garden</strong>
+            <strong>{b.name} is playing</strong>
             <span className="muted">
               {SHORT[b.status]}
-              {b.level ? ` · ${levelName(b.level)}` : ''} · {b.levels_done.length} of 4 chapters
+              {b.level ? ` · ${levelName(b.level)}` : ''} · {b.levels_done.length} of {chapterCount(b.levels)} {b.levels.includes('lobby') ? 'games' : 'chapters'}
             </span>
           </span>
           <span className="live-card-cta">Watch live →</span>

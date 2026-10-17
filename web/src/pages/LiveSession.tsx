@@ -6,7 +6,7 @@ import { handPos, handTarget, levelName, pct, secs } from '../components/liveDat
 import { TabPanel, Tabs } from '../components/Tabs'
 
 const KEEP = 100 * 40
-const DONE: LiveStatus[] = ['finished', 'failed', 'stopped', 'lost']
+const DONE: LiveStatus[] = ['finished', 'failed', 'stopped', 'lost', 'ended']
 
 const STATUS_TEXT: Record<LiveStatus, string> = {
   starting: 'Opening the game',
@@ -20,6 +20,7 @@ const STATUS_TEXT: Record<LiveStatus, string> = {
   failed: 'Could not judge',
   stopped: 'Closed early',
   lost: 'Connection lost',
+  ended: 'Session finished',
 }
 
 const CHAPTERS = ['apples', 'butterfly_left', 'butterfly_right', 'water']
@@ -92,7 +93,11 @@ export default function LiveSession() {
         const s = await api.caregiverLiveSnapshot(id, since.current)
         if (stop) return
         setError(null)
-        setSnap(s)
+        // Lobby games have no targets, so start on the stick-tilt chart for them.
+        setSnap((prev) => {
+          if (!prev && s.levels.includes('lobby')) setChart('tilt')
+          return s
+        })
         if (s.samples.length) {
           const fresh = s.samples.filter((x) => x[0] > since.current)
           since.current = s.seq
@@ -161,7 +166,7 @@ export default function LiveSession() {
       </div>
 
       <ol className="chapter-track" aria-label="Chapters">
-        {CHAPTERS.map((c) => {
+        {(snap.levels.some((l) => l !== 'lobby') ? snap.levels.filter((l) => l !== 'lobby') : CHAPTERS).map((c) => {
           const state = snap.levels_done.includes(c) ? 'done' : snap.level === c ? 'now' : 'todo'
           return (
             <li key={c} className={`chapter chapter-${state}`}>

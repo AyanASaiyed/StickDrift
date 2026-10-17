@@ -353,6 +353,62 @@ def my_garden(me: dict = Depends(current_senior)):
     return {"active": s is not None, "status": s.status if s else None, "level": s.level if s else None}
 
 
+# ---- browser lobby ------------------------------------------------------------
+# The 3D lobby (web/lobby.html) runs in the resident's own browser tab. It opens a
+# live session here with their login cookie and streams its stick samples to
+# /live/ingest like the garden game does. Lobby games have no pattern model yet,
+# so the session simply ends when the tab closes or the resident leaves.
+
+LOBBY_IDLE_S = 60        # a lobby tab that stopped posting this long ago is forgotten
+
+
+def _forget(s: LiveSession):
+    with REGISTRY_LOCK:
+        BY_TOKEN.pop(s.token, None)
+        SESSIONS.pop(s.id, None)
+
+
+def _end_lobby(s: LiveSession, status: str = "ended"):
+    with s.lock:
+        s.metrics.close_trial()
+        s.status, s.ended_at, s.level = status, _now(), None
+    _persist(s)
+    _forget(s)
+
+
+def _prune_lobby():
+    cutoff = time.monotonic() - LOBBY_IDLE_S
+    for s in [s for s in SESSIONS.values() if s.proc is None and s.last_state_write < cutoff]:
+        _end_lobby(s, "lost")
+
+
+class LobbyStart(BaseModel):
+    keyboard: bool = False
+
+
+@router.post("/me/lobby/start", status_code=201)
+def lobby_start(body: LobbyStart, me: dict = Depends(current_senior)):
+    _prune_lobby()
+    for old in [s for s in SESSIONS.values() if s.proc is None and s.participant_id == me["account_id"]]:
+        _end_lobby(old)  # one open lobby per resident; a reload replaces the old tab
+    s = LiveSession(me["account_id"], me["display_name"], body.keyboard)
+    s.status = "ready"
+    s.last_state_write = time.monotonic()
+    with REGISTRY_LOCK:
+        SESSIONS[s.id] = s
+        BY_TOKEN[s.token] = s
+    _persist(s)
+    _prune_db()
+    return {"live_id": s.id, "token": s.token}
+
+
+@router.post("/live/end", status_code=204)
+def lobby_end(x_live_token: str = Header(...)):
+    s = BY_TOKEN.get(x_live_token)
+    if s is not None and s.proc is None:
+        _end_lobby(s)
+
+
 # ---- game -------------------------------------------------------------------
 
 class IngestIn(BaseModel):

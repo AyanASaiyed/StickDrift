@@ -6,6 +6,7 @@ import { Hub } from './hub.js'
 import { AppleGame } from './apple.js'
 import { FishGame } from './fish.js'
 import { RatGame } from './rat.js'
+import { LiveStream } from './live.js'
 
 const canvas = document.getElementById('c')
 const $ = (id) => document.getElementById(id)
@@ -28,6 +29,7 @@ const input = new Input()
 const hub = new Hub()
 const games = { apple: new AppleGame(), fish: new FishGame(), rat: new RatGame() }
 let active = null // the running game, or null while in the lobby
+const live = new LiveStream()
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight
@@ -41,9 +43,11 @@ resize()
 function startGame(portal) {
   active = games[portal.game]
   active.start()
+  live.enter(portal.game)
 }
 function leaveGame() {
   active = null
+  live.enter('lobby')
   hub.reset()
   setText(overlay.hud, '')
   setText(overlay.big, '')
@@ -57,6 +61,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
   if (!running) return
   const pad = input.read()
+  live.sample(...pad.raw)
   if (active) {
     if (active.update(dt, pad)) leaveGame()
   } else {
@@ -81,6 +86,7 @@ $('go').addEventListener('click', () => {
   $('start').style.display = 'none'
   running = true
   clock.getDelta()
+  live.start(input.read().source !== 'gamepad', ['lobby', ...Object.keys(games)])
 })
 requestAnimationFrame(frame)
 
