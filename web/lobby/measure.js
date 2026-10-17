@@ -63,6 +63,10 @@ class AppleWatch {
   constructor() {
     this.open = { left: null, right: null }
     this.count = { left: 0, right: 0 }
+    this.prevWrong = 0
+    this.prevScore = { red: 0, blue: 0 }
+    this.seen = new Map()
+    this.reported = false
   }
 
   frame(g, t, sticks, emit) {
@@ -106,13 +110,50 @@ class AppleWatch {
       this.open[h].update(t, sticks[i], [dx / d, dy / d])
       out.trial = this.count[h]
     })
+    this.marks(g, t, emit)
     return out
   }
 
   close(h, t, reached) {
-    const e = { type: 'trial', trial: this.count[h], hand: h, ...this.open[h].result(t, reached) }
+    const e = { type: 'trial', t, trial: this.count[h], hand: h, ...this.open[h].result(t, reached) }
     this.open[h] = null
     return e
+  }
+
+  /** Facts the stick samples cannot reconstruct: a wrong colour, a basket drop, an apple that fell away. */
+  marks(g, t, emit) {
+    if (g.wrong > this.prevWrong) {
+      const hand = this.wrongHand(g)
+      for (let n = this.prevWrong; n < g.wrong; n++) emit({ type: 'wrong', hand, t })
+      this.prevWrong = g.wrong
+    }
+    for (const [color, hand] of [['red', 'left'], ['blue', 'right']]) {
+      const gained = g.score[color] - this.prevScore[color]
+      for (let n = 0; n < gained; n++) emit({ type: 'basket', hand, t })
+      this.prevScore[color] = g.score[color]
+    }
+    const alive = new Set(g.apples)
+    for (const apple of g.apples) {
+      const prev = this.seen.get(apple)
+      if (prev === 'hang' && (apple.state === 'gone' || apple.state === 'dead')) {
+        emit({ type: 'expired', hand: apple.color === 'red' ? 'left' : 'right', t })
+      }
+      this.seen.set(apple, apple.state)
+    }
+    for (const apple of this.seen.keys()) if (!alive.has(apple)) this.seen.delete(apple)
+    if (g.phase === 'done' && !this.reported) {
+      this.reported = true
+      emit({
+        type: 'result', t, score: g.points(), stars: g.stars(),
+        red: g.score.red, blue: g.score.blue, wrong: g.wrong,
+      })
+    }
+  }
+
+  wrongHand(g) {
+    let best = null
+    for (const apple of g.apples) if (apple.wob != null && (best == null || apple.wob > best.wob)) best = apple
+    return best && best.color === 'blue' ? 'right' : 'left'
   }
 }
 
@@ -122,8 +163,24 @@ const LANE_CY = 1.65 // fish.js draws the lane centred this far up the water
 const waterXY = (p) => [p[0] / WATER_SCALE, -(p[1] - LANE_CY) / WATER_SCALE]
 
 class FishWatch {
-  frame(g) {
+  constructor() {
+    this.traces = 0
+    this.reported = false
+  }
+
+  frame(g, t, _sticks, emit) {
     const out = { phase: null, trial: null, cur: [null, null], tgt: [null, null], on: [0, 0] }
+    while (this.traces < g.stats.length) {
+      const trace = g.stats[this.traces++]
+      emit({
+        type: 'trace', t, round: trace.round, hand: trace.side, shape: trace.shape,
+        time_s: trace.time, on_lane_pct: trace.pct, off_count: trace.off, score: trace.score,
+      })
+    }
+    if (g.state === 'done' && !this.reported) {
+      this.reported = true
+      emit({ type: 'result', t, score: g.points(), stars: g.stars(), caught: g.caught })
+    }
     if (g.state !== 'trace') return out
     const i = g.side === 'left' ? 0 : 1
     const n = g.pts.length
@@ -148,6 +205,11 @@ class RatWatch {
     this.hand = null
     this.lastRun = null
     this.count = 0
+    this.prev = { caught: 0, missed: 0, wrong: 0, empty: 0 }
+    this.flickSpeed = null
+    this.otherStick = false
+    this.reported = false
+    this.seenRats = 0
   }
 
   frame(g, t, sticks, emit) {
@@ -168,11 +230,54 @@ class RatWatch {
       if (!this.hand && g.hs === 'down') { // the slam: credit the stick pushed up furthest
         this.hand = -sticks[0][1] >= -sticks[1][1] ? 'left' : 'right'
         this.slamAt = t
+        const other = this.hand === 'left' ? sticks[1] : sticks[0]
+        this.flickSpeed = this.reach[this.hand].peakSpeed
+        this.otherStick = mag(...other) > 0.25
       }
       if (g.caughtThis) this.caught = true
       if (!runKey && g.hs !== 'down') this.finish(t, emit) // the rat is gone and the slam has landed
     }
+    if (g.timed) {
+      while (this.seenRats < g.timed.length) {
+        const row = g.timed[this.seenRats++]
+        emit({ type: 'card_rat', t, round: row.round, caught: row.caught, reaction_s: row.reaction_s })
+      }
+    }
+    this.outcomes(g, t, emit)
     return out
+  }
+
+  outcomes(g, t, emit) {
+    const stats = g.stats
+    for (const outcome of ['caught', 'wrong', 'empty']) {
+      while (this.prev[outcome] < stats[outcome]) {
+        this.prev[outcome]++
+        const hand = this.hand || 'right'
+        const reaction = this.reach && this.reach[hand]
+        emit({
+          type: 'slam', t, hand, outcome, round: g.round + 1,
+          reaction_s: reaction ? r3(reaction.onset) : null,
+          flick_speed: r3(this.flickSpeed),
+          early: outcome === 'empty',
+          other_stick: this.otherStick,
+        })
+      }
+    }
+    while (this.prev.missed < stats.missed) {
+      this.prev.missed++
+      emit({ type: 'miss', t, round: g.round + 1 })
+    }
+    if (g.state === 'done' && !this.reported) {
+      this.reported = true
+      const timing = g.timingReport ? g.timingReport() : null
+      emit({
+        type: 'result', t, score: g.points(), stars: g.stars(),
+        caught: stats.caught, missed: stats.missed, wrong: stats.wrong, empty: stats.empty,
+        target_rats: timing ? timing.target_rats : null,
+        correctness_pct: timing ? timing.correctness_pct : null,
+        median_reaction_s: timing ? timing.median_reaction_s : null,
+      })
+    }
   }
 
   finish(t, emit) {

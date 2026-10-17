@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from .auth import current_caregiver
 from .db import pool
-from .insights import fmt
+from .insights import PATTERN_LABELS, fmt
 from .views import all_profiles, resident_profile
 
 log = logging.getLogger(__name__)
@@ -150,6 +150,13 @@ def _game_line(g: dict) -> str:
             if v:
                 bits.append(f"{label} {v}")
         parts.append(f"{GAME_NAMES[key]}{'' if game.get('finished') else ' (left early)'}: " + "; ".join(bits or ["no measurements"]))
+    scores = ((g.get("tcn") or {}).get("scores") or {})
+    pattern = [f"{PATTERN_LABELS[k].lower()} {v:.0f}/100" for k, v in scores.items() if v is not None and k in PATTERN_LABELS]
+    if pattern:
+        parts.append("pattern model (resemblance, not diagnosis): " + ", ".join(pattern))
+    rat = ((g.get("visit") or {}).get("games") or {}).get("rat") or {}
+    if rat.get("median_reaction_s") is not None:
+        parts.append(f"rat timing: median {rat['median_reaction_s']:.2f}s nose-to-slam")
     when = g["started_at"].strftime("%b %d %H:%M") if hasattr(g["started_at"], "strftime") else str(g["started_at"])
     return f"{when}{' [simulated input]' if g.get('is_synthetic') else ''} - " + " | ".join(parts or ["no games played"])
 

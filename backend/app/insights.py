@@ -330,47 +330,62 @@ PATTERN_GUIDE = {
 }
 
 
-def add_model_concerns(insights: dict, garden_sessions: List[dict]) -> dict:
-    """Add a concern when the newest TCN-judged garden session resembles a movement pattern.
+GAME_LABELS = {"apple": "Apple Picking", "fish": "Harbour Fishing"}
 
-    Scores are 0-100 pattern resemblance from the model, not disease probabilities.
+
+def add_model_concerns(insights: dict, garden_sessions: List[dict], kind: str = "garden") -> dict:
+    """Add a concern when the newest TCN-judged session of this kind resembles a movement pattern.
+
+    `kind` is "garden" (the pygame garden) or "lobby" (web lobby visits, where Apple Picking and
+    Harbour Fishing are scored). Scores are 0-100 pattern resemblance, not disease probabilities.
     """
-    judged = [g for g in garden_sessions if g.get("tcn") and g["tcn"].get("scores")]
-    visits, n_judged = len(garden_sessions), len(judged)
-    insights = {**insights, "garden_visits": visits, "garden_judged": n_judged}
-    if insights["status"] == "insufficient" and visits:
-        # A baseline from earlier session summaries needs 4 sessions; garden visits are judged on their own.
-        insights["summary"] = (
-            f"{visits} garden {'visit' if visits == 1 else 'visits'} recorded"
-            f"{f', {n_judged} judged by the pattern model' if n_judged else ''}."
-        )
+    judged = [g for g in garden_sessions
+              if g.get("tcn") and any(v is not None for v in (g["tcn"].get("scores") or {}).values())]
+    noun = "garden session" if kind == "garden" else "game visit"
+    if kind == "garden":
+        visits, n_judged = len(garden_sessions), len(judged)
+        insights = {**insights, "garden_visits": visits, "garden_judged": n_judged}
+        if insights["status"] == "insufficient" and visits:
+            # A baseline from earlier session summaries needs 4 sessions; garden visits are judged on their own.
+            insights["summary"] = (
+                f"{visits} garden {'visit' if visits == 1 else 'visits'} recorded"
+                f"{f', {n_judged} judged by the pattern model' if n_judged else ''}."
+            )
     if not judged:
         return insights
     latest = judged[0]
     when = latest["started_at"].strftime("%b %d") if hasattr(latest["started_at"], "strftime") else "latest"
     simulated = " (simulated input)" if latest.get("is_synthetic") else ""
     concerns = list(insights["concerns"])
+    added = False
     for key, label in PATTERN_LABELS.items():
         score = latest["tcn"]["scores"].get(key)
         if score is None or score < MODEL_WATCH:
             continue
         contributors, checks = PATTERN_GUIDE[key]
+        per_part = [f"{lv['level'].replace('_', ' ')}: {lv['scores'][key]:.0f}/100"
+                    for lv in latest["tcn"].get("levels", []) if lv.get("scores", {}).get(key) is not None]
+        per_part += [f"{GAME_LABELS.get(g, g)}: {part['scores'][key]:.0f}/100"
+                     for g, part in (latest["tcn"].get("by_game") or {}).items()
+                     if (part.get("scores") or {}).get(key) is not None]
         concerns.append(_concern_raw(
-            f"model_{key}", f"Model pattern: {label.lower()}", "check" if score >= MODEL_CHECK else "watch",
-            f"At the end of the {when} garden session{simulated}, the movement pattern model rated this "
-            f"session {score:.0f} out of 100 for resemblance to this pattern.",
-            [f"{label}: {score:.0f}/100 pattern resemblance (garden session, {when})."]
-            + [f"{lv['level'].replace('_', ' ')}: {lv['scores'][key]:.0f}/100"
-               for lv in latest["tcn"].get("levels", []) if lv.get("scores", {}).get(key) is not None],
+            f"model_{key}" if kind == "garden" else f"model_{kind}_{key}",
+            f"Model pattern: {label.lower()}", "check" if score >= MODEL_CHECK else "watch",
+            f"At the end of the {when} {noun}{simulated}, the movement pattern model rated it "
+            f"{score:.0f} out of 100 for resemblance to this pattern.",
+            [f"{label}: {score:.0f}/100 pattern resemblance ({noun}, {when})."] + per_part,
             contributors, checks,
         ))
+        added = True
     risk = "check" if any(c["level"] == "check" for c in concerns) else "watch" if concerns else "none"
     if concerns:
         summary = "; ".join(c["title"] for c in concerns) + "."
-    elif insights["status"] == "insufficient":
+    elif insights["status"] == "insufficient" and kind == "garden":
         summary = f"{insights['summary']} The latest visit showed no movement pattern worth flagging."
     else:
         summary = insights["summary"]
+    if kind != "garden" and not added:
+        return insights
     return {**insights, "concerns": concerns, "risk": risk, "summary": summary}
 
 

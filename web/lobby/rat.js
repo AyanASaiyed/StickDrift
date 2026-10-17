@@ -16,6 +16,21 @@ const ROUNDS = 3
 const HAND_HOVER = 3.6, HAND_SLAM_Z = 0.9, HIT_HALF = 0.7, SLAM_TIME = 0.09
 const X0 = 9, X1 = -9 // run from the right hole to the left hole
 const SPEED = [7.3008, 10.70784] // m/s (original 3.0-4.4; +20%, +30%, +20%, +30% more)
+const RAT_SCALE = 1.8
+const NOSE_TIP_LOCAL = 0.97 // tip of the nose cone, on the rat's local +X
+const TAIL_ROOT_LOCAL = -0.5 // where the tail meets the body, on local X
+// The rat is turned 180°, so local +X points down the lane. These are the body
+// positions where the nose meets the near edge of the hand, and the tail root meets the far edge.
+export const NOSE_AT = HIT_HALF + NOSE_TIP_LOCAL * RAT_SCALE
+export const TAIL_AT = -HIT_HALF + TAIL_ROOT_LOCAL * RAT_SCALE
+
+/** Time when a value moving from prev to next crosses edge, or null if it does not. */
+export function crossTime(prev, next, edge, tPrev, tNext) {
+  if (!(prev > edge && next <= edge)) return null
+  const span = prev - next
+  const f = span > 0 ? (prev - edge) / span : 1
+  return tPrev + f * (tNext - tPrev)
+}
 const SKIN = [0.85, 0.58, 0.42]
 const CARD_DIST = 12, CARD_SCALE = 0.7 // the card sits in the top-left corner of the view at this scale
 
@@ -136,6 +151,8 @@ export class RatGame {
     this.ratX = X0
     this.ratV = 0
     this.hop = 0
+    this.timed = [] // one row per card rat that finished: { round, reaction_s, caught }
+    this.timing = null
     for (const o of [...Object.values(this.rats), ...Object.values(this.cards)]) o.visible = false
     this.handColor = null
     this.setHandColor('normal')
@@ -168,6 +185,7 @@ export class RatGame {
     this.ratV = uniform(...SPEED)
     this.caughtThis = false
     this.hop = 0
+    this.timing = this.rat === this.targets[this.round] ? { round: this.round + 1, tNose: null } : null
     const ob = this.rats[this.rat]
     ob.visible = true
     ob.scale.setScalar(1.8)
@@ -176,8 +194,48 @@ export class RatGame {
     sfx.squeak()
   }
 
+  /** Close the open card-rat clock. A miss has no reaction time. */
+  finishCard(caught) {
+    if (!this.timing) return
+    const reaction = caught && this.timing.tNose != null
+      ? Math.round((this.clock - this.timing.tNose) * 1000) / 1000
+      : null
+    this.timed.push({ round: this.timing.round, reaction_s: reaction, caught })
+    this.timing = null
+  }
+
+  noteCardRat(prevX, nextX, tPrev, tNext) {
+    if (!this.timing) return
+    if (this.timing.tNose == null) {
+      const t = crossTime(prevX, nextX, NOSE_AT, tPrev, tNext)
+      if (t != null) this.timing.tNose = t
+    }
+    if (this.timing && crossTime(prevX, nextX, TAIL_AT, tPrev, tNext) != null) this.finishCard(false)
+  }
+
+  /** Correct slams divided by the card rats that ran, as a percent. */
+  timingReport() {
+    const rats = this.timed
+    const caught = rats.filter((row) => row.caught).length
+    const times = rats.map((row) => row.reaction_s).filter((value) => value != null).sort((a, b) => a - b)
+    let median = null
+    if (times.length) {
+      const mid = Math.floor(times.length / 2)
+      median = times.length % 2 ? times[mid] : Math.round(((times[mid - 1] + times[mid]) / 2) * 1000) / 1000
+    }
+    return {
+      target_rats: rats.length,
+      caught,
+      correctness_pct: rats.length ? Math.round((1000 * caught) / rats.length) / 10 : null,
+      median_reaction_s: median,
+    }
+  }
+
   endRun() {
-    if (this.rat === this.targets[this.round] && !this.caughtThis) this.stats.missed++ // the target ran past
+    if (this.rat === this.targets[this.round] && !this.caughtThis) {
+      this.stats.missed++ // the target ran past
+      this.finishCard(false)
+    }
     this.rats[this.rat].visible = false
     this.rat = null
     this.runI++
@@ -238,6 +296,7 @@ export class RatGame {
       this.ok = true
       this.caughtThis = true
       this.stats.caught++
+      this.finishCard(true)
       const ob = this.rats[hit]
       ob.scale.set(2.2, 2.2, 0.2)
       ob.position.set(this.ratX, 0, 0.03)
@@ -279,7 +338,10 @@ export class RatGame {
         else this.endRun()
       }
     } else if (s === 'run') {
+      const prevX = this.ratX
+      const tPrev = this.clock - dt
       this.ratX -= this.ratV * dt
+      this.noteCardRat(prevX, this.ratX, tPrev, this.clock)
       const ob = this.rats[this.rat]
       const run = this.clock * this.ratV * 4
       this.hop = Math.max(0, this.hop - dt)

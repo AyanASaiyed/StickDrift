@@ -70,6 +70,7 @@ class GardenSession(BaseModel):
     status: str
     is_synthetic: bool
     levels_completed: Optional[int]
+    levels_total: int = 4
     tcn: Optional[dict]
     live: Optional[dict]
 
@@ -83,6 +84,8 @@ class GameSession(BaseModel):
     is_synthetic: bool
     games: dict
     games_finished: List[str]
+    tcn: Optional[dict] = None    # pattern-model scores for Apple Picking + Harbour Fishing (visit.report)
+    visit: Optional[dict] = None  # the full visit report: rat timing, traces, per-game results
 
 
 class ResidentDetail(BaseModel):
@@ -117,6 +120,7 @@ def _fetch_garden(conn, participant_id: UUID) -> List[dict]:
     return conn.execute(
         """SELECT s.session_id, s.started_at, s.status, s.is_synthetic,
                   (ss.metrics->>'levels_completed')::int AS levels_completed,
+                  CASE WHEN s.protocol_version = 'lobby-v1' THEN 3 ELSE 4 END AS levels_total,
                   ss.metrics->'tcn' AS tcn, ss.metrics->'live' AS live
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
@@ -131,7 +135,8 @@ def _fetch_games(conn, participant_id: UUID) -> List[dict]:
         """SELECT s.session_id, s.started_at, s.completed_at, s.status, s.is_synthetic,
                   COALESCE(ss.metrics->'games', '{}'::jsonb) AS games,
                   ARRAY(SELECT jsonb_array_elements_text(COALESCE(ss.metrics->'games_finished', '[]'::jsonb)))
-                    AS games_finished
+                    AS games_finished,
+                  ss.metrics->'tcn' AS tcn, ss.metrics->'visit' AS visit
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
            WHERE s.participant_id = %s AND s.protocol_version LIKE 'lobby-%%'
@@ -158,6 +163,7 @@ def resident_profile(conn, participant_id: UUID) -> Optional[dict]:
     garden = _fetch_garden(conn, participant_id)
     games = _fetch_games(conn, participant_id)
     insights = add_model_concerns(analyze(sessions), garden)
+    insights = add_model_concerns(insights, games, kind="lobby")
     insights["game_visits"] = len(games)
     if insights["status"] == "insufficient" and not garden and games and not insights["concerns"]:
         insights["summary"] = (f"{len(games)} game {'visit' if len(games) == 1 else 'visits'} recorded. "

@@ -1,5 +1,6 @@
-import type { GameResult, GameSession, HandLive, LobbyGame } from '../api'
+import type { GameResult, GameSession, HandLive, LobbyGame, RatReport } from '../api'
 import { formatDateTime } from '../format'
+import { PatternBars } from './LiveCharts'
 import { pct, secs } from './liveData'
 
 const GAME_NAMES: Record<LobbyGame, string> = {
@@ -33,7 +34,7 @@ const ROWS: Record<LobbyGame, Row[]> = {
   ],
 }
 
-function GameCard({ game, result }: { game: LobbyGame; result: GameResult }) {
+function GameCard({ game, result, rat }: { game: LobbyGame; result: GameResult; rat?: RatReport | null }) {
   return (
     <article className="game-card">
       <header>
@@ -70,6 +71,12 @@ function GameCard({ game, result }: { game: LobbyGame; result: GameResult }) {
           ))}
         </tbody>
       </table>
+      {rat && rat.target_rats ? (
+        <p className="game-note">
+          {rat.correctness_pct != null && <>Caught {Math.round(rat.correctness_pct)}% of {rat.target_rats} target rats. </>}
+          {rat.median_reaction_s != null && <>Median {secs(rat.median_reaction_s)} from the rat’s nose reaching the hand to the slam.</>}
+        </p>
+      ) : null}
       <p className="hint">{Math.round(result.play_s)} s of play recorded</p>
     </article>
   )
@@ -108,9 +115,16 @@ export function GameVisits({ visits }: { visits: GameSession[] }) {
         </h2>
         <div className="game-grid">
           {ORDER.filter((g) => latest.games[g]).map((g) => (
-            <GameCard key={g} game={g} result={latest.games[g]!} />
+            <GameCard key={g} game={g} result={latest.games[g]!} rat={g === 'rat' ? latest.visit?.games?.rat : null} />
           ))}
         </div>
+        {latest.tcn?.scores && Object.values(latest.tcn.scores).some((v) => v != null) && (
+          <div className="game-patterns">
+            <h3>Pattern model</h3>
+            <p className="muted">Apple Picking and Harbour Fishing, scored at the end of the visit.</p>
+            <PatternBars scores={latest.tcn.scores} />
+          </div>
+        )}
         <p className="hint">
           Lobby games are free play: each visit is shown on its own and does not set a baseline. Hover a measurement
           name for what it means.

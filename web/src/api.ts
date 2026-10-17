@@ -163,6 +163,7 @@ export interface GardenSession {
   status: string
   is_synthetic: boolean
   levels_completed: number | null
+  levels_total?: number
   tcn: TcnResult | null
   live: LiveMetrics | null
 }
@@ -199,6 +200,18 @@ export interface GameSession {
   is_synthetic: boolean
   games: Partial<Record<LobbyGame, GameResult>>
   games_finished: LobbyGame[]
+  /** Pattern-model scores for Apple Picking + Harbour Fishing; null until scored or without a trained model. */
+  tcn?: (TcnResult & { by_game?: Partial<Record<LobbyGame, { scores: PatternScores }>> }) | null
+  /** The full visit report (visit/report.py), including Rat Catching timing. */
+  visit?: { games?: { rat?: RatReport | null } } | null
+}
+
+export interface RatReport {
+  target_rats: number | null
+  correctness_pct: number | null
+  median_reaction_s: number | null
+  reaction_spread_s: number | null
+  early_slams: number
 }
 
 export type LiveStatus =

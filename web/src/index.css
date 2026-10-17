@@ -984,3 +984,7 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
 
 .report-btn { margin-left: auto; align-self: center; }
 .report-btn .error { margin: 6px 0 0; font-size: 0.85rem; }
+
+.game-note { margin: 8px 0 0; font-size: 0.92rem; }
+.game-patterns { margin-top: 18px; }
+.game-patterns h3 { margin: 0 0 2px; font-size: 1.05rem; }

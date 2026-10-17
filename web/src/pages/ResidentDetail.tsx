@@ -295,7 +295,7 @@ function GardenVisits({ visits }: { visits: GardenSession[] }) {
               {visits.map((v) => (
                 <tr key={v.session_id}>
                   <td>{formatDateTime(v.started_at)}</td>
-                  <td className="num">{v.levels_completed ?? '—'}/4</td>
+                  <td className="num">{v.levels_completed ?? '—'}/{v.levels_total ?? 4}</td>
                   {PATTERN_ORDER.map((k) => {
                     const val = v.tcn?.scores?.[k]
                     return (
