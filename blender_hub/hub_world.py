@@ -1244,7 +1244,7 @@ RAT_TYPES = [("grey", "Grey Rat", (0.42, 0.42, 0.46)), ("white", "White Rat", (0
 RAT_ROUNDS, RAT_LANE_Y = 3, 600.0
 HAND_HOVER, HAND_SLAM_Z, HIT_HALF, SLAM_TIME = 3.6, 0.9, 0.7, 0.09
 RAT_X0, RAT_X1 = 9.0, -9.0                     # run from the right hole to the left hole
-RAT_SPEED = (5.616, 8.2368)                 # m/s (original 3.0-4.4; +20%, +30%, +20% more)
+RAT_SPEED = (7.3008, 10.70784)               # m/s (original 3.0-4.4; +20%, +30%, +20%, +30% more)
 RAT_CAM_POS, RAT_CAM_TARGET = (0.0, 592.0, 9.0), (0.0, 600.0, 0.6)
 
 
