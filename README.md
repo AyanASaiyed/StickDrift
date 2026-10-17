@@ -172,7 +172,9 @@ screens and breaks are not recorded). Every HID report is a row: the
 t_trial`, the target and unsmoothed normalized cursor for each stick,
 `reached_l, reached_r` and `t_wall`. `level.json` holds that level's exact
 targets and per-trial results. Space/Enter, P and Esc remain optional facilitator
-shortcuts. The game still exports CSV/JSON locally; TigerData upload is separate.
+shortcuts. The game writes CSV/JSON locally, then imports that recording into
+TigerData when `backend/.env` has a connection string. If import fails, the
+files remain available for a later retry. Use `--no-tiger-sync` for local-only runs.
 
 Headless checks and visual previews:
 
@@ -196,8 +198,8 @@ You need Node 20+, Python 3.9+, Chrome, and a Tiger Data service.
 
 ```bash
 cd backend
-cp .env.example .env          # paste the connection string into DATABASE_URL
-psql "$(grep ^DATABASE_URL .env | cut -d= -f2-)" -f schema.sql
+cp .env.example .env          # edit DATABASE_URL in .env
+psql '<the same TigerData connection string>' -f schema.sql
 ```
 
 **2. Backend.**
@@ -258,12 +260,47 @@ web/
 | POST | `/sessions/{id}/complete` | Save summary and mark session complete |
 | POST | `/sessions/{id}/abandon` | Mark an interrupted session abandoned |
 | GET | `/sessions/{id}/data-status` | Verify sample/trial/response/event counts |
+| GET | `/garden/recordings` | List imported garden CSV recordings and counts |
+| GET | `/sessions/{id}/garden-timeline` | Read one-second TigerData aggregates |
 
 Run `backend/schema.sql` against the TigerData service before using these routes.
 `raw_samples.t_ms` is milliseconds from the client session-start clock;
 `raw_samples.time` is reconstructed from the server's session start time. Upload
 sample batches using the same sequence numbers when retrying so the hypertable's
 unique index can ignore duplicate samples.
+
+### Import existing garden recordings
+
+Run the schema first. From `backend/`, with its dependencies installed:
+
+```powershell
+python -m scripts.import_garden ..\data --dry-run
+python -m scripts.import_garden ..\data
+```
+
+The command also accepts one recording folder or another data root, such as
+`..\Controller Data - Zain\Games\data`. Repeat it to retry failed folders;
+successful imports are skipped. Each recording is committed as one transaction,
+CSV rows stream into PostgreSQL using `COPY`, and each level's original `params`
+and `results` JSON is preserved. The importer refreshes the one-second continuous
+aggregate for historical timestamps. Source files are never rewritten.
+
+Garden recordings are stored as `free_play` because garden-v3 is not the fixed
+arrow assessment protocol. Anonymous recordings get distinct pseudonymous
+profiles. The parent folder is stored as `source_group` for experimental
+grouping; these labels are not diagnoses. Synthetic status comes from
+`session.json`.
+
+Recorded timestamps lack timezone information. Set `GARDEN_RECORDING_TIMEZONE`
+(default `America/Toronto`) if they were recorded elsewhere. CSV `t_wall`
+preserves timing within each level, but exact gaps between levels were not
+recorded, so the imported timeline uses a one-second display gap. The original
+timings remain in the CSVs.
+
+The Python garden game calls the same importer after a game finishes when
+TigerData is configured in `backend/.env`. It uses `backend/.venv` if present;
+otherwise install `backend/requirements.txt` in the game's Python environment.
+The web dashboard's Garden recordings panel reads the aggregate through the API.
 
 ## Limitations
 

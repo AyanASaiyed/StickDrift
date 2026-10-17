@@ -167,6 +167,28 @@ input {
   font-weight: 700;
 }
 
+.garden-analytics { margin-top: 20px; }
+.analytics-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.garden-analytics select {
+  width: 100%; min-height: 48px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink);
+}
+.btn-secondary { background: transparent; color: var(--accent); }
+.garden-chart {
+  display: block; width: 100%; height: auto;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+.chart-axis { stroke: var(--line); stroke-width: 2; }
+.chart-left, .chart-right {
+  fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.chart-left { stroke: var(--accent); }
+.chart-right { stroke: var(--warn); }
+.chart-key { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.chart-key-left { background: var(--accent); }
+.chart-key-right { background: var(--warn); }
+
 /* Status */
 .status {
   display: flex;

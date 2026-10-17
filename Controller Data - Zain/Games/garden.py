@@ -31,8 +31,11 @@ import math
 import os
 import re
 import statistics
+import subprocess
+import sys
 import threading
 import time
+from pathlib import Path
 
 import pygame
 
@@ -900,13 +903,38 @@ def main():
     p.add_argument("--demo", action="store_true", help="synthetic keyboard input: WASD and arrow keys")
     p.add_argument("--reduced-motion", action="store_true", help="still scenery and fewer visual effects")
     p.add_argument("--preview", metavar="DIRECTORY", help="save art previews without playing or recording")
+    p.add_argument("--no-tiger-sync", action="store_true", help="keep this recording local only")
     from garden_diorama import DioramaGame
     args = p.parse_args()
     game = DioramaGame(args)
     if args.preview:
         game.preview(args.preview)
     else:
-        game.run()
+        try:
+            game.run()
+        finally:
+            # Import the files the game actually wrote, after its CSV writers
+            # close. Failed imports leave those files intact for a later retry.
+            if not args.no_tiger_sync:
+                backend = Path(__file__).resolve().parents[2] / "backend"
+                configured = (os.environ.get("DATABASE_URL") or
+                              os.environ.get("TIMESCALE_SERVICE_URL") or
+                              (backend / ".env").is_file())
+                if configured:
+                    candidates = (backend / ".venv" / "Scripts" / "python.exe",
+                                  backend / ".venv" / "bin" / "python")
+                    python = next((str(path) for path in candidates if path.is_file()), sys.executable)
+                    try:
+                        result = subprocess.run(
+                            [python, "-m", "scripts.import_garden", str(Path(game.folder).resolve())],
+                            cwd=backend, check=False,
+                        )
+                        if result.returncode:
+                            print("TigerData sync failed; CSV/JSON is saved. Retry with the import command.")
+                    except OSError as error:
+                        print(f"TigerData sync could not start: {error}. CSV/JSON is saved.")
+                else:
+                    print("TigerData is not configured; CSV/JSON is saved for a later import.")
 
 
 if __name__ == "__main__":

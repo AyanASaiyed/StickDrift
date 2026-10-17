@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { listParticipants, listSessions, type Participant, type SessionRow } from './api'
 import { ControllerCheck, type InputSource } from './components/ControllerCheck'
+import { GardenAnalytics } from './components/GardenAnalytics'
 import { ProfileHistory } from './components/ProfileHistory'
 import { ProfilePicker } from './components/ProfilePicker'
 
@@ -111,6 +112,8 @@ export default function App() {
         </section>
 
         {selected && <ProfileHistory participant={selected} sessions={sessions} error={sessionsError} />}
+
+        <GardenAnalytics />
 
         <footer className="foot">
           Stick Drift shows care teams changes worth checking. It does not diagnose any condition. If someone has a

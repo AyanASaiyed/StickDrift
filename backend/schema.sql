@@ -126,7 +126,15 @@ ALTER TABLE raw_samples
     ADD COLUMN IF NOT EXISTS target_x REAL,
     ADD COLUMN IF NOT EXISTS target_y REAL,
     ADD COLUMN IF NOT EXISTS cursor_x REAL,
-    ADD COLUMN IF NOT EXISTS cursor_y REAL;
+    ADD COLUMN IF NOT EXISTS cursor_y REAL,
+    ADD COLUMN IF NOT EXISTS target_lx REAL,
+    ADD COLUMN IF NOT EXISTS target_ly REAL,
+    ADD COLUMN IF NOT EXISTS target_rx REAL,
+    ADD COLUMN IF NOT EXISTS target_ry REAL,
+    ADD COLUMN IF NOT EXISTS cursor_lx REAL,
+    ADD COLUMN IF NOT EXISTS cursor_ly REAL,
+    ADD COLUMN IF NOT EXISTS cursor_rx REAL,
+    ADD COLUMN IF NOT EXISTS cursor_ry REAL;
 
 DO $$ BEGIN
     ALTER TABLE raw_samples ADD CONSTRAINT raw_samples_activity_check
@@ -139,6 +147,51 @@ SELECT create_hypertable('raw_samples', by_range('time'), if_not_exists => TRUE)
 CREATE UNIQUE INDEX IF NOT EXISTS raw_samples_time_session_seq_uidx
     ON raw_samples (time, session_id, seq);
 CREATE INDEX IF NOT EXISTS raw_samples_session_idx ON raw_samples (session_id, time);
+
+-- Imported garden recordings keep their source result structure. This avoids
+-- inventing assessment outcomes for tracking and watering levels.
+CREATE TABLE IF NOT EXISTS garden_level_results (
+    session_id UUID NOT NULL REFERENCES sessions (session_id) ON DELETE CASCADE,
+    level_number SMALLINT NOT NULL,
+    level_name TEXT NOT NULL,
+    completed BOOLEAN NOT NULL,
+    sample_count INTEGER NOT NULL,
+    duration_s DOUBLE PRECISION NOT NULL,
+    params JSONB NOT NULL,
+    results JSONB NOT NULL,
+    PRIMARY KEY (session_id, level_number)
+);
+
+CREATE TABLE IF NOT EXISTS garden_imports (
+    source_hash TEXT PRIMARY KEY,
+    session_id UUID NOT NULL UNIQUE REFERENCES sessions (session_id) ON DELETE CASCADE,
+    source_group TEXT,
+    sample_count INTEGER NOT NULL,
+    imported_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS garden_imports_group_idx ON garden_imports (source_group);
+
+-- One-second buckets make the ~500 Hz recordings quick to plot. Current
+-- unmaterialized rows are included by the real-time aggregate setting.
+CREATE MATERIALIZED VIEW IF NOT EXISTS garden_sample_seconds
+WITH (timescaledb.continuous) AS
+SELECT time_bucket('1 second', time) AS bucket,
+       session_id,
+       activity,
+       count(*) AS sample_count,
+       avg(sqrt(lx * lx + ly * ly)) AS left_magnitude,
+       avg(sqrt(rx * rx + ry * ry)) AS right_magnitude,
+       sum(CASE WHEN connected THEN 0 ELSE 1 END) AS disconnected_count
+FROM raw_samples
+GROUP BY bucket, session_id, activity
+WITH NO DATA;
+ALTER MATERIALIZED VIEW garden_sample_seconds
+    SET (timescaledb.materialized_only = false);
+SELECT add_continuous_aggregate_policy('garden_sample_seconds',
+    start_offset => INTERVAL '7 days',
+    end_offset => INTERVAL '10 seconds',
+    schedule_interval => INTERVAL '1 minute',
+    if_not_exists => TRUE);
 
 -- Low-volume event stream for phase changes, pauses, calibration, and other
 -- auditable game events. High-rate axes remain in raw_samples.

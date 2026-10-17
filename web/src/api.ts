@@ -108,6 +108,25 @@ export interface SessionDataStatus {
   event_count: number
 }
 
+export interface GardenRecording {
+  session_id: string
+  source_group: string | null
+  sample_count: number
+  level_count: number
+  started_at: string
+  status: string
+  is_synthetic: boolean
+}
+
+export interface GardenSecond {
+  bucket: string
+  activity: Activity | null
+  sample_count: number
+  left_magnitude: number | null
+  right_magnitude: number | null
+  disconnected_count: number
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
@@ -172,3 +191,8 @@ export const abandonSession = (sessionId: string) =>
 
 export const getSessionDataStatus = (sessionId: string) =>
   request<SessionDataStatus>(`/sessions/${sessionId}/data-status`)
+
+export const listGardenRecordings = () => request<GardenRecording[]>('/garden/recordings')
+
+export const getGardenTimeline = (sessionId: string) =>
+  request<GardenSecond[]>(`/sessions/${sessionId}/garden-timeline`)
