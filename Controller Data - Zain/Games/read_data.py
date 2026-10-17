@@ -2,8 +2,8 @@
 """
 Real-time DualSense (PS5) input viewer. Works over USB or Bluetooth.
 
-Setup:   pip install hidapi
-Run:     python dualsense_viewer.py
+Setup:   uv sync
+Run:     uv run python "Controller Data - Zain\\read_data.py"
 Keys:    R = start/stop CSV recording, Esc = quit
 """
 import csv

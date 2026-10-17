@@ -81,7 +81,29 @@ Each session records the controller ID, connection type and how the controller w
 
 ## Running locally
 
-Setup instructions will be added once the code is in place.
+The Python game scripts live in `Controller Data - Zain`. From the repository
+root, install the locked dependencies with [uv](https://docs.astral.sh/uv/):
+
+```powershell
+uv sync
+```
+
+Connect a DualSense controller over USB, then start a game:
+
+```powershell
+uv run python "Controller Data - Zain\trace.py" --player P01 --session 1
+uv run python "Controller Data - Zain\catch.py" --player P01 --session 1
+uv run python "Controller Data - Zain\maze.py" --player P01 --session 1
+```
+
+Optional game flags include `--seed 42` (repeatable randomized layouts) and
+`--kids` for red decoys in Catch. Each game writes its CSV and JSON session
+files to a `data/` directory under the current working directory. To test
+controller input separately, run:
+
+```powershell
+uv run python "Controller Data - Zain\read_data.py"
+```
 
 ## Limitations
 

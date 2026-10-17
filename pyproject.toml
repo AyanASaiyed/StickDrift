@@ -1,20 +1,16 @@
 [project]
 name = "stickdrift"
 version = "0.1.0"
-description = "Add your description here"
+description = "Stick Drift games and DualSense input tools"
 readme = "README.md"
 authors = [
     { name = "Zain Rizvi", email = "zain4rizvi@gmail.com" }
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "hid>=1.0.9",
     "hidapi>=0.15.0",
+    "pygame-ce>=2.5.8",
 ]
 
-[project.scripts]
-stickdrift = "stickdrift:main"
-
-[build-system]
-requires = ["uv_build>=0.12.23,<0.13.0"]
-build-backend = "uv_build"
+[tool.uv]
+package = false
