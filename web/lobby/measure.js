@@ -118,7 +118,8 @@ class AppleWatch {
 
 // ---- Harbour Fishing: one hand at a time traces a lane ---------------------------------------------
 const WATER_SCALE = 4.8, LANE_HALF = 0.5
-const waterXY = (p) => [p[0] / WATER_SCALE, -p[1] / WATER_SCALE]
+const LANE_CY = 1.65 // fish.js draws the lane centred this far up the water
+const waterXY = (p) => [p[0] / WATER_SCALE, -(p[1] - LANE_CY) / WATER_SCALE]
 
 class FishWatch {
   frame(g) {
