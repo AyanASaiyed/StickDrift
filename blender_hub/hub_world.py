@@ -15,6 +15,7 @@ import os
 import random
 import shutil
 import subprocess
+import webbrowser
 
 import bpy
 import bmesh
@@ -35,6 +36,9 @@ GRANDMA_START = (0.0, -5.0)
 HALF_X, HALF_Y = 9.6, 6.1          # walkable half-extents inside the fence
 SPEED = 2.1                        # m/s
 PORTAL_R = 1.9                     # prompt distance
+DOOR = (0.0, -(HALF_Y + 0.35))     # exit door in the south fence, right behind where grandma starts
+DOOR_R, DOOR_GAP, DOOR_OPEN = 1.2, 1.0, 1.45
+DASHBOARD_URL = "http://localhost:5173/"   # where the exit door sends you (the web dashboard)
 PLAYER_R = 0.38
 CAM_DIST = 22.0                    # camera distance from the focus point
 MAX_TILT = math.radians(45)        # right stick up/down: 0 = straight top-down .. 45 deg
@@ -158,20 +162,46 @@ def build_ground():
 
     # fence: stone corner posts + wooden rails
     fx, fy = HALF_X + 0.35, HALF_Y + 0.35
-    for sx, sy, w, h in ((0, fy, 2 * fx, 0.12), (0, -fy, 2 * fx, 0.12)):
-        box("RailX", (w, h, 0.12), (sx, sy, 0.55), wood)
-        box("RailX2", (w, h, 0.12), (sx, sy, 0.95), wood)
+    ln = fx - DOOR_GAP
+    for z_, name in ((0.55, "RailX"), (0.95, "RailX2")):
+        box(name, (2 * fx, 0.12, 0.12), (0, fy, z_), wood)                           # north side: full length
+        box(name, (ln, 0.12, 0.12), (-(DOOR_GAP + ln / 2), -fy, z_), wood)           # south side: two pieces
+        box(name, (ln, 0.12, 0.12), (DOOR_GAP + ln / 2, -fy, z_), wood)              # with the doorway between
     for sx in (-fx, fx):
         box("RailY", (0.12, 2 * fy, 0.12), (sx, 0, 0.55), wood)
         box("RailY2", (0.12, 2 * fy, 0.12), (sx, 0, 0.95), wood)
     for i in range(-10, 11):
         x = i * fx / 10
         for y in (fy, -fy):
+            if y < 0 and abs(x) < DOOR_GAP + 0.05:
+                continue                                                              # no post in the doorway
             box("Post", (0.16, 0.16, 1.2), (x, y, 0.6), stone)
     for j in range(-6, 7):
         y = j * fy / 6
         for x in (fx, -fx):
             box("Post", (0.16, 0.16, 1.2), (x, y, 0.6), stone)
+
+
+def build_door():
+    """Exit door in the south fence: a low frame, warm light outside, a doormat and a leaf that swings open when near."""
+    dx, dy = DOOR
+    frame, wood_m, dark = mat("DoorFrame", (0.30, 0.19, 0.09), 0.9), mat("DoorWood", (0.50, 0.33, 0.17), 0.85), mat("DoorDark", (0.28, 0.17, 0.08), 0.9)
+    light = mat("DoorLight", (1, 0.9, 0.6), 0.4, emit=(1, 0.85, 0.5), emit_strength=2.2)
+    green = mat("DoorMat", (0.2, 0.75, 0.35), 0.6, emit=(0.2, 0.8, 0.35), emit_strength=1.2)
+    knob = mat("DoorKnob", (0.9, 0.75, 0.3), 0.3)
+    for sx in (-DOOR_GAP - 0.08, DOOR_GAP + 0.08):
+        box("DoorPost", (0.2, 0.28, 1.7), (dx + sx, dy, 0.85), frame)
+    box("DoorLintel", (2 * DOOR_GAP + 0.55, 0.28, 0.2), (dx, dy, 1.72), frame)
+    box("DoorLight", (2 * DOOR_GAP, 0.05, 1.6), (dx, dy - 0.32, 0.8), light)
+    box("DoorMat", (1.9, 0.8, 0.03), (dx, dy + 0.55, 0.03), green)
+    label("EXIT", (dx, dy + 0.55, 0.06), 0.42, (1, 1, 1))
+    hinge = bpy.data.objects.new("DoorHinge", None)              # the leaf is hinged on the left post
+    bpy.context.collection.objects.link(hinge)
+    hinge.location = (dx - DOOR_GAP, dy, 0)
+    box("DoorLeaf", (2 * DOOR_GAP, 0.1, 1.6), (dx, dy, 0.8), wood_m, parent=hinge)
+    box("DoorBar", (2 * DOOR_GAP - 0.2, 0.12, 0.08), (dx, dy, 1.2), dark, parent=hinge)
+    box("DoorBar", (2 * DOOR_GAP - 0.2, 0.12, 0.08), (dx, dy, 0.45), dark, parent=hinge)
+    sphere("DoorKnob", 0.07, (dx + DOOR_GAP - 0.2, dy + 0.1, 0.85), knob, parent=hinge, seg=8)
 
 
 def blob(name, r, loc, material, parent, squash=1.0, seed=0):
@@ -370,7 +400,8 @@ def build_world():
         build_lamp(x, y)
     for name, text, _, x, y in PORTALS:
         build_portal(name, text, x, y)
-    label("Grandma", (GRANDMA_START[0], GRANDMA_START[1] - 1.0, 0.02), 0.4, (1, 1, 1))
+    label("Grandma", (GRANDMA_START[0] + 2.3, GRANDMA_START[1], 0.02), 0.4, (1, 1, 1))   # beside her, off the doormat
+    build_door()
     build_grandma(*GRANDMA_START)
     build_apple_game()
     build_fish_game()
@@ -633,7 +664,7 @@ def optimize_scene():
         animated.update(ob.children_recursive)
 
     for ob in bpy.data.objects:
-        if ob.name.startswith(("Grandma", "Crystal_", "Ring_", "Hand_", "Apple_", "AppleHUD", "AppleBig", "Label_Game", "Label_Grandma", "Fish", "Rod", "Lure", "Ripple", "Marker", "Trace", "Rat")):
+        if ob.name.startswith(("Grandma", "Crystal_", "Ring_", "Hand_", "Apple_", "AppleHUD", "AppleBig", "Label_Game", "Label_Grandma", "Fish", "Rod", "Lure", "Ripple", "Marker", "Trace", "Rat", "Door")):
             keep(ob)
     bpy.context.view_layer.update()
     statics = [o for o in bpy.context.scene.objects
@@ -1560,6 +1591,7 @@ class HUB_OT_play(bpy.types.Operator):
         self.pad = Gamepad()
         self.games, self.game, self.mode = {"Game1": AppleGame(), "Game2": FishGame(), "Game3": RatGame()}, None, "hub"
         self.near_state, self.last_header = {}, None
+        self.hinge, self.door_angle = bpy.data.objects["DoorHinge"], 0.0
         self.focus = (0.0, 0.0)
         self.yaw, self.tilt, self.zoom = 0.0, math.radians(14), 12.0     # orbit angle, tilt from top-down, zoom
         self.t, self.msg, self.heading = 0.0, "", self.root.rotation_euler.z
@@ -1611,6 +1643,8 @@ class HUB_OT_play(bpy.types.Operator):
                 self.near_state[name] = near
                 bsdf = next(n for n in glow.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
                 bsdf.inputs["Emission Strength"].default_value = 3.0 if near else 1.2
+        self.door_angle += ((DOOR_OPEN if self.near_door() else 0.0) - self.door_angle) * min(1, 6 * dt)
+        self.hinge.rotation_euler.z = self.door_angle
         cam, k = self.cam, min(1, 5 * dt)
         scale = self.zoom if self.follow else 2 * HALF_X + 2.4
         cam.data.ortho_scale += (scale - cam.data.ortho_scale) * k
@@ -1624,6 +1658,10 @@ class HUB_OT_play(bpy.types.Operator):
         tx, ty = self.focus
         cam.location = (tx + CAM_DIST * sp * sy, ty - CAM_DIST * sp * cy, CAM_DIST * cp)   # orbit around focus
         cam.rotation_euler = (self.tilt, 0, self.yaw)
+
+    def near_door(self):
+        p = self.root.location
+        return math.hypot(p.x - DOOR[0], p.y - DOOR[1]) < DOOR_R
 
     def portal_near(self):
         p = self.root.location
@@ -1657,6 +1695,10 @@ class HUB_OT_play(bpy.types.Operator):
             if pad["cam"]:
                 self.follow = not self.follow
             near = self.portal_near()
+            if pad["enter"] and self.near_door():                # the exit door: stop playing and open the dashboard
+                self.finish(context)
+                webbrowser.open(DASHBOARD_URL)
+                return {"CANCELLED"}
             if pad["enter"] and near:
                 if near[1] is None:
                     self.start_game(context, near[2])
@@ -1688,7 +1730,9 @@ class HUB_OT_play(bpy.types.Operator):
 
         self.animate(dt)
         near = self.portal_near()
-        if near:
+        if self.near_door():
+            txt = "Press X (Cross) to leave and go back to the dashboard"
+        elif near:
             txt = self.msg if self.msg.startswith(("Entering", "cannot")) else f"Press X (Cross) to enter {near[0]}"
         else:
             self.msg, txt = "", "Left stick: walk   |   Right stick: orbit/tilt   |   L1/R1: zoom   |   Triangle: camera   |   walk onto a glowing pad and press X   |   Esc: quit"

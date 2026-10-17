@@ -51,6 +51,19 @@ function levelDone(game) {
   return !!game && (game.phase === 'done' || game.state === 'done')
 }
 
+/** The exit door: end the live session, say goodbye, and go back to the dashboard. */
+function exitLobby() {
+  if (leaving) return
+  leaving = true
+  sfx.back()
+  audio.setTrack(null)
+  $('exiting').classList.add('on')
+  live.end() // flushes the last samples and closes the caregiver's live view
+  setTimeout(() => {
+    window.location.href = '/'
+  }, 900)
+}
+
 function startGame(portal) {
   sfx.enterGame()
   audio.setTrack(portal.game)
@@ -82,6 +95,7 @@ function leaveGame() {
 const clock = new THREE.Clock()
 let running = false
 let slow = 0, fast = 0, uiAcc = 1, lastView = null
+let leaving = false // set once the player has gone through the exit door
 
 /** Frame-time governor: ~1 s of slow frames lowers the render resolution one step; ~4 s of fast frames raises it. */
 function adapt(dt) {
@@ -104,6 +118,10 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
   if (!running) return
   const pad = input.read()
+  if (leaving) {
+    renderer.render(hub.scene, hub.camera) // keep the last frame under the goodbye screen
+    return
+  }
   const sample = measure.frame(active, live.now(), pad.raw, (e) => {
     live.event(e.type, e)
     record.trial(e)
@@ -115,7 +133,8 @@ function frame() {
     if (active.update(dt, pad)) leaveGame()
   } else {
     const enter = hub.update(dt, pad)
-    if (enter) startGame(enter)
+    if (enter && enter.door) exitLobby()
+    else if (enter) startGame(enter)
   }
   const view = active || hub
   // the DOM overlay only needs ~15 updates a second (and straight away when switching between lobby and a game)

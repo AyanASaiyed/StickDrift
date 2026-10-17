@@ -76,7 +76,9 @@ export function render(ui, inGame) {
   const p = ui.prompt
   set('prompt', JSON.stringify(p || null), (e) => {
     e.innerHTML = p
-      ? `<div class="pc glass">${CROSS}<div><h3>${esc(p.title)}${p.best ? ' ' + stars(p.stars) : ''}</h3><p>Press <b>X</b> to play${p.best ? ' · High score ' + p.best : ''}</p></div></div>`
+      ? `<div class="pc glass ${p.exit ? 'exit' : ''}">${CROSS}<div><h3>${esc(p.title)}${p.best ? ' ' + stars(p.stars) : ''}</h3><p>${
+          p.exit ? 'Press <b>X</b> to leave and end your session' : `Press <b>X</b> to play${p.best ? ' · High score ' + p.best : ''}`
+        }</p></div></div>`
       : ''
   })
 
