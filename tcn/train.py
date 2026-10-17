@@ -127,13 +127,23 @@ def _epoch(
         if training:
             optimizer.zero_grad(set_to_none=True)
         predicted = model(inputs)
-        loss = nn.functional.mse_loss(predicted / 100.0, target / 100.0)
+        loss = masked_loss(predicted, target)
         if training:
             loss.backward()
             optimizer.step()
-        absolute += (predicted - target).abs().sum().item()
-        count += predicted.numel()
+        valid = torch.isfinite(target)
+        if bool(valid.any()):
+            absolute += (predicted[valid] - target[valid]).abs().sum().item()
+            count += int(valid.sum().item())
     return absolute / max(count, 1)
+
+
+def masked_loss(predicted: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """MSE on scores that have a label. NaN targets are skipped, not treated as 0."""
+    mask = torch.isfinite(target)
+    if not bool(mask.any()):
+        return predicted.sum() * 0.0
+    return nn.functional.mse_loss(predicted[mask] / 100.0, target[mask] / 100.0)
 
 
 def _loader(items, mean, std, batch_size: int, shuffle: bool) -> DataLoader:

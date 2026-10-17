@@ -4,6 +4,12 @@ The slow path is a centered average of the stick. A reach takes a large
 fraction of a second, so it survives the average. A shake flips direction
 several times a second, so it cancels out. The network sees the difference,
 plus how fast the slow path moved for its size.
+
+The miss is separate from that leftover. It is the stick, in the game's
+-1..1 space, minus that hand's target, rotated so the target direction is
+the along axis. Positive along means the hand went past the target. Across
+means it left the line of the target. A 6 Hz wobble stays in the residual.
+A slow departure from a moving path stays in the miss.
 """
 
 from dataclasses import dataclass
@@ -16,7 +22,8 @@ from tcn.prepare import Prepared
 _LEFT = (CHANNELS.index("lx"), CHANNELS.index("ly"))
 _RIGHT = (CHANNELS.index("rx"), CHANNELS.index("ry"))
 _GYRO = (CHANNELS.index("gyro_x"), CHANNELS.index("gyro_y"), CHANNELS.index("gyro_z"))
-_HANDS = (("left", _LEFT), ("right", _RIGHT))
+_HANDS = (("left", _LEFT, (0, 1)), ("right", _RIGHT, (2, 3)))
+_MIN_TARGET_RADIUS = 0.05
 
 
 @dataclass(frozen=True)
@@ -41,10 +48,13 @@ def build_stretches(
     smooth_w = _odd_window(segment.smooth_s, prepared.sample_hz, prepared.values.shape[1])
     gyro = prepared.values[list(_GYRO)]
     gyro_resid = gyro - moving_average(gyro, smooth_w)
+    in_task = _in_task(prepared.time_s, task_spans)
     found: list[tuple[float, Stretch]] = []
-    for hand, sticks in _HANDS:
+    for hand, sticks, aim_pair in _HANDS:
         found.extend(
-            _hand_stretches(prepared, cues, segment, hand, sticks, gyro_resid, smooth_w, task_spans)
+            _hand_stretches(
+                prepared, cues, segment, hand, sticks, aim_pair, gyro_resid, smooth_w, task_spans, in_task
+            )
         )
     found.sort(key=lambda item: (item[0], item[1].hand))
     ordered = _with_shrink([item[1] for item in found], segment.shrink_clip)
@@ -67,9 +77,11 @@ def _hand_stretches(
     segment: Segment,
     hand: str,
     sticks: tuple[int, int],
+    aim_pair: tuple[int, int],
     gyro_resid: np.ndarray,
     smooth_w: int,
     task_spans: np.ndarray | None,
+    in_task: np.ndarray,
 ) -> list[tuple[float, Stretch]]:
     position = prepared.values[list(sticks)]
     slow = moving_average(position, smooth_w)
@@ -92,6 +104,8 @@ def _hand_stretches(
             latency_s,
             has_cue,
             override,
+            aim_pair,
+            in_task,
         )
         if piece is not None:
             stretches.append((piece.start_s, piece))
@@ -166,6 +180,8 @@ def _stretch(
     latency_s: float,
     has_cue: float,
     amplitude_override: float | None,
+    aim_pair: tuple[int, int],
+    in_task: np.ndarray,
 ) -> Stretch | None:
     raw_x = position[0, start:end]
     raw_y = position[1, start:end]
@@ -178,6 +194,7 @@ def _stretch(
     path = float(np.hypot(np.diff(slow_x), np.diff(slow_y)).sum())
     speed_ratio = path / duration / travel
     amplitude = travel if amplitude_override is None else amplitude_override
+    along, across, has_target = _miss(prepared, aim_pair, start, end, in_task)
     series = np.vstack(
         [
             residual[0, start:end],
@@ -185,6 +202,9 @@ def _stretch(
             gyro_resid[0, start:end],
             gyro_resid[1, start:end],
             gyro_resid[2, start:end],
+            along,
+            across,
+            has_target,
         ]
     )
     fixed = _fixed(series, segment.stretch_steps)
@@ -201,6 +221,44 @@ def _stretch(
         speed_ratio=float(speed_ratio),
         amplitude=amplitude,
     )
+
+
+def _miss(
+    prepared: Prepared,
+    aim_pair: tuple[int, int],
+    start: int,
+    end: int,
+    in_task: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Signed miss in the target frame. Zeros outside cue/track and with no target."""
+    width = end - start
+    zeros = np.zeros(width, dtype=np.float64)
+    if prepared.aim is None or prepared.cursor is None:
+        return zeros, zeros.copy(), zeros.copy()
+    target = prepared.aim[list(aim_pair), start:end]
+    cursor = prepared.cursor[list(aim_pair), start:end]
+    tx, ty = target[0], target[1]
+    radius = np.hypot(tx, ty)
+    usable = in_task[start:end] & (radius > _MIN_TARGET_RADIUS)
+    usable &= np.isfinite(target).all(axis=0) & np.isfinite(cursor).all(axis=0)
+    safe = np.where(usable, radius, 1.0)
+    ux = tx / safe
+    uy = ty / safe
+    miss_x = cursor[0] - tx
+    miss_y = cursor[1] - ty
+    along = miss_x * ux + miss_y * uy
+    across = miss_x * (-uy) + miss_y * ux
+    gate = usable.astype(np.float64)
+    return np.where(usable, along, 0.0), np.where(usable, across, 0.0), gate
+
+
+def _in_task(time_s: np.ndarray, task_spans: np.ndarray | None) -> np.ndarray:
+    mask = np.zeros(len(time_s), dtype=bool)
+    if task_spans is None or len(task_spans) == 0:
+        return mask
+    for start, end in task_spans:
+        mask |= (time_s >= float(start)) & (time_s <= float(end))
+    return mask
 
 
 def _with_shrink(stretches: list[Stretch], clip: float) -> list[Stretch]:

@@ -1,11 +1,11 @@
-"""Turn per-hand stretch scores into the three recording scores."""
+"""Turn per-hand stretch scores into the five recording scores."""
 
 import numpy as np
 import torch
 
-from tcn.config import HAND_SCORES, SCORES, Segment
+from tcn.config import SCORES, Segment
 from tcn.prepare import prepare
-from tcn.recording import Recording
+from tcn.recording import Recording, activity_gates
 from tcn.stretch import build_stretches
 
 
@@ -30,34 +30,97 @@ def score_recording(
     with torch.no_grad():
         predicted = model(inputs).detach().cpu().numpy()
 
-    tremor_index = hand_scores.index(HAND_SCORES[0])
-    impairment_index = hand_scores.index(HAND_SCORES[1])
-    tremor: dict[str, list[float]] = {"left": [], "right": []}
-    impairment: dict[str, list[float]] = {"left": [], "right": []}
+    bags = {name: {"left": [], "right": []} for name in hand_scores}
     for stretch, row in zip(stretches, predicted, strict=True):
         counts[stretch.hand] += 1
-        tremor[stretch.hand].append(float(row[tremor_index]))
-        impairment[stretch.hand].append(float(row[impairment_index]))
-    return _result(recording.name, prepared.duration_s, counts, _aggregate(tremor, impairment))
+        for name in hand_scores:
+            bags[name][stretch.hand].append(float(row[hand_scores.index(name)]))
+    return _result(
+        recording.name,
+        prepared.duration_s,
+        counts,
+        _aggregate(
+            bags.get("tremor", {}),
+            bags.get("impairment", {}),
+            bags.get("diabetes"),
+            bags.get("ataxia"),
+            activity=recording.activity,
+            has_targets=recording.has_targets,
+        ),
+    )
+
+
+def fuse(apple: dict, path: dict) -> dict[str, float | None]:
+    """Combine one apple recording with one butterfly or water recording.
+
+    Parkinson and essential tremor are averaged across the two files. A null
+    is left out of that average. Stroke and diabetes stay with the apple file.
+    Ataxia stays with the path file.
+    """
+
+    def average(left: float | None, right: float | None) -> float | None:
+        values = [value for value in (left, right) if value is not None]
+        if not values:
+            return None
+        return round(float(sum(values) / len(values)), 1)
+
+    def keep(value: float | None) -> float | None:
+        return None if value is None else round(float(value), 1)
+
+    return {
+        "parkinson": average(apple.get("parkinson"), path.get("parkinson")),
+        "stroke": keep(apple.get("stroke")),
+        "essential_tremor": average(apple.get("essential_tremor"), path.get("essential_tremor")),
+        "diabetes": keep(apple.get("diabetes")),
+        "ataxia": keep(path.get("ataxia")),
+    }
 
 
 def _aggregate(
     tremor: dict[str, list[float]],
     impairment: dict[str, list[float]],
+    diabetes: dict[str, list[float]] | None = None,
+    ataxia: dict[str, list[float]] | None = None,
+    activity: str | None = None,
+    has_targets: bool = False,
 ) -> dict[str, float | None]:
-    """Parkinson is the impairment shared by both hands. Stroke is the gap."""
-    tremor_means = {hand: float(np.mean(values)) for hand, values in tremor.items() if values}
-    impairment_means = {hand: float(np.mean(values)) for hand, values in impairment.items() if values}
+    """Parkinson is the impairment shared by both hands. Stroke is the gap.
+
+    Diabetes is scored only on an apple file that has targets. Ataxia is scored
+    only on a butterfly or water file that has targets. One hand moving leaves
+    stroke null; the hands do not have to move at the same time.
+    """
+    tremor_means = _means(tremor)
+    impairment_means = _means(impairment)
+    scores: dict[str, float | None] = {name: None for name in SCORES}
     if not tremor_means:
-        return {name: None for name in SCORES}
-    scores: dict[str, float | None] = {"essential_tremor": max(tremor_means.values())}
+        return scores
+    scores["essential_tremor"] = max(tremor_means.values())
     if "left" in impairment_means and "right" in impairment_means:
         scores["parkinson"] = min(impairment_means["left"], impairment_means["right"])
         scores["stroke"] = abs(impairment_means["left"] - impairment_means["right"])
     else:
         scores["parkinson"] = next(iter(impairment_means.values()))
         scores["stroke"] = None
+    diabetes_open, ataxia_open = activity_gates(activity)
+    if diabetes_open and has_targets:
+        scores["diabetes"] = _max_mean(diabetes)
+    if ataxia_open and has_targets:
+        scores["ataxia"] = _max_mean(ataxia)
     return scores
+
+
+def _means(groups: dict[str, list[float]] | None) -> dict[str, float]:
+    if not groups:
+        return {}
+    return {hand: float(np.mean(values)) for hand, values in groups.items() if values}
+
+
+def _max_mean(groups: dict[str, list[float]] | None) -> float | None:
+    means = _means(groups)
+    if not means:
+        return None
+    return max(means.values())
 
 
 def _result(name: str, duration_s: float, counts: dict[str, int], scores: dict[str, float | None]) -> dict:

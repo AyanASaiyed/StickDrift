@@ -17,10 +17,12 @@ from tcn.train import _device
 
 
 def score(checkpoint: str | Path, recording: Recording, device: str = "auto") -> dict:
-    """Return the three pattern scores for one recording.
+    """Return the five pattern scores for one recording.
 
     Stroke is null when only one hand moves, because the gap between hands
     cannot be read. Parkinson and tremor are null when neither hand moves.
+    Diabetes is null unless the file is apples and has targets. Ataxia is null
+    unless the file is butterfly or water and has targets.
     """
     torch_device = _device(device)
     model, blob = load_checkpoint(Path(checkpoint), torch_device)
