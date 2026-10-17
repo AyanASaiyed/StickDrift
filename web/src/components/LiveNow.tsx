@@ -60,7 +60,7 @@ export function LiveNow({ participantId, compact }: { participantId?: string; co
     const b = active[0]
     return (
       <Link className="live-banner" to={`/caregiver/live/${b.live_id}`}>
-        <span className="pulse" aria-hidden /> <strong>{b.name} is in the garden right now</strong> ·{' '}
+        <span className="pulse" aria-hidden /> <strong>{b.name} is playing right now</strong> ·{' '}
         {SHORT[b.status]}
         {b.level ? ` · ${levelName(b.level)}` : ''} — watch live
       </Link>
@@ -70,7 +70,7 @@ export function LiveNow({ participantId, compact }: { participantId?: string; co
   if (!active.length && !recent.length) {
     return (
       <p className="live-idle">
-        <span className="live-idle-dot" aria-hidden /> No one is in the garden right now.
+        <span className="live-idle-dot" aria-hidden /> No one is playing right now.
       </p>
     )
   }

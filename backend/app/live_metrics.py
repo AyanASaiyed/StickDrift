@@ -202,38 +202,55 @@ class SessionMetrics:
         return {"hands": hands, "left_right_difference_pct": diff, "reach_trials": trials, "tracking": tracking}
 
     def _hand_summary(self, hand, trials) -> dict:
-        rows = [t[hand] for t in trials if hand in t]
-        out: Dict[str, Optional[float]] = {}
-
-        def med(key, src=rows):
-            vals = [r[key] for r in src if r.get(key) is not None]
-            return round(median(vals), 3) if vals else None
-
-        out["reaction_s"] = med("reaction_s")
-        out["reach_s"] = med("reach_s")
-        out["peak_speed"] = med("peak_speed")
-        out["reach_size"] = med("reach_size")
-        out["apples_reached"] = sum(r["reached"] for r in rows) if rows else None
-        out["apples_total"] = len(rows) if rows else None
-        speeds = [r["peak_speed"] for r in rows if r.get("peak_speed")]
-        if len(speeds) >= 4:
-            half = len(speeds) // 2
-            first, last = mean(speeds[:half]), mean(speeds[-half:])
-            out["speed_change_pct"] = round((last - first) / first * 100, 1) if first else None
-        else:
-            out["speed_change_pct"] = None
-
         tracks = [tr.result() for by_hand in self.trackers.values() for h, tr in by_hand.items() if h == hand]
-        tracks = [x for x in tracks if x]
-        total = sum(x["samples"] for x in tracks)
-        if total:
-            out["tracking_error"] = round(sum(x["tracking_error"] * x["samples"] for x in tracks) / total, 4)
-            out["on_target"] = round(sum(x["on_target"] * x["samples"] for x in tracks) / total, 3)
-            shakes = [x for x in tracks if x["shake"] is not None]
-            out["shake"] = (round(sum(x["shake"] * x["samples"] for x in shakes) / sum(x["samples"] for x in shakes), 4)
-                            if shakes else None)
-            hz = [x["shake_hz"] for x in tracks if x["shake_hz"]]
-            out["shake_hz"] = round(median(hz), 1) if hz else None
-        else:
-            out.update(tracking_error=None, on_target=None, shake=None, shake_hz=None)
-        return out
+        return hand_summary(hand, trials, [x for x in tracks if x])
+
+
+def hand_summary(hand: str, trials: List[dict], tracks: List[dict]) -> dict:
+    """One hand's measurements from reach trials and tracker results (both plain dicts)."""
+    rows = [t[hand] for t in trials if hand in t]
+    out: Dict[str, Optional[float]] = {}
+
+    def med(key, src=rows):
+        vals = [r[key] for r in src if r.get(key) is not None]
+        return round(median(vals), 3) if vals else None
+
+    out["reaction_s"] = med("reaction_s")
+    out["reach_s"] = med("reach_s")
+    out["peak_speed"] = med("peak_speed")
+    out["reach_size"] = med("reach_size")
+    out["apples_reached"] = sum(r["reached"] for r in rows) if rows else None
+    out["apples_total"] = len(rows) if rows else None
+    speeds = [r["peak_speed"] for r in rows if r.get("peak_speed")]
+    if len(speeds) >= 4:
+        half = len(speeds) // 2
+        first, last = mean(speeds[:half]), mean(speeds[-half:])
+        out["speed_change_pct"] = round((last - first) / first * 100, 1) if first else None
+    else:
+        out["speed_change_pct"] = None
+
+    total = sum(x["samples"] for x in tracks)
+    if total:
+        out["tracking_error"] = round(sum(x["tracking_error"] * x["samples"] for x in tracks) / total, 4)
+        out["on_target"] = round(sum(x["on_target"] * x["samples"] for x in tracks) / total, 3)
+        shakes = [x for x in tracks if x["shake"] is not None]
+        out["shake"] = (round(sum(x["shake"] * x["samples"] for x in shakes) / sum(x["samples"] for x in shakes), 4)
+                        if shakes else None)
+        hz = [x["shake_hz"] for x in tracks if x["shake_hz"]]
+        out["shake_hz"] = round(median(hz), 1) if hz else None
+    else:
+        out.update(tracking_error=None, on_target=None, shake=None, shake_hz=None)
+    return out
+
+
+def game_summary(summary: dict, game: str) -> dict:
+    """Measurements for one web lobby game, cut from a whole-visit `SessionMetrics.summary()`."""
+    trials = [t for t in summary.get("reach_trials", []) if t.get("game") == game]
+    by_hand = (summary.get("tracking") or {}).get(game) or {}
+    hands = {h: hand_summary(h, trials, [by_hand[h]] if by_hand.get(h) else []) for h in HANDS}
+    diff = {}
+    for key in ("reaction_s", "reach_s", "peak_speed", "tracking_error", "shake"):
+        a, b = hands["left"].get(key), hands["right"].get(key)
+        if a is not None and b is not None and (a + b) > 0:
+            diff[key] = round((a - b) / ((a + b) / 2) * 100, 1)
+    return {"hands": hands, "left_right_difference_pct": diff, "attempts": len(trials)}

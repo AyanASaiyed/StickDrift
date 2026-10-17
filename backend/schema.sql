@@ -134,7 +134,8 @@ ALTER TABLE raw_samples
     ADD COLUMN IF NOT EXISTS cursor_lx REAL,
     ADD COLUMN IF NOT EXISTS cursor_ly REAL,
     ADD COLUMN IF NOT EXISTS cursor_rx REAL,
-    ADD COLUMN IF NOT EXISTS cursor_ry REAL;
+    ADD COLUMN IF NOT EXISTS cursor_ry REAL,
+    ADD COLUMN IF NOT EXISTS game TEXT;  -- web lobby game (apple, fish, rat); NULL for the garden
 
 DO $$ BEGIN
     ALTER TABLE raw_samples ADD CONSTRAINT raw_samples_activity_check

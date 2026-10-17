@@ -111,10 +111,47 @@ def _resident_facts(p: dict, full: bool) -> str:
         lines.append("  Recommended caregiver checks: " + " ".join(c["recommended_checks"]))
         if full:
             lines.append("  Research basis: " + " | ".join(c["references"]))
+    games = p.get("game_sessions", [])
+    if games:
+        lines.append(f"Game visits (web lobby games, newest first, {len(games)} total; free play, no baseline):")
+        lines += [f"  {_game_line(g)}" for g in games[: 10 if full else 1]]
     if full:
         lines.append("Session history (newest first):")
         lines += [f"  {_session_line(s)}" for s in p["sessions"][:30]]
     return "\n".join(lines)
+
+
+GAME_NAMES = {"apple": "Apple Picking", "fish": "Harbour Fishing", "rat": "Rat Catching"}
+
+
+def _game_line(g: dict) -> str:
+    """One lobby visit as text, left/right per measurement."""
+    def lr(hands, key, fmt):
+        vals = [hands.get(h, {}).get(key) for h in ("left", "right")]
+        return None if all(v is None for v in vals) else "left " + " / right ".join(
+            "n/a" if v is None else fmt(v) for v in vals)
+
+    secs = lambda v: f"{v:.2f}s"
+    pct = lambda v: f"{v * 100:.0f}%"
+    parts = []
+    for key in ("apple", "fish", "rat"):
+        game = (g.get("games") or {}).get(key)
+        if not game:
+            continue
+        h = game.get("hands", {})
+        bits = []
+        caught = [f"{side} {h[side]['apples_reached']}/{h[side]['apples_total']}" for side in ("left", "right")
+                  if h.get(side, {}).get("apples_total")]
+        if caught:
+            bits.append("caught " + " / ".join(caught))
+        for label, k, f in (("time to pick/slam", "reach_s", secs), ("reaction", "reaction_s", secs),
+                            ("distance from lane", "tracking_error", pct), ("time on lane", "on_target", pct)):
+            v = lr(h, k, f)
+            if v:
+                bits.append(f"{label} {v}")
+        parts.append(f"{GAME_NAMES[key]}{'' if game.get('finished') else ' (left early)'}: " + "; ".join(bits or ["no measurements"]))
+    when = g["started_at"].strftime("%b %d %H:%M") if hasattr(g["started_at"], "strftime") else str(g["started_at"])
+    return f"{when}{' [simulated input]' if g.get('is_synthetic') else ''} - " + " | ".join(parts or ["no games played"])
 
 
 def build_facts(profiles: List[dict], focus: Optional[dict]) -> str:

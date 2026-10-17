@@ -53,6 +53,14 @@ export class LiveStream {
     return (performance.now() - this.t0) / 1000
   }
 
+  /** Tell the caregiver view once a controller is in use (the page only sees one after a button press). */
+  source(src) {
+    if (src === 'gamepad' && !this.sawPad && this.token) {
+      this.sawPad = true
+      this.event('input', { source: 'gamepad' })
+    }
+  }
+
   /** One 17-value sample from measure.js: t, trial, phase, sticks, targets, on-target flags, in-game hands. */
   sample(item) {
     if (!this.token) return

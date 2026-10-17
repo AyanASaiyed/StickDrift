@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 
 from .auth import current_caregiver, current_senior
 from .db import pool
-from .live_metrics import SessionMetrics
+from .live_metrics import SessionMetrics, game_summary
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["live"])
@@ -123,6 +123,9 @@ class LiveSession:
             if e.get("level") and e.get("completed"):
                 self.levels_done.append(str(e["level"]))
             self.status, self.level, self.trial, self.phase = "ready", None, None, None
+        elif kind == "input":  # the lobby saw a controller after starting as "keyboard"
+            if e.get("source") == "gamepad":
+                self.synthetic = self.keyboard = False
         elif kind == "trial" and self.level:
             self.metrics.add_trial(e)
         elif kind == "session_end":
@@ -167,7 +170,8 @@ def _persist(s: LiveSession, with_metrics: bool = True):
                      levels_done = EXCLUDED.levels_done, trial = EXCLUDED.trial, phase = EXCLUDED.phase,
                      synthetic = EXCLUDED.synthetic, seq = EXCLUDED.seq,
                      metrics = COALESCE(EXCLUDED.metrics, live_sessions.metrics),
-                     result = EXCLUDED.result, db_session_id = EXCLUDED.db_session_id,
+                     result = EXCLUDED.result,
+                     db_session_id = COALESCE(EXCLUDED.db_session_id, live_sessions.db_session_id),
                      error = EXCLUDED.error, ended_at = EXCLUDED.ended_at, updated_at = now()""",
                 values,
             )
@@ -211,6 +215,7 @@ def _heartbeat(s: LiveSession):
 
 def _prune_db():
     try:
+        save_unsaved_lobbies()  # never drop a finished lobby visit that hasn't reached the history yet
         with pool.connection() as conn:
             conn.execute("DELETE FROM live_sessions WHERE updated_at < now() - interval '1 day'")
     except Exception:
@@ -392,6 +397,108 @@ def _end_lobby(s: LiveSession, status: str = "ended"):
         s.status, s.ended_at, s.level = status, _now(), None
     _persist(s)
     _forget(s)
+    try:
+        save_lobby(s.id)
+    except Exception:
+        log.exception("Saving lobby visit %s failed; a later sweep will retry", s.id)
+
+
+# ---- saving lobby visits to the resident's history ---------------------------------
+# A visit becomes one `sessions` row (protocol lobby-v1, free play so it never feeds the arrow-style
+# baseline) with per-game results in session_summaries.metrics. Only in-game samples are copied to
+# raw_samples, so walking around the lobby, menus and countdowns never reach training data.
+
+LOBBY_GAMES = ("apple", "fish", "rat")
+LOBBY_PROTOCOL = "lobby-v1"
+
+
+def save_lobby(live_id: UUID) -> Optional[UUID]:
+    """Save a finished lobby visit once; returns its session_id (None if no game was played)."""
+    with pool.connection() as conn, conn.transaction():
+        row = conn.execute(
+            """SELECT participant_id, synthetic, status, levels, levels_done, metrics, db_session_id,
+                      started_at, COALESCE(ended_at, updated_at) AS ended_at
+               FROM live_sessions WHERE live_id = %s FOR UPDATE""",
+            (live_id,),
+        ).fetchone()
+        if row is None or "lobby" not in (row["levels"] or []) or row["db_session_id"]:
+            return row["db_session_id"] if row else None
+        played = conn.execute(
+            """SELECT level, count(*) AS n, max(t) - min(t) AS span
+               FROM live_samples WHERE live_id = %s AND level <> 'lobby' AND phase IS NOT NULL
+               GROUP BY level""",
+            (live_id,),
+        ).fetchall()
+        if not played:
+            return None
+        metrics = row["metrics"] or SessionMetrics().summary()
+        done = list(dict.fromkeys(g for g in row["levels_done"] if g in LOBBY_GAMES))
+        # The page only knows about a controller once a button is pressed, so "keyboard" at the start can be
+        # wrong. Keys give exactly -1, 0 or 1; a real stick gives values in between.
+        synthetic = row["synthetic"] and _keyboard_only(conn, live_id)
+        games = {p["level"]: {**game_summary(metrics, p["level"]), "samples": p["n"],
+                              "play_s": round(float(p["span"] or 0), 1), "finished": p["level"] in done}
+                 for p in played if p["level"] in LOBBY_GAMES}
+        session_id = conn.execute(
+            """INSERT INTO sessions (participant_id, mode, protocol_version, connection, status, quality,
+                                   is_synthetic, started_at, completed_at)
+               VALUES (%s, 'free_play', %s, %s, %s, NULL, %s, %s, %s) RETURNING session_id""",
+            (row["participant_id"], LOBBY_PROTOCOL, "simulated" if synthetic else "unknown",
+             "completed" if done else "abandoned", synthetic, row["started_at"], row["ended_at"]),
+        ).fetchone()["session_id"]
+        conn.execute(
+            "INSERT INTO session_summaries (session_id, metrics, code_version) VALUES (%s, %s, %s)",
+            (session_id, Jsonb({"games": games, "games_finished": done, "reach_trials": metrics.get("reach_trials", [])}),
+             LOBBY_PROTOCOL),
+        )
+        conn.execute(
+            """INSERT INTO raw_samples (time, session_id, seq, t_ms, lx, ly, rx, ry, connected, activity, game,
+                                      trial_id, target_lx, target_ly, target_rx, target_ry,
+                                      cursor_lx, cursor_ly, cursor_rx, cursor_ry)
+               SELECT %s + make_interval(secs => t), %s, seq, t * 1000.0, lx, ly, rx, ry, true,
+                      CASE level WHEN 'fish' THEN 'target_tracking' ELSE 'target_reach' END, level,
+                      trial, tgt_lx, tgt_ly, tgt_rx, tgt_ry, cur_lx, cur_ly, cur_rx, cur_ry
+               FROM live_samples
+               WHERE live_id = %s AND level <> 'lobby' AND phase IS NOT NULL AND lx IS NOT NULL""",
+            (row["started_at"], session_id, live_id),
+        )
+        conn.execute("UPDATE live_sessions SET db_session_id = %s WHERE live_id = %s", (session_id, live_id))
+        return session_id
+
+
+def _keyboard_only(conn, live_id: UUID) -> bool:
+    analog = conn.execute(
+        """SELECT EXISTS (SELECT 1 FROM live_samples WHERE live_id = %s AND level <> 'lobby' AND
+                  (abs(lx) NOT IN (0, 1) OR abs(ly) NOT IN (0, 1) OR abs(rx) NOT IN (0, 1) OR abs(ry) NOT IN (0, 1)))
+                  AS analog""",
+        (live_id,),
+    ).fetchone()["analog"]
+    return not analog
+
+
+_last_sweep = 0.0
+
+
+def save_unsaved_lobbies(min_gap_s: float = 30.0) -> int:
+    """Save lobby visits that ended without being saved (a closed laptop, an older API). Cheap to call often."""
+    global _last_sweep
+    if time.monotonic() - _last_sweep < min_gap_s:
+        return 0
+    _last_sweep = time.monotonic()
+    with pool.connection() as conn:
+        ids = [r["live_id"] for r in conn.execute(
+            f"""SELECT live_id FROM live_sessions
+                WHERE levels ? 'lobby' AND db_session_id IS NULL
+                  AND (status NOT IN ({",".join(["%s"] * len(ACTIVE))}) OR updated_at < now() - make_interval(secs => %s))""",
+            (*ACTIVE, STALE_S),
+        ).fetchall()]
+    saved = 0
+    for live_id in ids:
+        try:
+            saved += save_lobby(live_id) is not None
+        except Exception:
+            log.exception("Saving lobby visit %s failed", live_id)
+    return saved
 
 
 def _prune_lobby():

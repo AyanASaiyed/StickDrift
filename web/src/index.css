@@ -966,3 +966,18 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
 .feed-live::before { animation: feed-pulse 1.6s ease-in-out infinite; }
 @keyframes feed-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .feed-live::before { animation: none; } }
+
+/* resident page: web lobby game visits */
+.game-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 12px; }
+.game-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--surface); }
+.game-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.game-card h3 { margin: 0; font-size: 1.05rem; }
+.game-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.game-table th, .game-table td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+.game-table tbody tr:last-child th, .game-table tbody tr:last-child td { border-bottom: 0; }
+.game-table th { text-transform: none; letter-spacing: normal; }
+.game-table thead th { font-size: 0.8rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.game-table thead i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.game-table tbody th { font-size: 0.95rem; font-weight: 500; color: var(--ink); cursor: help; }
+.game-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.game-table thead th:not(:first-child) { text-align: right; }

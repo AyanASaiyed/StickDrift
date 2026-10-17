@@ -1,215 +1,110 @@
 # Stick Drift
 
-A short two-thumbstick activity for senior-living and long-term-care settings that helps care teams notice when a resident's response pattern changes.
+Controller games for senior-living and long-term-care residents that help care teams notice when someone's movement changes.
 
-A resident plays a 2–4 minute game on a PS5 controller, following large on-screen arrows with one or both thumbsticks. Stick Drift records how they respond, builds a baseline from that resident's own sessions, and shows the care team a review card when something shifts, such as slower responses, more missed prompts, or a new left/right difference.
+A resident logs in, opens a small 3D game lobby, and plays short games with a PS5 controller: picking apples, tracing a fish through a harbour, catching rats. While they play, Stick Drift measures how each hand moves: how quickly it reacts, how fast and far it reaches, how closely it follows a path, and how much it shakes. A caregiver on any computer can watch the session live, then review every visit, see trends over time, and ask an AI assistant about the results.
 
-The output is **a change worth checking**. Stick Drift does not diagnose, predict disease, or decide whether something is an emergency. A nurse or caregiver reads the card, adds context, and decides what happens next.
+The output is **a change worth checking**, never a diagnosis. Stick Drift does not name conditions, predict disease, or decide whether something is an emergency. A nurse or caregiver reads the numbers, adds context, and decides what happens next.
 
 > Built for Hack the Valley 11 (PointClickCare: Catch It Early).
 
 ## How it works
 
 ```
-DualSense (USB-C) → browser game (Gamepad API) → FastAPI + Tiger Data → baseline + review rules → care-team dashboard
+Resident's laptop                                         Caregiver's laptop (any computer)
+─────────────────                                         ─────────────────────────────────
+Browser: 3D lobby + games ──samples──► FastAPI ──┐   ┌──► FastAPI ──WebSocket──► Dashboard, live view,
+(PS5 pad via Gamepad API)                        ▼   │                             history, trends, assistant
+                                          Tiger Data (PostgreSQL + TimescaleDB)
+                                          live buffer · NOTIFY · history · samples
 ```
 
-1. **Connect and calibrate.** Staff pick a pseudonymous resident profile. The resident presses a button to connect the controller, then the app measures each stick's resting center, jitter and range. If calibration fails, the hardware-check screen says so before the session starts.
-2. **Practice.** 4–8 unscored prompts so the resident can get used to the controls. Practice is never stored as performance history.
-3. **Assessment.** Three fixed blocks of 12 prompts each: left hand only, right hand only, and both hands. Every prompt has a visible cue, a fixed 2-second response window, and a pause to recenter. The protocol is identical in every session so the results can be compared.
-4. **Finish.** The resident sees a neutral, positive completion screen and can rate the session 1–5. Staff see the data-quality status and, once there is enough history, the trend card.
+1. **Play.** The resident logs in and clicks **Open the lobby**. They walk Grandma around a 3D lobby with the left stick and step onto a pad to start a game.
+2. **Stream.** The lobby sends stick samples, in-game hand and target positions, and one result per attempt to the resident's API, about ten times a second. That API writes them to Tiger Data and sends a Postgres `NOTIFY`.
+3. **Watch live.** Any caregiver's API `LISTEN`s and pushes updates to their browser over a WebSocket. The live view shows the sticks, distance from target and measurements as they happen, about 0.1 s behind the resident.
+4. **Save.** When the visit ends, it becomes a permanent session in the resident's history with per-game, per-hand results. Only in-game samples are kept for analysis and training. Walking around the lobby, menus and countdowns are dropped.
+5. **Review.** Caregivers see each resident's visits, trends across visits, any potential concerns with recommended checks, and can ask the assistant questions grounded in the recorded numbers.
 
-A separate free-play mode may add speed or themes. It is labeled **not used for health trends** and never feeds the baseline.
+The two laptops share nothing but the Tiger Data database. If the resident's API runs older code and sends no notifications, the caregiver's API reads new samples directly every 0.15 s, so the view stays live either way.
 
-## What it measures
+## The games
 
-| Metric | Definition |
-| --- | --- |
-| Response latency | Time from cue onset to the first valid stick movement, per hand and direction (median and spread) |
-| Direction accuracy | Correct first responses out of valid prompts, plus wrong-direction, missed and early-movement counts |
-| Left/right gap | Difference between the two hands' latencies on matched directions, compared with that resident's usual gap |
-| Two-hand timing gap | Time between the left and right threshold crossings on both-hand prompts |
-| Participation | Completion, skipped sessions, retries, enjoyment rating |
-| Data quality | Controller disconnects, calibration drift, unreadable trials |
+### Web lobby (main experience)
 
-A movement counts once the intended axis passes about 40% of that stick's calibrated range for 2–3 samples. The stick must return below about 20% before the next response is accepted. Timeouts and false starts are recorded as their own outcomes and never counted as slow responses.
+A three.js lobby that runs in the browser at `/lobby.html`. Residents open it from their home page in a new tab.
 
-Latency includes seeing the cue, deciding and moving, plus browser and display delay. It is not a pure motor-speed measure, and the app doesn't claim millisecond precision.
+| Game | What the resident does | What it measures, per hand |
+| --- | --- | --- |
+| **Apple Picking** | Steer a red glove (left stick) and a blue glove (right stick) to matching apples, then carry them to the basket | Apples picked, time to pick, reaction time, peak speed, how far the stick was pushed |
+| **Harbour Fishing** | Trace a glowing lane with the fishing lure, one hand at a time | Distance from the lane, share of time on the lane, shake and its rhythm |
+| **Rat Catching** | Flick a stick up to slam the hand when the target rat runs underneath | Target rats caught, time to slam, reaction time |
 
-## Personal baseline and review cards
+Controls: left stick walks, right stick moves the camera, Cross enters a game, Circle leaves it. A keyboard fallback exists (WASD, IJKL, Space, O); visits played that way are labelled **keyboard input** everywhere. Each game shows a score and 0–3 stars to the resident. Those are for fun and are separate from the caregiver measurements.
 
-Each resident is compared only with themselves, never with a population "normal."
+The games move an in-game hand with the stick (velocity control), so distance from target compares that hand with its target, while speed and shake are read from the stick itself. The game logic lives in `web/lobby/*.js`. `web/lobby/measure.js` reads each game's state without changing it.
 
-- A baseline needs at least 3 valid sessions over 2–3 different days, run under the same protocol version, on the same controller and in the same setup.
-- For each metric, the baseline center is the median of session results, and the spread is a robust MAD-based estimate with a floor set by instrument noise.
-- Sessions that fail quality checks are flagged and kept out of comparisons. A missed session is never read as decline.
-- A review card is raised when two separate reliable metrics move noticeably in the same direction, or when a large change repeats on the next valid session.
-- Flagged sessions are never automatically folded into the baseline. A reset happens only after documented caregiver review, and earlier history is kept.
+### Mabel's Moonflower Garden (desktop game)
 
-A card shows the actual numbers, for example:
+The original pygame game (`garden-v3`): four chapters of apple picking with both sticks, a left-stick and a right-stick butterfly flight, and watering with both sticks. It records every controller report (~500 Hz) to CSV, imports the recording into Tiger Data, and appears on the resident's page as **Garden visits**. The site no longer opens it, but it can still be run directly (see [Running the garden game](#running-the-garden-game)).
 
-> Left-hand response median 0.82 s vs personal baseline 0.49 s; 4/12 incorrect vs 0–1/12 usual. Session quality: good. Please check in.
+### Blender lobby
 
-Staff mark each card **acknowledged**, **needs assessment**, or **dismissed with reason**, and can add a note. The app never contacts family, writes to a medical record, or names a condition.
+`blender_hub/hub_world.py` is the same lobby and games built inside Blender 5 (Windows only). It is a design reference and does not send data to Stick Drift. See [blender_hub/README.md](blender_hub/README.md).
 
-The numbers above are illustrative. All thresholds in this project are untested design choices, not clinical cutoffs.
+## What caregivers see
 
-## AI components
+- **Dashboard** (`/caregiver`). Every resident with a risk badge ("No concerns", "Keep an eye on", "Check soon"), who is playing right now, and visits that just finished.
+- **Live view** (`/caregiver/live/:id`). Each in-game hand against its target, a rolling 20-second chart (distance from target or stick tilt), and measurements updating as the resident plays.
+- **Resident page** (`/caregiver/residents/:id`):
+  - **Overview.** Status banner and any potential concerns. Each concern shows what changed, what to check first, possible everyday reasons, and its research basis.
+  - **Trends.** One line per hand across visits: time to pick an apple, time on the fishing lane, time to slam a rat (and garden or earlier sessions when the resident has them).
+  - **Game visits.** The latest visit as one card per game, plus a table of every visit.
+  - **Ask the assistant.** Questions about this resident, answered from their recorded measurements.
 
-- **Rule-based comparison (core).** Medians, robust spread, quality gates and explicit review rules. Every other component is measured against this.
-- **Written summary (optional).** An LLM turns the computed metrics into a short note for staff. It only receives structured values, every number in its output is checked against the source, and disease names are rejected. If the API is unavailable, the app falls back to a fixed template.
-- **Anomaly experiment (optional).** A small PyTorch autoencoder trained on session-level features. A high reconstruction error means "unusual compared with the training sessions," not illness. It ships only if it beats the rules on held-out data.
+### AI assistant and guardrails
 
-## Data
+The assistant (Google Gemini, `backend/app/assistant.py`) receives only structured facts built from the database: measurements, changes from usual, concerns, recommended checks, and recent visits. Its answers are filtered before they are shown:
 
-Stick Drift keeps raw stick samples, the prompt schedule, detected responses and the protocol version separately, so trends can be recomputed if the scoring logic changes. Data lives in [Tiger Data](https://www.tigerdata.com/) (managed PostgreSQL with TimescaleDB). Raw stick samples go in a hypertable partitioned by time. Each resident has a profile with their session history and per-session results.
+- Any number not present in the facts is flagged as unverified.
+- Answers that name a disease or condition are replaced with a referral to a clinician.
+- If the API key is missing or Gemini is unavailable, a rule-based answer built directly from the records is returned instead.
 
-Because Tiger Data is a cloud service, data leaves the laptop. Profiles hold only a nickname or code and a dominant hand: never a real name or other health information. The connection string stays in `backend/.env`, which is not committed. There is no camera, microphone or other biometric capture.
+Potential concerns come from fixed rules (latest result vs that resident's own usual level) and, for garden visits, the pattern model below. They always use neutral movement wording, such as "One-sided difference between hands", never a diagnosis.
 
-The multi-day trends in the demo are **synthetic and labeled as such**. The short baseline in the demo comes from consenting adult teammates and is not clinical data.
+### Pattern model (`tcn/`)
 
-### Combined-game data contract
+A temporal convolutional network that scores garden recordings 0–100 for resemblance to five movement patterns. The labels caregivers see are:
 
-The planned `garden-v1` assessment is one session with three activity values:
-`target_reach`, `target_tracking`, and `bilateral_control`. Keep the same session
-ID across all three activities. Send browser data to FastAPI; the browser must
-never receive the TigerData connection string. The backend stores:
+- slowed, smaller movements in both hands;
+- a one-sided difference between hands;
+- shake during movement;
+- reaches that land past or short, then correct;
+- a hand that weaves off a moving path.
 
-- Batched normalized joystick samples, with monotonic time, activity/trial ID,
-  and target/cursor coordinates when applicable.
-- Each trial's prompt parameters, deterministic outcome, and calculated metrics.
-- Low-volume events such as activity changes, pauses, and trial markers.
-- A final session quality and summary metrics object.
-
-`web/src/sessionRecorder.ts` is the game-facing recorder. It batches samples
-(up to 120 in memory before upload; API accepts up to 500 per request), retries
-failed batches on the next flush, and supports saving trials/events and closing
-or abandoning the same session. A game should call `recordSample` from its
-animation loop and update its activity/trial/target context before each sample.
-Never include a name or medical note in event payloads or metric objects.
-
-## Hardware
-
-- Sony DualSense (PS5) controller, connected by a USB-C **data** cable. Use wired for assessments: Bluetooth adds latency and jitter.
-- A laptop running Chrome.
-
-Each session records the controller ID, connection type and how the controller was placed (in hand, on a table, on a lap). If the controller is unavailable, a keyboard simulator uses the same event format and is clearly labeled **SIMULATED** on screen.
-
-## Tech stack
-
-- **Web app:** Vite, React, TypeScript. Residents log in and open the 3D garden game from their home page (the game runs as a desktop window, not in the browser); caregivers log in at `/caregiver/login` for the dashboard, live session view and resident profiles
-- **Backend:** Python, FastAPI, psycopg
-- **Database:** Tiger Data (PostgreSQL + TimescaleDB)
-- **Analysis:** pandas, NumPy, PyTorch (optional)
+These are pattern resemblance, not disease probabilities. The model is trained on teammate-recorded and synthetic data only. **No trained checkpoint is committed.** Until `runs/tcn/model.pt` exists, garden visits are saved without a judgement. See [Training the pattern model](#training-the-pattern-model).
 
 ## Running locally
 
-The Python game scripts live in `Controller Data - Zain`. From the repository
-root, install the locked dependencies with [uv](https://docs.astral.sh/uv/):
+You need Node 20+, Python 3.9+ for the backend, Python 3.14 with [uv](https://docs.astral.sh/uv/) for the games and model, Chrome or Edge, and a [Tiger Data](https://www.tigerdata.com/) service.
 
-```powershell
-uv sync
-```
-
-Connect a DualSense controller over USB, then start a game:
-
-```powershell
-uv run python "Controller Data - Zain\trace.py" --player P01 --session 1
-uv run python "Controller Data - Zain\catch.py" --player P01 --session 1
-uv run python "Controller Data - Zain\maze.py" --player P01 --session 1
-```
-
-Optional game flags include `--seed 42` (repeatable randomized layouts) and
-`--kids` for red decoys in Catch. Each game writes its CSV and JSON session
-files to a `data/` directory under the current working directory.
-**Mabel's Moonflower Garden** (`garden-v3`) is the combined garden game. Help
-Mabel host a picnic: guide Pip and Poppy to apples for a tart, invite butterflies
-through the meadow, and wake the moonflowers. The story ends at an evening
-picnic. Shaded 3D character, bird, cottage and tree meshes are rendered into
-cached artwork using a fixed orthographic camera. The presentation is 2.5D;
-stick movement remains on the original two-dimensional task plane.
-
-The four chapters retain apple picking with both sticks, a left-stick flight,
-a right-stick flight, and watering with both sticks. Right-stick targets mirror
-the left. Apple time allowance is now 12 seconds per pair; do not mix v2 and v3
-sessions into one baseline. `--label` tags output without changing the course.
-
-```powershell
-uv run python "Controller Data - Zain\Games\garden.py" --player P01 --session 1 --fullscreen
-uv run python "Controller Data - Zain\Games\garden.py" --demo --mute
-```
-
-For the local backend Python environment used during development:
-
-```powershell
-.\backend\.venv\Scripts\python.exe "Controller Data - Zain\Games\garden.py" --demo
-```
-
-The game requires `pygame-ce` and `hidapi` (already listed in the root project).
-No separate 3D engine or asset download is required. All art is built locally.
-
-Press X to move on from a story note (Space or Enter also works). Move both
-sticks to discover your birds. Hold both sticks OUTWARD for a break; at the
-bench, press X to resume or hold either stick DOWN to finish early. Releasing
-the stick brings a bird home with its apple. `--reduced-motion` stills decorative
-motion; `--mute` disables sound.
-`--demo` uses WASD and arrow keys and labels the session as synthetic.
-
-Each run writes a folder:
-
-```
-data/2026-10-17_04-10-56_garden_P01_all-levels/
-  session.json                       calibration, levels completed, column notes
-  level_1_apples/controller_data.csv + level.json
-  level_2_butterfly_left/...
-  level_3_butterfly_right/...
-  level_4_water/...
-```
-
-A level's CSV starts when the level starts and stops when it ends (instruction
-screens and breaks are not recorded). Every HID report is a row: the
-`Example PS5 Data.csv` columns, then `label, level, trial, hand, phase,
-t_trial`, the target and unsmoothed normalized cursor for each stick,
-`reached_l, reached_r` and `t_wall`. `level.json` holds that level's exact
-targets and per-trial results. Space/Enter, P and Esc remain optional facilitator
-shortcuts. The game writes CSV/JSON locally, then imports that recording into
-TigerData when `backend/.env` has a connection string. If import fails, the
-files remain available for a later retry. Use `--no-tiger-sync` for local-only runs.
-
-Headless checks and visual previews:
-
-```powershell
-.\backend\.venv\Scripts\python.exe -m unittest discover -s tests -p test_garden_story.py
-.\backend\.venv\Scripts\python.exe "Controller Data - Zain\Games\garden.py" --preview "hreem-folder\garden-preview" --mute
-```
-
-The redesign decisions and outstanding playtest questions are in
-`design/ux/moonflower-garden.md`. The requested `3d-games` skill is installed at
-`.claude/skills/3d-games/SKILL.md`; its source is pinned in `skills-lock.json`.
-
-To test controller input separately, run:
-
-```powershell
-uv run python "Controller Data - Zain\read_data.py"
-```
-You need Node 20+, Python 3.9+, Chrome, and a Tiger Data service.
-
-**1. Database.** Create a service in Tiger Console and copy its connection string. Then:
+**1. Database.** Create a service in Tiger Console and copy its connection string. Apply both schemas (they are safe to re-run):
 
 ```bash
 cd backend
-cp .env.example .env          # edit DATABASE_URL in .env
-psql '<the same TigerData connection string>' -f schema.sql
+cp .env.example .env               # set DATABASE_URL (and the other variables below)
+psql "$DATABASE_URL" -f schema.sql
+psql "$DATABASE_URL" -f auth_schema.sql
 ```
 
 **2. Backend.**
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m scripts.seed_synthetic   # optional: two demo profiles with SYNTHETIC history
-uvicorn app.main:app --reload      # http://localhost:8000
+python -m scripts.seed_synthetic   # optional: two demo residents with SYNTHETIC history
+python seed_accounts.py            # optional: logins for existing residents + a caregiver account
+uvicorn app.main:app --port 8000
 ```
 
 **3. Web app.**
@@ -217,95 +112,125 @@ uvicorn app.main:app --reload      # http://localhost:8000
 ```bash
 cd web
 npm install
-npm run dev                        # http://localhost:5173
+npm run dev                        # http://localhost:5173 (the lobby is http://localhost:5173/lobby.html)
 ```
 
-If the API runs somewhere other than `http://localhost:8000`, set `VITE_API_URL` in `web/.env`.
+The Vite dev server proxies `/api` (including the live WebSocket) to `http://localhost:8000`, so the browser sees one origin and the login cookie just works. After pulling changes, restart both the API and the dev server.
+
+**4. Use it.**
+
+- Residents sign up at `/signup` and open the lobby from their home page.
+- Caregivers register at `/caregiver/signup` with the access code from `CAREGIVER_INVITE_CODE`, or use the account from `seed_accounts.py`.
+
+For the cross-laptop setup, each laptop runs its own API and web app against the same `DATABASE_URL`.
+
+### Environment variables (`backend/.env`)
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Tiger Data connection string (never commit it) |
+| `CAREGIVER_INVITE_CODE` | Access code required to register a caregiver; empty turns registration off |
+| `GEMINI_API_KEY` | Enables the AI assistant; without it the rule-based answers are used |
+| `GEMINI_MODEL` | Optional model override (default `gemini-3.8-flash`, with fallbacks) |
+| `CORS_ORIGINS` | Allowed web origins, comma separated (default `http://localhost:5173`) |
+| `GARDEN_RECORDING_TIMEZONE` | Timezone of garden CSV timestamps (default `America/Toronto`) |
+| `STICKDRIFT_GAME_PYTHON`, `STICKDRIFT_API_URL` | Where the API finds Python for the garden game and model, and its own URL |
+
+### Running the garden game
+
+From the repository root:
+
+```bash
+uv sync
+uv run python "Controller Data - Zain/Games/garden.py" --player P01 --session 1 --fullscreen
+uv run python "Controller Data - Zain/Games/garden.py" --demo --mute     # keyboard, labelled synthetic
+```
+
+Each run writes `data/<timestamp>_garden_<player>_all-levels/` with one CSV and `level.json` per chapter, then imports it into Tiger Data when `backend/.env` is configured. Use `--no-tiger-sync` to skip the import, and `--reduced-motion` to still decorative motion. To import recordings later:
+
+```bash
+cd backend
+python -m scripts.import_garden ../data --dry-run
+python -m scripts.import_garden ../data
+```
+
+### Training the pattern model
+
+The model trains in the root Python 3.14 environment on recordings whose folder names are the labels (see `tcn/labels.py`):
+
+```bash
+uv run python -m tcn.synthetic                                   # writes data/Synthetic
+uv run python -c "from tcn import fit, load_examples; fit(load_examples('data'))"
+```
+
+This writes `runs/tcn/model.pt`. Once that file exists, the API scores each garden visit with `backend/scripts/score_garden.py` when the game closes.
+
+## Data and privacy
+
+Data lives in Tiger Data (managed PostgreSQL with TimescaleDB), so it leaves the laptop:
+
+- **Profiles** hold only a nickname or code and a dominant hand, never a real name or health information.
+- **Passwords** are hashed with argon2id, and logins use an HttpOnly session cookie.
+- **No camera, microphone or other biometric capture.**
+
+| Table | What it holds |
+| --- | --- |
+| `participants`, `caregivers`, `auth_sessions` | Accounts and logins |
+| `sessions`, `session_summaries` | One row per visit (`lobby-v1` or `garden-v3`) and its per-game, per-hand results |
+| `raw_samples` | Hypertable of in-game stick samples with target and in-game hand positions, tagged by game; the training data |
+| `garden_level_results`, `garden_imports` | Imported garden recordings |
+| `live_sessions`, `live_samples` | Short-term buffer for the live view, cleared after a day; finished visits are copied to `sessions` and `raw_samples` first |
+
+Lobby visits are stored as free play: each visit is shown on its own and does not feed a statistical baseline yet. The multi-day histories of the demo residents are **synthetic and labelled as such**.
 
 ## Project layout
 
-For design decisions, guardrails and what's built so far, read [Context.MD](Context.MD).
-
 ```
-Context.MD                   Project context, guardrails, current build state, decision log
-Controller Data - Zain/
-  read_data.py               DualSense reader over HID (~500 Hz): live viewer + CSV recording
-  Example PS5 Data.csv       Sample recording
-  Games/garden.py            Garden tasks and full-rate CSV recording, garden-v3 launcher
-  Games/garden_story.py      Mabel's story, stick-only menus, illustration and accessibility options
-  Games/garden_3d.py         Mesh geometry, lighting and cached orthographic 3D rendering
-  Games/garden_diorama.py    3D artwork integration with the existing interaction/recording model
-backend/
-  schema.sql                 Tiger Data tables (participants, sessions, results, trials, raw samples)
-  app/main.py                API: profiles and session history
-  scripts/seed_synthetic.py  Labeled synthetic demo data
 web/
-  src/App.tsx                Routes: resident home (opens the garden game), caregiver dashboard, live view, resident profiles
-  src/useGamepad.ts          DualSense input via the Gamepad API
+  index.html, src/           React app: login and signup, resident home, caregiver dashboard, live view, resident pages
+  src/components/            Charts, live feed (WebSocket + playback buffer), game visits, assistant, insights
+  lobby.html, lobby/         Browser 3D lobby and games (three.js); live.js streams, measure.js measures
+backend/
+  schema.sql, auth_schema.sql   Tiger Data tables
+  app/main.py                FastAPI app, health, and the low-level session API
+  app/auth.py                Resident and caregiver accounts, sessions, access code
+  app/live.py                Live sessions, lobby streaming, saving lobby visits, garden launch and scoring
+  app/live_stream.py         LISTEN/NOTIFY hub and the caregiver WebSocket
+  app/live_metrics.py        Per-hand movement measurements (reach, tracking, shake, left-right difference)
+  app/views.py, insights.py  Caregiver resident data, concerns and recommended checks
+  app/assistant.py           Gemini assistant with grounding and wording checks
+  scripts/                   Synthetic demo data, garden import, garden scoring
+  seed_accounts.py           Demo logins
+tcn/                         Pattern model: data preparation, network, training, scoring
+Controller Data - Zain/      DualSense reader and the pygame garden game
+blender_hub/                 Blender version of the lobby
+Context.MD                   Project context, guardrails and decision log
 ```
 
 ### API
 
-| Method | Path | Returns |
+All caregiver routes need a caregiver login; `/me/*` routes need a resident login.
+
+| Method | Path | Purpose |
 | --- | --- | --- |
+| POST | `/auth/senior/signup`, `/auth/senior/login` | Resident accounts |
+| POST | `/auth/caregiver/signup`, `/auth/caregiver/login` | Caregiver accounts (signup needs the access code) |
+| GET / POST | `/auth/me`, `/auth/logout` | Current account, log out |
+| POST | `/me/lobby/start` | Open a live session for the lobby; returns a one-time stream token |
+| POST | `/live/ingest`, `/live/end` | Stream samples and events with the token; end the visit (saves it to history) |
+| POST / GET | `/me/garden/launch`, `/me/garden` | Launch the desktop garden game on this computer and check its state |
+| GET | `/caregiver/residents`, `/caregiver/residents/{id}` | Residents with risk; one resident's visits, insights and concerns |
+| GET | `/caregiver/live`, `/caregiver/live/{id}` | Live and recently finished sessions; one session's state and samples |
+| WS | `/caregiver/live/{id}/ws` | Push stream of one live session |
+| POST | `/caregiver/assistant` | Ask the assistant about all residents or one |
 | GET | `/health` | Database reachable |
-| GET | `/participants` | Profiles with session count and last played |
-| POST | `/participants` | Create a profile `{alias, dominant_hand}` |
-| GET | `/participants/{id}` | One profile |
-| GET | `/participants/{id}/sessions` | Session history with results, newest first |
-| POST | `/participants/{id}/sessions` | Start one game session (`garden-v1` by default) |
-| POST | `/sessions/{id}/samples` | Append up to 500 timestamped four-axis samples |
-| POST | `/sessions/{id}/trials` | Save one prompt/outcome/metrics record |
-| POST | `/sessions/{id}/events` | Append idempotent phase and session events |
-| POST | `/sessions/{id}/complete` | Save summary and mark session complete |
-| POST | `/sessions/{id}/abandon` | Mark an interrupted session abandoned |
-| GET | `/sessions/{id}/data-status` | Verify sample/trial/response/event counts |
-| GET | `/garden/recordings` | List imported garden CSV recordings and counts |
-| GET | `/sessions/{id}/garden-timeline` | Read one-second TigerData aggregates |
 
-Run `backend/schema.sql` against the TigerData service before using these routes.
-`raw_samples.t_ms` is milliseconds from the client session-start clock;
-`raw_samples.time` is reconstructed from the server's session start time. Upload
-sample batches using the same sequence numbers when retrying so the hypertable's
-unique index can ignore duplicate samples.
-
-### Import existing garden recordings
-
-Run the schema first. From `backend/`, with its dependencies installed:
-
-```powershell
-python -m scripts.import_garden ..\data --dry-run
-python -m scripts.import_garden ..\data
-```
-
-The command also accepts one recording folder or another data root, such as
-`..\Controller Data - Zain\Games\data`. Repeat it to retry failed folders;
-successful imports are skipped. Each recording is committed as one transaction,
-CSV rows stream into PostgreSQL using `COPY`, and each level's original `params`
-and `results` JSON is preserved. The importer refreshes the one-second continuous
-aggregate for historical timestamps. Source files are never rewritten.
-
-Garden recordings are stored as `free_play` because garden-v3 is not the fixed
-arrow assessment protocol. Anonymous recordings get distinct pseudonymous
-profiles. The parent folder is stored as `source_group` for experimental
-grouping; these labels are not diagnoses. Synthetic status comes from
-`session.json`.
-
-Recorded timestamps lack timezone information. Set `GARDEN_RECORDING_TIMEZONE`
-(default `America/Toronto`) if they were recorded elsewhere. CSV `t_wall`
-preserves timing within each level, but exact gaps between levels were not
-recorded, so the imported timeline uses a one-second display gap. The original
-timings remain in the CSVs.
-
-The Python garden game calls the same importer after a game finishes when
-TigerData is configured in `backend/.env`. It uses `backend/.venv` if present;
-otherwise install `backend/requirements.txt` in the game's Python environment.
-The web dashboard's Garden recordings panel reads the aggregate through the API.
+`main.py` also keeps a lower-level `/participants` and `/sessions/{id}/…` API for recording sessions sample by sample, and `/garden/recordings` and `/sessions/{id}/garden-timeline` for imported garden data.
 
 ## Limitations
 
-- This is a hackathon prototype, not a medical device, and it has not been clinically validated.
-- A change in results can come from fatigue, sleep, medication, vision, unfamiliarity with game controllers, controller placement, or a faulty device. The dashboard shows data quality and context for this reason.
-- The joystick task is loosely inspired by clinical movement comparisons. It does not implement a validated exam and cannot measure grip strength, tremor or posture.
-- Usability findings are preliminary unless they come from older adults and care staff.
+- This is a hackathon prototype, not a medical device, and it has not been clinically validated. All thresholds are untested design choices, not clinical cutoffs.
+- A change in results can come from fatigue, sleep, medication, vision, unfamiliarity with game controllers, how the controller is held, or a faulty device.
+- Lobby measurements are sampled at about 60 Hz in the browser, including display and network delay. They are not precise to the millisecond and are not a pure motor-speed measure.
+- The pattern model is trained on teammate-simulated and synthetic recordings only, and no trained model is committed.
 - Anyone with a sudden new neurological symptom needs normal urgent care. Nobody should wait on a game score.

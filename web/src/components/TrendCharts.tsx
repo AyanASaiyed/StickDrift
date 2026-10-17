@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { Concern, Finding, GardenSession, Insights, MeasureKey, SessionSummary } from '../api'
+import type { Concern, Finding, GameSession, GardenSession, HandLive, Insights, MeasureKey, SessionSummary } from '../api'
 import { formatDate, visitLabels } from '../format'
 import { Tabs } from './Tabs'
 
@@ -124,8 +124,15 @@ function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recent
         ))}
 
         {xLabels.map((label, i) =>
-          i % labelEvery === 0 || i === n - 1 ? (
-            <text key={i} className="chart-axis" x={x(i)} y={H - PAD.bottom + 22} textAnchor={n > 2 && i === n - 1 ? 'end' : 'middle'}>
+          // the first and last points are always labelled; drop a regular label that would crowd the last one
+          i === 0 || i === n - 1 || (i % labelEvery === 0 && n - 1 - i >= Math.max(2, labelEvery * 0.75)) ? (
+            <text
+              key={i}
+              className="chart-axis"
+              x={x(i)}
+              y={H - PAD.bottom + 22}
+              textAnchor={n > 1 && i === n - 1 ? 'end' : n > 1 && i === 0 ? 'start' : 'middle'}
+            >
               {label}
             </text>
           ) : null,
@@ -429,6 +436,79 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
             ]}
           />
         ))}
+    </div>
+  )
+}
+
+type GameKey = 'apple' | 'fish' | 'rat'
+const GAME_TABS: { key: GameKey; label: string }[] = [
+  { key: 'apple', label: 'Apple Picking' },
+  { key: 'fish', label: 'Harbour Fishing' },
+  { key: 'rat', label: 'Rat Catching' },
+]
+
+/** One line per hand across web lobby visits, for the headline measurement of each game. */
+export function GameTrendCharts({ visits }: { visits: GameSession[] }) {
+  const ordered = visits.slice().reverse()
+  const played = (g: GameKey) => ordered.filter((v) => v.games[g])
+  const [view, setView] = useState<GameKey>(() => GAME_TABS.find((t) => played(t.key).length >= 2)?.key ?? 'apple')
+  const rows = played(view)
+  const pick = (k: keyof HandLive) => (h: 'left' | 'right') => rows.map((v) => v.games[view]!.hands[h][k] ?? null)
+  const chart = {
+    apple: {
+      title: 'Time to pick an apple',
+      caption: 'Median time from an apple being free to pick until that hand’s glove grabbed it, per visit. Lower is quicker.',
+      format: (v: number) => `${v.toFixed(2)} s`,
+      points: pick('reach_s'),
+      yMin: 0,
+      yMax: undefined,
+    },
+    fish: {
+      title: 'Time on the fishing lane',
+      caption: 'Share of each trace the lure stayed on the glowing lane, per visit. Higher is steadier.',
+      format: (v: number) => `${Math.round(v * 100)}%`,
+      points: pick('on_target'),
+      yMin: 0,
+      yMax: 1,
+    },
+    rat: {
+      title: 'Time to slam a target rat',
+      caption: 'Median time from the target rat appearing until the stick was flicked up, per visit. Lower is quicker.',
+      format: (v: number) => `${v.toFixed(2)} s`,
+      points: pick('reach_s'),
+      yMin: 0,
+      yMax: undefined,
+    },
+  }[view]
+
+  return (
+    <div className="chart-single">
+      <Tabs
+        variant="pills"
+        label="Game chart"
+        value={view}
+        onChange={setView}
+        items={GAME_TABS.map((t) => ({ ...t, badge: played(t.key).length || null }))}
+      />
+      {rows.length < 2 ? (
+        <p className="muted">
+          This chart appears after at least two visits that include {GAME_TABS.find((t) => t.key === view)!.label}.{' '}
+          {rows.length === 1 ? '1 so far.' : ''}
+        </p>
+      ) : (
+        <LineChart
+          title={chart.title}
+          caption={chart.caption}
+          xLabels={visitLabels(rows.map((v) => v.started_at))}
+          yMin={chart.yMin}
+          yMax={chart.yMax}
+          format={chart.format}
+          series={[
+            { label: 'Left hand', color: 'var(--hand-left)', points: chart.points('left') },
+            { label: 'Right hand', color: 'var(--hand-right)', points: chart.points('right') },
+          ]}
+        />
+      )}
     </div>
   )
 }

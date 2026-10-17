@@ -86,6 +86,7 @@ export interface Insights {
   synthetic: boolean
   usable_sessions: number
   garden_visits?: number
+  game_visits?: number
   garden_judged?: number
   baseline_sessions: number
   recent_session_ids: string[]
@@ -175,6 +176,29 @@ export interface ResidentDetail {
   insights: Insights
   sessions: SessionSummary[]
   garden_sessions: GardenSession[]
+  game_sessions: GameSession[]
+}
+
+export type LobbyGame = 'apple' | 'fish' | 'rat'
+
+/** One web lobby game within a visit. Apples picked and rats caught use apples_reached / apples_total. */
+export interface GameResult {
+  hands: { left: HandLive; right: HandLive }
+  left_right_difference_pct: Partial<Record<keyof HandLive, number>>
+  attempts: number
+  samples: number
+  play_s: number
+  finished: boolean
+}
+
+export interface GameSession {
+  session_id: string
+  started_at: string
+  completed_at: string | null
+  status: string
+  is_synthetic: boolean
+  games: Partial<Record<LobbyGame, GameResult>>
+  games_finished: LobbyGame[]
 }
 
 export type LiveStatus =

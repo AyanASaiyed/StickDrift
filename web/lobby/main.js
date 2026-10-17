@@ -87,6 +87,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
   if (!running) return
   const pad = input.read()
+  live.source(pad.source)
   live.sample(measure.frame(active, live.now(), pad.raw, (e) => live.event(e.type, e)))
   let ui
   if (active) {

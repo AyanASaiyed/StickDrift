@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from . import live
 from .auth import current_caregiver
 from .db import pool
 from .insights import add_model_concerns, analyze, review_from
@@ -73,6 +74,17 @@ class GardenSession(BaseModel):
     live: Optional[dict]
 
 
+class GameSession(BaseModel):
+    """One visit to the web lobby: per-game results keyed apple / fish / rat."""
+    session_id: UUID
+    started_at: Any
+    completed_at: Optional[Any]
+    status: str
+    is_synthetic: bool
+    games: dict
+    games_finished: List[str]
+
+
 class ResidentDetail(BaseModel):
     participant_id: UUID
     username: Optional[str]
@@ -82,6 +94,7 @@ class ResidentDetail(BaseModel):
     insights: dict
     sessions: List[SessionSummary]
     garden_sessions: List[GardenSession]
+    game_sessions: List[GameSession]
 
 
 def _fetch_sessions(conn, participant_id: UUID) -> List[dict]:
@@ -94,6 +107,7 @@ def _fetch_sessions(conn, participant_id: UUID) -> List[dict]:
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
            WHERE s.participant_id = %s AND s.protocol_version NOT LIKE 'garden-%%'
+             AND s.protocol_version NOT LIKE 'lobby-%%'
            ORDER BY s.started_at DESC""",
         (participant_id,),
     ).fetchall()
@@ -112,6 +126,27 @@ def _fetch_garden(conn, participant_id: UUID) -> List[dict]:
     ).fetchall()
 
 
+def _fetch_games(conn, participant_id: UUID) -> List[dict]:
+    return conn.execute(
+        """SELECT s.session_id, s.started_at, s.completed_at, s.status, s.is_synthetic,
+                  COALESCE(ss.metrics->'games', '{}'::jsonb) AS games,
+                  ARRAY(SELECT jsonb_array_elements_text(COALESCE(ss.metrics->'games_finished', '[]'::jsonb)))
+                    AS games_finished
+           FROM sessions s
+           LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
+           WHERE s.participant_id = %s AND s.protocol_version LIKE 'lobby-%%'
+           ORDER BY s.started_at DESC LIMIT 50""",
+        (participant_id,),
+    ).fetchall()
+
+
+def _sweep():
+    try:
+        live.save_unsaved_lobbies()
+    except Exception:
+        pass  # a failed sweep must never block the caregiver's view; it retries on the next visit
+
+
 def resident_profile(conn, participant_id: UUID) -> Optional[dict]:
     p = conn.execute(
         "SELECT participant_id, username, alias, dominant_hand FROM participants WHERE participant_id = %s",
@@ -121,12 +156,17 @@ def resident_profile(conn, participant_id: UUID) -> Optional[dict]:
         return None
     sessions = _fetch_sessions(conn, participant_id)
     garden = _fetch_garden(conn, participant_id)
+    games = _fetch_games(conn, participant_id)
     insights = add_model_concerns(analyze(sessions), garden)
+    insights["game_visits"] = len(games)
+    if insights["status"] == "insufficient" and not garden and games and not insights["concerns"]:
+        insights["summary"] = (f"{len(games)} game {'visit' if len(games) == 1 else 'visits'} recorded. "
+                               "Lobby games are shown visit by visit; they don't set a baseline yet.")
     return {
         "participant_id": p["participant_id"], "username": p["username"],
         "display_name": p["alias"], "dominant_hand": p["dominant_hand"],
         "review": review_from(insights), "insights": insights, "sessions": sessions,
-        "garden_sessions": garden,
+        "garden_sessions": garden, "game_sessions": games,
     }
 
 
@@ -146,17 +186,18 @@ RISK_ORDER = {"check": 0, "watch": 1, "none": 2}
 
 @router.get("/caregiver/residents", response_model=List[ResidentRow])
 def residents(_: dict = Depends(current_caregiver)):
+    _sweep()
     with pool.connection() as conn:
         profiles = all_profiles(conn)
     out = []
     for p in profiles:
         sessions = p["sessions"]
         done = [s for s in reversed(sessions) if s["status"] == "completed"][-12:]
-        played = [x["started_at"] for x in sessions[:1] + p["garden_sessions"][:1]]
+        played = [x["started_at"] for x in sessions[:1] + p["garden_sessions"][:1] + p["game_sessions"][:1]]
         out.append({
             "participant_id": p["participant_id"], "username": p["username"],
             "display_name": p["display_name"], "dominant_hand": p["dominant_hand"],
-            "session_count": len(sessions) + len(p["garden_sessions"]),
+            "session_count": len(sessions) + len(p["garden_sessions"]) + len(p["game_sessions"]),
             "last_played_at": max(played) if played else None,
             "review": p["review"], "risk": p["insights"]["risk"],
             "concerns": p["insights"]["concerns"],
@@ -169,6 +210,7 @@ def residents(_: dict = Depends(current_caregiver)):
 
 @router.get("/caregiver/residents/{participant_id}", response_model=ResidentDetail)
 def resident_detail(participant_id: UUID, _: dict = Depends(current_caregiver)):
+    _sweep()
     with pool.connection() as conn:
         profile = resident_profile(conn, participant_id)
     if profile is None:
