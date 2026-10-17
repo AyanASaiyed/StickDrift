@@ -1,14 +1,15 @@
 """Lightweight non-causal temporal convolutional network.
 
 The recording is scored offline, so each layer looks both backward and forward.
-Three independent sigmoids produce resemblance scores. Nothing in the head
-forces those scores to add up to 100.
+One shared network reads a single hand. Two independent sigmoids produce that
+hand's tremor and impairment scores. Nothing in the head forces those scores
+to add up to 100.
 """
 
 import torch
 from torch import nn
 
-from tcn.config import DROPOUT, HIDDEN, KERNEL, LEVELS
+from tcn.config import DROPOUT, HAND_SCORES, HIDDEN, KERNEL, LEVELS
 
 
 class TemporalBlock(nn.Module):
@@ -38,7 +39,7 @@ class PatternTCN(nn.Module):
         levels: int = LEVELS,
         kernel: int = KERNEL,
         dropout: float = DROPOUT,
-        n_scores: int = 3,
+        n_scores: int = len(HAND_SCORES),
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -53,10 +54,10 @@ class PatternTCN(nn.Module):
         self.head = nn.Linear(hidden, n_scores)
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
-        """Score a batch.
+        """Score a batch of single-hand stretches.
 
         `x` is (batch, channels, time). `mask` is (batch, time), 1 on real
-        samples and 0 on padding. Returns (batch, 3) scores in (0, 100).
+        samples and 0 on padding. Returns (batch, n_scores) scores in (0, 100).
         """
         hidden = self.in_proj(x)
         for block in self.blocks:

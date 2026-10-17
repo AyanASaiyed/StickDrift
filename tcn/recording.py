@@ -6,15 +6,16 @@ both stick positions, and the motion sensor inside the controller body:
     t, lx, ly, rx, ry, gyro_x, gyro_y, gyro_z, acc_x, acc_y, acc_z
 
 Stick columns may also be named raw_x, raw_y, raw_rx, raw_ry. Any other fields
-in a sample are ignored. CSV, JSON, or a database row can all become a
-Recording once those fields are in memory.
+in a sample are ignored, except `phase`. When a garden file marks a sample as
+cue or track, that time is kept so a late start can be measured. The return
+to center is not a cue.
 """
 
 from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from tcn.config import CHANNELS, COLUMN_ALIASES, SCORES
+from tcn.config import CHANNELS, COLUMN_ALIASES, CUE_PHASES, SCORES
 
 
 class RecordingError(ValueError):
@@ -25,10 +26,17 @@ class Recording:
     """Raw samples before resampling.
 
     `time_s` has shape (samples,). `values` has shape (samples, channels) in
-    `CHANNELS` order.
+    `CHANNELS` order. `cue_s` holds the times a movement was requested.
     """
 
-    def __init__(self, time_s: np.ndarray, values: np.ndarray, name: str = ""):
+    def __init__(
+        self,
+        time_s: np.ndarray,
+        values: np.ndarray,
+        name: str = "",
+        cues: np.ndarray | None = None,
+        task_spans: np.ndarray | None = None,
+    ):
         time_s = np.asarray(time_s, dtype=np.float64).reshape(-1)
         values = np.asarray(values, dtype=np.float64)
         if values.ndim != 2 or values.shape[1] != len(CHANNELS):
@@ -44,17 +52,34 @@ class Recording:
             raise RecordingError(f"{_label(name)} needs at least 2 samples.")
         if not np.isfinite(time_s).all() or not np.isfinite(values).all():
             raise RecordingError(f"{_label(name)} contains a blank or non-numeric sample.")
+        cue_s = np.zeros(0, dtype=np.float64) if cues is None else np.asarray(cues, dtype=np.float64).reshape(-1)
+        if cue_s.size and not np.isfinite(cue_s).all():
+            raise RecordingError(f"{_label(name)} contains a blank cue time.")
+        if task_spans is None:
+            spans = np.zeros((0, 2), dtype=np.float64)
+        else:
+            spans = np.asarray(task_spans, dtype=np.float64).reshape(-1, 2)
+        if spans.size and not np.isfinite(spans).all():
+            raise RecordingError(f"{_label(name)} contains a blank task time.")
         self.time_s = time_s
         self.values = values
+        self.cue_s = np.sort(cue_s)
+        self.task_spans = spans
         self.name = name
 
     @classmethod
-    def from_columns(cls, time_s: Sequence[float], name: str = "", **columns: Sequence[float]) -> "Recording":
+    def from_columns(
+        cls,
+        time_s: Sequence[float],
+        name: str = "",
+        cues: Sequence[float] | None = None,
+        **columns: Sequence[float],
+    ) -> "Recording":
         """Build a recording from one array per channel."""
         resolved = _resolve_columns(columns, name)
         width = len(np.asarray(time_s).reshape(-1))
         rows = np.column_stack([_match_length(resolved[channel], width, channel, name) for channel in CHANNELS])
-        return cls(time_s, rows, name)
+        return cls(time_s, rows, name, cues=None if cues is None else np.asarray(cues, dtype=np.float64))
 
     @classmethod
     def from_rows(cls, rows: Sequence[Mapping[str, object]], name: str = "") -> "Recording":
@@ -77,19 +102,44 @@ class Recording:
             values.append(row)
         if not values:
             raise RecordingError(f"{_label(name)} has no complete samples.")
-        return cls(times, values, name)
+        cues, spans = _task_times(samples, chosen["t"])
+        return cls(times, values, name, cues=cues, task_spans=spans)
 
 
 class Example:
-    """A recording plus the three pattern scores it should match, each 0–100."""
+    """A recording plus the pattern it should match.
 
-    def __init__(self, recording: Recording, parkinson: float, stroke: float, essential_tremor: float):
+    `parkinson`, `stroke`, and `essential_tremor` are recording-level resemblance
+    targets from 0 to 100. The weak hand is trained on the shared Parkinson
+    score plus the stroke gap. The other hand is trained on the shared score.
+    `tremor_hand` limits the tremor target to one hand.
+    """
+
+    def __init__(
+        self,
+        recording: Recording,
+        parkinson: float,
+        stroke: float,
+        essential_tremor: float,
+        weak_hand: str | None = None,
+        tremor_hand: str | None = None,
+    ):
         target = np.asarray([parkinson, stroke, essential_tremor], dtype=np.float32)
         for score_name, value in zip(SCORES, target, strict=True):
             if not 0.0 <= float(value) <= 100.0:
                 raise RecordingError(f"{score_name} must be from 0 to 100.")
+        if weak_hand not in (None, "left", "right"):
+            raise RecordingError("weak_hand must be left, right, or empty.")
+        if float(stroke) > 0.0 and weak_hand is None:
+            raise RecordingError("A stroke target needs weak_hand set to left or right.")
+        if weak_hand is not None and float(stroke) <= 0.0:
+            raise RecordingError("weak_hand is set, but the stroke target is 0.")
+        if tremor_hand not in (None, "both", "left", "right"):
+            raise RecordingError("tremor_hand must be both, left, right, or empty.")
         self.recording = recording
         self.target = target
+        self.weak_hand = weak_hand
+        self.tremor_hand = "both" if tremor_hand is None else tremor_hand
 
 
 def _resolve_columns(columns: Mapping[str, Sequence[float]], name: str) -> dict[str, np.ndarray]:
@@ -129,6 +179,46 @@ def _parse_sample(sample: Mapping[str, object], chosen: dict[str, str]) -> tuple
         except (TypeError, ValueError):
             return None
     return cells[0], cells[1:]
+
+
+def _task_times(
+    samples: Sequence[Mapping[str, object]],
+    time_key: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Cue times and the [start, end] spans where the task asked for a reach."""
+    cues: list[float] = []
+    spans: list[tuple[float, float]] = []
+    active = False
+    start = 0.0
+    stamp = 0.0
+    saw_phase = False
+    for sample in samples:
+        phase = sample.get("phase")
+        if phase is None or str(phase) == "":
+            if active:
+                spans.append((start, stamp))
+                active = False
+            continue
+        saw_phase = True
+        try:
+            stamp = float(sample.get(time_key))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(stamp):
+            continue
+        in_task = str(phase) in CUE_PHASES
+        if in_task and not active:
+            active = True
+            start = stamp
+            cues.append(stamp)
+        elif not in_task and active:
+            spans.append((start, stamp))
+            active = False
+    if active:
+        spans.append((start, stamp))
+    if not saw_phase:
+        return np.zeros(0, dtype=np.float64), np.zeros((0, 2), dtype=np.float64)
+    return np.asarray(cues, dtype=np.float64), np.asarray(spans, dtype=np.float64).reshape(-1, 2)
 
 
 def _match_length(values: np.ndarray, width: int, channel: str, name: str) -> np.ndarray:
