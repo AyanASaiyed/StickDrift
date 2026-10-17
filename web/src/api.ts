@@ -57,6 +57,7 @@ export interface SessionSummary {
   quality: 'good' | 'flagged' | 'invalid' | null
   mode: string
   protocol_version: string
+  is_synthetic: boolean
   left_median_latency_ms: number | null
   right_median_latency_ms: number | null
   left_correct: number | null
@@ -73,6 +74,59 @@ export interface Review {
   reasons: string[]
 }
 
+export type Risk = 'none' | 'watch' | 'check'
+export type MeasureKey =
+  | 'left_latency'
+  | 'right_latency'
+  | 'left_accuracy'
+  | 'right_accuracy'
+  | 'both_accuracy'
+  | 'lr_gap'
+  | 'enjoyment'
+
+export interface Finding {
+  key: MeasureKey
+  label: string
+  hand: 'left' | 'right' | 'both' | null
+  kind: 'latency' | 'accuracy' | 'gap' | 'enjoyment'
+  baseline: number
+  latest: number
+  change: number
+  baseline_text: string
+  latest_text: string
+  change_text: string
+  direction: 'worse' | 'better' | 'steady'
+  flagged: boolean
+  persistent: boolean
+  flagged_session_ids: string[]
+  text: string
+}
+
+export interface Concern {
+  id: string
+  title: string
+  level: 'watch' | 'check'
+  summary: string
+  evidence: string[]
+  possible_contributors: string[]
+  recommended_checks: string[]
+  references: string[]
+  measurements: MeasureKey[]
+}
+
+export interface Insights {
+  status: 'ok' | 'insufficient'
+  risk: Risk
+  summary: string
+  disclaimer: string
+  synthetic: boolean
+  usable_sessions: number
+  baseline_sessions: number
+  recent_session_ids: string[]
+  findings: Finding[]
+  concerns: Concern[]
+}
+
 export interface ResidentRow {
   participant_id: string
   username: string | null
@@ -81,6 +135,10 @@ export interface ResidentRow {
   session_count: number
   last_played_at: string | null
   review: Review
+  risk: Risk
+  concerns: Pick<Concern, 'id' | 'title' | 'level'>[]
+  trend_left_ms: (number | null)[]
+  trend_right_ms: (number | null)[]
 }
 
 export interface ResidentDetail {
@@ -89,7 +147,21 @@ export interface ResidentDetail {
   display_name: string
   dominant_hand: Hand
   review: Review
+  insights: Insights
   sessions: SessionSummary[]
+}
+
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  text: string
+}
+
+export interface AssistantAnswer {
+  answer: string
+  source: 'gemini' | 'rules'
+  grounded: boolean
+  unverified_numbers: string[]
+  note: string | null
 }
 
 export class ApiError extends Error {
@@ -196,4 +268,6 @@ export const api = {
 
   caregiverResidents: () => request<ResidentRow[]>('/caregiver/residents'),
   caregiverResident: (id: string) => request<ResidentDetail>(`/caregiver/residents/${id}`),
+  askAssistant: (question: string, history: ChatTurn[], participantId?: string) =>
+    post<AssistantAnswer>('/caregiver/assistant', { question, history, participant_id: participantId ?? null }),
 }

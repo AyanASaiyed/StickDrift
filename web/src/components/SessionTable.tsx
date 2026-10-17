@@ -1,30 +1,5 @@
-import type { Review, SessionSummary } from '../api'
+import type { SessionSummary } from '../api'
 import { formatDateTime, formatScore, formatSeconds } from '../format'
-
-export function ReviewCard({ review, name }: { review: Review; name: string }) {
-  if (!review.flagged) {
-    return (
-      <div className="review review-ok" role="status">
-        <strong>No change worth checking</strong>
-        <p className="muted">{name}’s recent sessions are in line with their usual pattern.</p>
-      </div>
-    )
-  }
-  return (
-    <div className="review review-flag" role="status">
-      <strong>Change worth checking</strong>
-      <ul>
-        {review.reasons.map((r) => (
-          <li key={r}>{r}</li>
-        ))}
-      </ul>
-      <p className="hint">
-        This is a prompt to check in, not a diagnosis. A change can come from tiredness, medication, vision or an
-        unfamiliar setup.
-      </p>
-    </div>
-  )
-}
 
 function Quality({ s }: { s: SessionSummary }) {
   if (s.status === 'abandoned') return <span className="badge">Stopped early</span>
@@ -62,6 +37,7 @@ export function SessionTable({ sessions }: { sessions: SessionSummary[] }) {
               <td className="num">{s.enjoyment ? `${s.enjoyment}/5` : '—'}</td>
               <td>
                 <Quality s={s} />
+                {s.is_synthetic && <span className="badge badge-synthetic">Simulated</span>}
               </td>
             </tr>
           ))}
