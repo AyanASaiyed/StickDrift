@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, type ResidentDetail as Detail } from '../api'
 import { ReviewCard, SessionTable } from '../components/SessionTable'
+import { TrendCharts } from '../components/TrendCharts'
 
 export default function ResidentDetail() {
   const { id = '' } = useParams()
@@ -44,6 +45,12 @@ export default function ResidentDetail() {
 
           <section className="panel">
             <ReviewCard review={data.review} name={data.display_name} />
+          </section>
+
+          <section className="panel">
+            <h2>Trends over time</h2>
+            <p className="muted">Each point is one session, oldest on the left. Compared only with this resident’s own history.</p>
+            <TrendCharts sessions={data.sessions} />
           </section>
 
           <section className="panel">

@@ -8,6 +8,11 @@ const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
 
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso))
 
+const dateFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+
+/** Short "Oct 17" style label for chart axes. */
+export const formatDate = (iso: string) => dateFmt.format(new Date(iso))
+
 export const formatScore = (hits: number | null, total: number | null) =>
   hits === null || total === null ? '—' : `${hits}/${total}`
 
