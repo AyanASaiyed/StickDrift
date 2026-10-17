@@ -1,0 +1,199 @@
+{
+ "protocol": "garden-v3",
+ "level": "apples",
+ "number": 1,
+ "label": "unlabeled",
+ "player": "anon",
+ "session": 1,
+ "params": {
+  "rest_radius": 0.2,
+  "start_tolerance": 0.2,
+  "start_hold_s": 0.3,
+  "start_max_s": 3.0,
+  "hand": "both",
+  "rest_hold_s": 0.3,
+  "rest_max_s": 2.5,
+  "min_gap_s": 0.8,
+  "reach_radius": 0.18,
+  "timeout_s": 12.0,
+  "apples_left_deg_dist": [
+   [
+    270,
+    0.6
+   ],
+   [
+    180,
+    0.4
+   ],
+   [
+    135,
+    0.6
+   ],
+   [
+    315,
+    0.4
+   ],
+   [
+    90,
+    0.4
+   ],
+   [
+    225,
+    0.6
+   ]
+  ],
+  "apples_left_xy": [
+   [
+    -0.0,
+    -0.6
+   ],
+   [
+    -0.4,
+    0.0
+   ],
+   [
+    -0.4243,
+    0.4243
+   ],
+   [
+    0.2828,
+    -0.2828
+   ],
+   [
+    0.0,
+    0.4
+   ],
+   [
+    -0.4243,
+    -0.4243
+   ]
+  ],
+  "apples_right_xy": [
+   [
+    0.0,
+    -0.6
+   ],
+   [
+    0.4,
+    0.0
+   ],
+   [
+    0.4243,
+    0.4243
+   ],
+   [
+    -0.2828,
+    -0.2828
+   ],
+   [
+    0.0,
+    0.4
+   ],
+   [
+    0.4243,
+    -0.4243
+   ]
+  ]
+ },
+ "completed": true,
+ "rows": 8505,
+ "duration_s": 12.556,
+ "results": [
+  {
+   "trial": 1,
+   "target_left": [
+    -0.0,
+    -0.6
+   ],
+   "target_right": [
+    0.0,
+    -0.6
+   ],
+   "reached_l": true,
+   "t_reach_l": 0.4821,
+   "reached_r": true,
+   "t_reach_r": 1.4734,
+   "t_end": 1.9145
+  },
+  {
+   "trial": 2,
+   "target_left": [
+    -0.4,
+    0.0
+   ],
+   "target_right": [
+    0.4,
+    0.0
+   ],
+   "reached_l": true,
+   "t_reach_l": 0.3391,
+   "reached_r": true,
+   "t_reach_r": 0.3561,
+   "t_end": 0.4583
+  },
+  {
+   "trial": 3,
+   "target_left": [
+    -0.4243,
+    0.4243
+   ],
+   "target_right": [
+    0.4243,
+    0.4243
+   ],
+   "reached_l": true,
+   "t_reach_l": 0.3561,
+   "reached_r": true,
+   "t_reach_r": 0.3731,
+   "t_end": 1.1283
+  },
+  {
+   "trial": 4,
+   "target_left": [
+    0.2828,
+    -0.2828
+   ],
+   "target_right": [
+    -0.2828,
+    -0.2828
+   ],
+   "reached_l": true,
+   "t_reach_l": 0.5233,
+   "reached_r": true,
+   "t_reach_r": 0.4045,
+   "t_end": 1.2204
+  },
+  {
+   "trial": 5,
+   "target_left": [
+    0.0,
+    0.4
+   ],
+   "target_right": [
+    0.0,
+    0.4
+   ],
+   "reached_l": true,
+   "t_reach_l": 0.6112,
+   "reached_r": true,
+   "t_reach_r": 0.3561,
+   "t_end": 1.1026
+  },
+  {
+   "trial": 6,
+   "target_left": [
+    -0.4243,
+    -0.4243
+   ],
+   "target_right": [
+    0.4243,
+    -0.4243
+   ],
+   "reached_l": true,
+   "t_reach_l": 0.5089,
+   "reached_r": true,
+   "t_reach_r": 0.6788,
+   "t_end": 1.4269
+  }
+ ]
+}

@@ -1,0 +1,34 @@
+{
+ "protocol": "garden-v3",
+ "level": "butterfly_right",
+ "number": 3,
+ "label": "unlabeled",
+ "player": "anon",
+ "session": 1,
+ "params": {
+  "rest_radius": 0.2,
+  "start_tolerance": 0.2,
+  "start_hold_s": 0.3,
+  "start_max_s": 3.0,
+  "hand": "right",
+  "mirrored": true,
+  "path": "r = R0 + RA*sin(LOBES*theta), theta = 2*pi*t/LAP_S, x = r cos(theta), y = r sin(theta); then x -> -x",
+  "R0": 0.4,
+  "RA": 0.06,
+  "LOBES": 2,
+  "LAP_S": 12.0,
+  "laps": 1,
+  "sparkle_radius": 0.2
+ },
+ "completed": true,
+ "rows": 8693,
+ "duration_s": 12.762,
+ "results": [
+  {
+   "trial": 1,
+   "hand": "right",
+   "frames_60hz": 736,
+   "frames_within_sparkle_radius": 472
+  }
+ ]
+}

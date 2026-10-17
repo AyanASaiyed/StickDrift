@@ -2,7 +2,7 @@
 garden.py - Mabel's Moonflower Garden (garden-v3), played with both thumbsticks.
 
 Run:  python garden.py --player P01 --session 1 --label normal [--level apples] [--mute] [--fullscreen]
-Sticks: hold either UP to continue; hold both OUTWARD to rest; DOWN at the bench to finish.
+Sticks: press X to continue between screens; hold both OUTWARD to rest; DOWN at the bench to finish.
 Optional facilitator keys: Space/Enter = continue, P = break, Esc = quit. Files are saved.
 
 Four garden chapters, with generous time for collecting apples:
@@ -18,10 +18,10 @@ every HID report (~500 Hz over USB): the Example PS5 Data columns (read_data.CSV
 Stick coordinates: normalized to -1..1 around the centre measured at the start of the session,
 y grows downward (same as the raw bytes and the screen). Right-stick targets are the left ones mirrored (x flipped).
 
-Output:
-  data/garden_{player}_{label}_s{session}_{stamp}/session.json
-  data/garden_{player}_{label}_s{session}_{stamp}/level_{n}_{name}/controller_data.csv
-  data/garden_{player}_{label}_s{session}_{stamp}/level_{n}_{name}/level.json
+Output (player, session and --label are added only when they are not the defaults):
+  data/{date}_{time}_garden_all-levels/session.json
+  data/{date}_{time}_garden_all-levels/level_{n}_{name}/controller_data.csv
+  data/{date}_{time}_garden_all-levels/level_{n}_{name}/level.json
 """
 import argparse
 import array
@@ -40,6 +40,20 @@ from read_data import CSV_HEADER, Reader, parse, to_row
 
 PROTOCOL = "garden-v3"
 LEVELS = ("apples", "butterfly_left", "butterfly_right", "water")
+
+
+def session_dirname(args, when=None):
+    """Readable session folder. Defaults (anon, session 1, unlabeled) are left out."""
+    safe = lambda v: re.sub(r"[^A-Za-z0-9_-]", "_", str(v))
+    parts = [(when or time.strftime("%Y-%m-%d_%H-%M-%S")), "garden"]
+    if str(args.player) != "anon":
+        parts.append(safe(args.player))
+    if args.session != 1:
+        parts.append(f"session-{args.session}")
+    if str(args.label) != "unlabeled":
+        parts.append(safe(args.label))
+    parts.append("all-levels" if args.level == "all" else safe(args.level))
+    return "_".join(parts)
 
 W, H = 1280, 720
 FPS = 60
@@ -324,9 +338,7 @@ def make_sounds():
 class Game:
     def __init__(self, args):
         self.args = args
-        safe = lambda v: re.sub(r"[^A-Za-z0-9_-]", "_", str(v))
-        stamp = time.strftime("%Y%m%d_%H%M%S")
-        self.folder = os.path.join("data", f"garden_{safe(args.player)}_{safe(args.label)}_s{args.session}_{stamp}")
+        self.folder = os.path.join("data", session_dirname(args))
         os.makedirs(self.folder, exist_ok=True)
         self.levels = LEVELS if args.level == "all" else (args.level,)
 

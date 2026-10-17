@@ -1,0 +1,102 @@
+{
+ "protocol": "garden-v3",
+ "game": "garden",
+ "player": "anon",
+ "session": 1,
+ "label": "unlabeled",
+ "started": "2026-10-17T05:03:14",
+ "controller": "Sony DualSense / DualSense Edge over HID (read_data.parse)",
+ "screen": [
+  1280,
+  720
+ ],
+ "display_smoothing": 0.35,
+ "coordinates": "target_* and cursor_* are sticks normalized to -1..1 around calibration.centers (positive side divided by 255-centre, negative side by centre), y grows downward. Right-stick targets are the left-stick targets mirrored (x flipped).",
+ "columns": {
+  "t": "active seconds since the level started (breaks are skipped)",
+  "t_wall": "wall-clock seconds since the level started (includes breaks)",
+  "t_trial": "active seconds since the apple pair appeared / the flight began; empty while waiting",
+  "phase": "wait = resting in the middle or moving to the start, cue = apples showing, return = both apples picked and coming back, track = following a moving target",
+  "hand": "left, right or both: which stick(s) the level uses",
+  "reached_l / reached_r": "1 once that hand has picked its apple in this pair",
+  "cursor_*": "unsmoothed normalized stick positions (the drawn cursor is smoothed)"
+ },
+ "levels_requested": [
+  "apples",
+  "butterfly_left",
+  "butterfly_right",
+  "water"
+ ],
+ "levels": [
+  {
+   "level": "apples",
+   "folder": "level_1_apples",
+   "completed": true,
+   "rows": 5684,
+   "duration_s": 8.355
+  },
+  {
+   "level": "butterfly_left",
+   "folder": "level_2_butterfly_left",
+   "completed": true,
+   "rows": 8970,
+   "duration_s": 13.243
+  },
+  {
+   "level": "butterfly_right",
+   "folder": "level_3_butterfly_right",
+   "completed": true,
+   "rows": 8878,
+   "duration_s": 13.132
+  },
+  {
+   "level": "water",
+   "folder": "level_4_water",
+   "completed": true,
+   "rows": 11110,
+   "duration_s": 16.349
+  }
+ ],
+ "pauses": 0,
+ "disconnects": 0,
+ "presentation": "moonflower-garden-v1",
+ "is_synthetic": false,
+ "reduced_motion": false,
+ "navigation": "press X (or Space/Enter) to continue between screens; both sticks outward 1.4s to pause; hold either stick down 1.4s from pause to finish",
+ "renderer": "orthographic-3d-baked-sprites-v1",
+ "calibration": {
+  "centers": {
+   "lx": 129,
+   "ly": 129,
+   "rx": 127,
+   "ry": 126
+  },
+  "samples_60hz": 93,
+  "rest_sd": {
+   "lx": 0.0,
+   "ly": 0.0,
+   "rx": 0.177,
+   "ry": 0.0
+  },
+  "rest_range": {
+   "lx": [
+    129,
+    129
+   ],
+   "ly": [
+    129,
+    129
+   ],
+   "rx": [
+    127,
+    128
+   ],
+   "ry": [
+    126,
+    126
+   ]
+  }
+ },
+ "completed": true,
+ "ended": "2026-10-17T05:04:17"
+}

@@ -1,4 +1,6 @@
-"""Illustrated presentation and stick-only navigation for the garden recorder.
+"""Illustrated presentation for the garden recorder.
+
+Screens advance with X (or Space/Enter). Stick holds are for play, pause, and leaving.
 
 All task positions and raw recording remain owned by garden.Game/Recorder.
 Artwork is drawn locally with Pygame; no downloaded assets or network needed.
@@ -68,7 +70,6 @@ class StoryGame(core.Game):
     def __init__(self, args):
         self.synthetic = args.demo or bool(args.preview)
         self.reduced_motion = args.reduced_motion
-        self.continue_hold = HoldGesture()
         self.break_hold = HoldGesture(1.4)
         self.leave_hold = HoldGesture(1.4)
         self.in_card = False
@@ -89,7 +90,7 @@ class StoryGame(core.Game):
             "presentation": "moonflower-garden-v1", "protocol": core.PROTOCOL,
             "is_synthetic": self.synthetic, "reduced_motion": self.reduced_motion,
             "controller": "synthetic keyboard (60 Hz render loop)" if self.synthetic else self.meta["controller"],
-            "navigation": "neutral then hold either stick up 0.8s; both outward 1.4s to pause; down 1.4s from pause to finish",
+            "navigation": "press X (or Space/Enter) to continue between screens; both sticks outward 1.4s to pause; hold either stick down 1.4s from pause to finish",
         })
 
     def make_reader(self):
@@ -433,16 +434,15 @@ class StoryGame(core.Game):
         if self.synthetic:
             self.text("DEMO INPUT  |  WASD + arrow keys", self.small_font, (640, 709), INK)
 
-    def continue_prompt(self, label="Hold either stick UP to continue", progress=None):
+    def continue_prompt(self, label="Press X to continue", progress=None):
         self.panel((340, 644, 600, 50), radius=16)
-        self.text(label, self.label_font, (640, 664), INK)
-        progress = self.continue_hold.progress if progress is None else progress
-        pygame.draw.rect(self.screen, (214, 215, 186), (365, 684, 550, 4), border_radius=2)
-        pygame.draw.rect(self.screen, TEAL, (365, 684, int(550 * progress), 4), border_radius=2)
+        self.text(label, self.label_font, (640, 669 if progress is None else 664), INK)
+        if progress is not None:
+            pygame.draw.rect(self.screen, (214, 215, 186), (365, 684, 550, 4), border_radius=2)
+            pygame.draw.rect(self.screen, TEAL, (365, 684, int(550 * progress), 4), border_radius=2)
 
     def card(self, rows, min_s=0.6, auto_s=None, prompt="Continue"):
         self.in_card = True
-        self.continue_hold.reset()
         if rows[0] == "A lovely evening together":
             self.chapter = "picnic"
         self.rec.suspend()
@@ -450,13 +450,13 @@ class StoryGame(core.Game):
             started = time.perf_counter()
             while True:
                 self.tick()
-                advance = self.navigation(self.reader.state, self.continue_hold)
                 self.card_frame(rows)
                 if not auto_s:
-                    self.continue_prompt("Hold either stick UP to finish" if self.chapter == "picnic" else "Hold either stick UP to continue")
+                    label = "Press X to finish" if self.chapter == "picnic" else "Press X to continue"
+                    self.continue_prompt(label)
                 pygame.display.flip()
                 elapsed = time.perf_counter() - started
-                if elapsed >= min_s and (advance or self.pressed or (auto_s and elapsed >= auto_s)):
+                if elapsed >= min_s and (self.pressed or (auto_s and elapsed >= auto_s)):
                     return
         finally:
             self.in_card = False
@@ -473,7 +473,7 @@ class StoryGame(core.Game):
     def calibrate(self):
         self.card(["Come over for a garden picnic", "I'm Mabel. Would you help me get the garden ready?",
                    "Two little birds, a few apples, and some good company."])
-        # A hold-to-continue may leave a stick tilted. Never calibrate that as centre.
+        # Centre is the released stick, so a leftover tilt is never stored as rest.
         samples = []
         started = None
         self.in_card = True
@@ -527,13 +527,11 @@ class StoryGame(core.Game):
         self.meta["disconnects" if lost else "pauses"] += 1
         self.rec.suspend()
         was_card, self.in_card = self.in_card, True
-        self.continue_hold.reset()
         self.leave_hold.reset()
         try:
             while True:
                 self.clock.tick(core.FPS)
                 s, pressed, _ = self._events()
-                resume = self.navigation(s, self.continue_hold)
                 leave = self.navigation(s, self.leave_hold, 1)
                 if s is None:
                     self.card_frame(["We'll keep your place", "Reconnect the controller with its cable.",
@@ -544,10 +542,10 @@ class StoryGame(core.Game):
                     if self.leave_hold.progress:
                         self.continue_prompt("Finishing for now...", self.leave_hold.progress)
                     else:
-                        self.continue_prompt("Hold either stick UP to return to the garden")
+                        self.continue_prompt("Press X to return to the garden")
                     if leave:
                         raise core.QuitGame()
-                    if resume or pressed:
+                    if pressed:
                         return
                 pygame.display.flip()
         finally:
@@ -588,7 +586,7 @@ class StoryGame(core.Game):
         self.chapter = "picnic"
         self.card_frame(["A lovely evening together", "The kettle is on. Your friends are here.",
                          "Thank you for spending a little time in the garden."])
-        self.continue_prompt("Hold either stick UP to finish")
+        self.continue_prompt("Press X to finish")
         pygame.image.save(self.screen, os.path.join(folder, "picnic.png"))
         pygame.quit()
 

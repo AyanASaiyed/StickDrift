@@ -148,17 +148,17 @@ For the local backend Python environment used during development:
 The game requires `pygame-ce` and `hidapi` (already listed in the root project).
 No separate 3D engine or asset download is required. All art is built locally.
 
-**Sticks only:** release then hold either stick UP to advance a story note.
-Move both sticks to discover your birds. Hold both sticks OUTWARD for a break;
-at the bench, hold either UP to resume or DOWN to finish early. Releasing the
-stick brings a bird home with its apple. Menus show the hold progress and wait
-for you. `--reduced-motion` stills decorative motion; `--mute` disables sound.
+Press X to move on from a story note (Space or Enter also works). Move both
+sticks to discover your birds. Hold both sticks OUTWARD for a break; at the
+bench, press X to resume or hold either stick DOWN to finish early. Releasing
+the stick brings a bird home with its apple. `--reduced-motion` stills decorative
+motion; `--mute` disables sound.
 `--demo` uses WASD and arrow keys and labels the session as synthetic.
 
 Each run writes a folder:
 
 ```
-data/garden_P01_unlabeled_s1_<stamp>/
+data/2026-10-17_04-10-56_garden_P01_all-levels/
   session.json                       calibration, levels completed, column notes
   level_1_apples/controller_data.csv + level.json
   level_2_butterfly_left/...
