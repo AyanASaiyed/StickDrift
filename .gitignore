@@ -9,4 +9,7 @@ venv/
 .DS_Store
 # Local project data and context for hreem
 hreem-folder/
-runs/
+runs/*
+!runs/tcn/
+runs/tcn/*
+!runs/tcn/model.pt
