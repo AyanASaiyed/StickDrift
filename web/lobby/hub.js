@@ -1,6 +1,7 @@
 // The top-down lobby: grandma walks between three game pads. Port of the Blender hub.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
+import { bestFor, starText } from './scores.js'
 import { TAU, blob, box, clamp, cyl, mat, mergeStatic, rng, sphere, textSprite, torus } from './util.js'
 
 const HALF_X = 9.6, HALF_Y = 6.1
@@ -306,7 +307,10 @@ export class Hub {
   }
 
   header() {
-    if (this.near) return `Press X (Cross) to enter ${this.near.title}`
+    if (this.near) {
+      const b = bestFor(this.near.game)
+      return `Press X (Cross) to enter ${this.near.title}   |   High score ${b.best} ${starText(b.stars)}`
+    }
     return 'Left stick: walk   |   Right stick: orbit/tilt   |   L1/R1: zoom   |   Triangle: camera   |   walk onto a glowing pad and press X'
   }
 }

@@ -3,6 +3,7 @@
 // Like trace.py: velocity-controlled cursor, lane tolerance, % on path. Port of the Blender version.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
+import { record, resultLines, starText } from './scores.js'
 import { RETURN_DELAY, TAU, blob, box, catmull, choice, clamp, shuffle, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, setSegment, sphere, torus, uniform, unitCyl } from './util.js'
 
 const WY0 = 2 // water-plane origin (world y)
@@ -331,7 +332,7 @@ export class FishGame {
       this.lure.material = off ? this.matOff : this.matOn
       if (this.prog >= n - 3) {
         const pct = (100 * this.onFrames) / Math.max(this.frames, 1)
-        this.stats.push({ round: this.round + 1, side: this.side, shape: this.kind, time: +this.tTrace.toFixed(2), pct: Math.round(pct), off: this.offCount })
+        this.stats.push({ round: this.round + 1, side: this.side, shape: this.kind, time: +this.tTrace.toFixed(2), pct: Math.round(pct), off: this.offCount, score: Math.round(pct * 6 + Math.max(0, 12 - this.tTrace) * 25) })
         if (this.side === 'left') {
           this.state = 'switch'
           this.timer = 1.4
@@ -409,19 +410,30 @@ export class FishGame {
   finishGame() {
     this.state = 'done'
     this.timer = 0
-    const lines = ['Harbour Fishing complete!', `Fish caught: ${this.caught}`]
-    for (let r = 1; r <= ROUNDS; r++) {
-      const sl = this.stats.filter((s) => s.round === r)
-      lines.push(`Round ${r}   ` + sl.map((s) => `${s.side === 'left' ? 'L' : 'R'} ${s.time.toFixed(1)}s ${s.pct}%`).join('   '))
-    }
-    this.bigText = lines.join('\n')
+    this.rec = record('fish', { score: this.points(), stars: this.stars() })
+    this.bigText = ['Harbour Fishing complete!', `Fish caught ${this.caught}   On the lane ${this.avgPct()}%`, ...resultLines(this.points(), this.stars(), this.rec)].join('\n')
     this.lure.material = this.matOn
+  }
+
+  /** Each trace scores up to 900: 6 per % of the time you stayed on the lane (max 600) + 25 per second under 12 s (max 300). */
+  points() {
+    return this.stats.reduce((sum, s) => sum + s.score, 0)
+  }
+
+  avgPct() {
+    return this.stats.length ? Math.round(this.stats.reduce((sum, s) => sum + s.pct, 0) / this.stats.length) : 0
+  }
+
+  /** Stars from how accurately you traced on average: 60% = 1 star, 80% = 2, 92% = 3. */
+  stars() {
+    const a = this.avgPct()
+    return a >= 92 ? 3 : a >= 80 ? 2 : a >= 60 ? 1 : 0
   }
 
   ui() {
     let header
-    if (this.state === 'done') header = `Harbour Fishing done - ${this.caught} fish caught   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
+    if (this.state === 'done') header = `Harbour Fishing done - ${this.caught} fish caught   Score ${this.points()} ${starText(this.stars())}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
     else header = `Harbour Fishing   Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}   Caught ${this.caught}   ${this.side === 'left' ? 'LEFT stick' : 'RIGHT stick'}: trace the fish along the glowing lane   |   O: back`
-    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Fish caught ${this.caught}`, big: this.bigText }
+    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Fish caught ${this.caught}    Score ${this.points()}`, big: this.bigText }
   }
 }

@@ -3,6 +3,7 @@
 // green and is caught; a wrong rat or an empty slam just makes the hand shake. 3 rounds, a new target each round.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
+import { MAX_STARS, record, resultLines, starText } from './scores.js'
 import { RETURN_DELAY, box, choice, clamp, cyl, makeHand, mat, mergeStatic, ownMat, perspectiveCam, setLens, shuffle, sphere, uniform } from './util.js'
 
 const TYPES = [
@@ -193,7 +194,21 @@ export class RatGame {
     this.timer = 0
     for (const c of Object.values(this.cards)) c.visible = false
     this.cardName = ''
-    this.bigText = `Rat Catching complete!\nCaught ${s.caught}/${2 * ROUNDS} target rats\nWrong rat slammed: ${s.wrong}   Empty slams: ${s.empty}`
+    this.rec = record('rat', { score: this.points(), stars: this.stars() })
+    this.bigText = [`Rat Catching complete!`, `Caught ${s.caught}/${2 * ROUNDS}   Wrong ${s.wrong}   Empty ${s.empty}`, ...resultLines(this.points(), this.stars(), this.rec)].join('\n')
+  }
+
+  /** 300 per target rat caught, minus 100 for slamming a wrong rat and 50 for an empty slam. */
+  points() {
+    const s = this.stats
+    return Math.max(0, s.caught * 300 - s.wrong * 100 - s.empty * 50)
+  }
+
+  /** One star per 2 net catches; every 2 mistakes (wrong or empty slams) cancel one catch. 2 = 1 star, 4 = 2, 6 = 3. */
+  stars() {
+    const s = this.stats
+    const net = s.caught - Math.floor((s.wrong + s.empty) / 2)
+    return clamp(Math.floor(net / 2), 0, MAX_STARS)
   }
 
   /** True once per flick: either stick snaps up past 0.75 within ~0.15 s; it must come back down to re-arm. */
@@ -302,8 +317,8 @@ export class RatGame {
     const target = this.name(this.targets[Math.min(this.round, ROUNDS - 1)])
     const header =
       this.state === 'done'
-        ? `Rat Catching done - caught ${s.caught}/${2 * ROUNDS}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
+        ? `Rat Catching done - caught ${s.caught}/${2 * ROUNDS}   Score ${this.points()} ${starText(this.stars())}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
         : `Rat Catching   Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}   Caught ${s.caught}   |   flick a stick UP: slam the ${target}   |   O: back`
-    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Caught ${s.caught}`, big: this.bigText, label: this.cardName }
+    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Caught ${s.caught}    Score ${this.points()}`, big: this.bigText, label: this.cardName }
   }
 }
