@@ -2,8 +2,11 @@ data/
 pycache/
 __pycache__/
 .env
+*credentials*.env
 __pycache__/
 *.pyc
 .venv/
 venv/
 .DS_Store
+# Local project data and context for hreem
+hreem-folder/
