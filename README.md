@@ -11,7 +11,7 @@ The output is **a change worth checking**. Stick Drift does not diagnose, predic
 ## How it works
 
 ```
-DualSense (USB-C) → browser game (Gamepad API) → FastAPI + SQLite → baseline + review rules → care-team dashboard
+DualSense (USB-C) → browser game (Gamepad API) → FastAPI + Tiger Data → baseline + review rules → care-team dashboard
 ```
 
 1. **Connect and calibrate.** Staff pick a pseudonymous resident profile. The resident presses a button to connect the controller, then the app measures each stick's resting center, jitter and range. If calibration fails, the hardware-check screen says so before the session starts.
@@ -62,7 +62,9 @@ The numbers above are illustrative. All thresholds in this project are untested 
 
 ## Data
 
-Stick Drift keeps raw stick samples, the prompt schedule, detected responses and the protocol version separately, so trends can be recomputed if the scoring logic changes. Residents are identified by pseudonym and everything is stored locally in SQLite. There is no camera, microphone or other biometric capture.
+Stick Drift keeps raw stick samples, the prompt schedule, detected responses and the protocol version separately, so trends can be recomputed if the scoring logic changes. Data lives in [Tiger Data](https://www.tigerdata.com/) (managed PostgreSQL with TimescaleDB). Raw stick samples go in a hypertable partitioned by time. Each resident has a profile with their session history and per-session results.
+
+Because Tiger Data is a cloud service, data leaves the laptop. Profiles hold only a nickname or code and a dominant hand: never a real name or other health information. The connection string stays in `backend/.env`, which is not committed. There is no camera, microphone or other biometric capture.
 
 The multi-day trends in the demo are **synthetic and labeled as such**. The short baseline in the demo comes from consenting adult teammates and is not clinical data.
 
@@ -76,12 +78,69 @@ Each session records the controller ID, connection type and how the controller w
 ## Tech stack
 
 - **Web app:** Vite, React, TypeScript, Gamepad API (resident game at `/play`, care dashboard at `/care`)
-- **Backend:** Python, FastAPI, SQLite
+- **Backend:** Python, FastAPI, psycopg
+- **Database:** Tiger Data (PostgreSQL + TimescaleDB)
 - **Analysis:** pandas, NumPy, PyTorch (optional)
 
 ## Running locally
 
-Setup instructions will be added once the code is in place.
+You need Node 20+, Python 3.9+, Chrome, and a Tiger Data service.
+
+**1. Database.** Create a service in Tiger Console and copy its connection string. Then:
+
+```bash
+cd backend
+cp .env.example .env          # paste the connection string into DATABASE_URL
+psql "$(grep ^DATABASE_URL .env | cut -d= -f2-)" -f schema.sql
+```
+
+**2. Backend.**
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python -m scripts.seed_synthetic   # optional: two demo profiles with SYNTHETIC history
+uvicorn app.main:app --reload      # http://localhost:8000
+```
+
+**3. Web app.**
+
+```bash
+cd web
+npm install
+npm run dev                        # http://localhost:5173
+```
+
+If the API runs somewhere other than `http://localhost:8000`, set `VITE_API_URL` in `web/.env`.
+
+## Project layout
+
+For design decisions, guardrails and what's built so far, read [Context.MD](Context.MD).
+
+```
+Context.MD                   Project context, guardrails, current build state, decision log
+Controller Data - Zain/
+  read_data.py               DualSense reader over HID (~500 Hz): live viewer + CSV recording
+  Example PS5 Data.csv       Sample recording
+backend/
+  schema.sql                 Tiger Data tables (participants, sessions, results, trials, raw samples)
+  app/main.py                API: profiles and session history
+  scripts/seed_synthetic.py  Labeled synthetic demo data
+web/
+  src/App.tsx                Landing page: controller check, profile picker, start, history
+  src/useGamepad.ts          DualSense input via the Gamepad API
+```
+
+### API
+
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/health` | Database reachable |
+| GET | `/participants` | Profiles with session count and last played |
+| POST | `/participants` | Create a profile `{alias, dominant_hand}` |
+| GET | `/participants/{id}` | One profile |
+| GET | `/participants/{id}/sessions` | Session history with results, newest first |
 
 ## Limitations
 
