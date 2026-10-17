@@ -13,7 +13,7 @@ const TYPES = [
 const ROUNDS = 3
 const HAND_HOVER = 3.6, HAND_SLAM_Z = 0.9, HIT_HALF = 0.7, SLAM_TIME = 0.09
 const X0 = 9, X1 = -9 // run from the right hole to the left hole
-const SPEED = [4.68, 6.864] // m/s (original 3.0-4.4, then +20%, then +30% more)
+const SPEED = [5.616, 8.2368] // m/s (original 3.0-4.4; +20%, +30%, +20% more)
 const SKIN = [0.85, 0.58, 0.42]
 const CARD = [-5.6, 3.4, -12]
 
