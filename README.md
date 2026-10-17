@@ -121,8 +121,38 @@ uv run python "Controller Data - Zain\maze.py" --player P01 --session 1
 
 Optional game flags include `--seed 42` (repeatable randomized layouts) and
 `--kids` for red decoys in Catch. Each game writes its CSV and JSON session
-files to a `data/` directory under the current working directory. To test
-controller input separately, run:
+files to a `data/` directory under the current working directory.
+**Garden Rescue** (`garden-v2`) is the combined fixed-course game, about
+60-90 seconds of play in four levels: apple picking (both sticks at once),
+butterfly with the left stick, butterfly with the right stick, and watering
+(both sticks at once). Right-stick targets mirror the left. The course is
+identical every run; `--label` only tags the output folder.
+
+```powershell
+uv run python "Controller Data - Zain\Games\garden.py" --player Zain --session 1 --label normal
+uv run python "Controller Data - Zain\Games\garden.py" --player Zain --session 2 --label shaky --level butterfly_left
+```
+
+Each run writes a folder:
+
+```
+data/garden_Zain_normal_s1_<stamp>/
+  session.json                       calibration, levels completed, column notes
+  level_1_apples/controller_data.csv + level.json
+  level_2_butterfly_left/...
+  level_3_butterfly_right/...
+  level_4_water/...
+```
+
+A level's CSV starts when the level starts and stops when it ends (instruction
+screens and breaks are not recorded). Every HID report is a row: the
+`Example PS5 Data.csv` columns, then `label, level, trial, hand, phase,
+t_trial`, the target and unsmoothed normalized cursor for each stick,
+`reached_l, reached_r` and `t_wall`. `level.json` holds that level's exact
+targets and per-trial results. Cross continues, Options takes a break, Esc
+quits and still saves; `--mute` turns off sounds.
+
+To test controller input separately, run:
 
 ```powershell
 uv run python "Controller Data - Zain\read_data.py"
@@ -166,6 +196,7 @@ Context.MD                   Project context, guardrails, current build state, d
 Controller Data - Zain/
   read_data.py               DualSense reader over HID (~500 Hz): live viewer + CSV recording
   Example PS5 Data.csv       Sample recording
+  Games/garden.py            Garden Rescue: fixed four-level game, full-rate CSV per level folder
 backend/
   schema.sql                 Tiger Data tables (participants, sessions, results, trials, raw samples)
   app/main.py                API: profiles and session history
