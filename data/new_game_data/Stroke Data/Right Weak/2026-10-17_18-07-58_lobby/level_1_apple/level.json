@@ -1,0 +1,122 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "8dedcdc0-983b-4062-8821-4a4c49d93a1d",
+ "level": "apple",
+ "number": 1,
+ "completed": true,
+ "rows": 2186,
+ "duration_s": 21.016,
+ "score": 775.0,
+ "stars": 1,
+ "source": "gamepad",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "left",
+    "reaction_s": 0.688,
+    "reach_s": 1.493,
+    "peak_speed": 7.93,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "left",
+    "reaction_s": 0.458,
+    "reach_s": 1.25,
+    "peak_speed": 15.29,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 1.978,
+    "reach_s": 2.729,
+    "peak_speed": 11.74,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 3,
+    "hand": "left",
+    "reaction_s": 0.812,
+    "reach_s": 1.423,
+    "peak_speed": 22.85,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "right",
+    "reaction_s": 1.076,
+    "reach_s": 2.152,
+    "peak_speed": 20.52,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 4,
+    "hand": "left",
+    "reaction_s": 0.583,
+    "reach_s": 1.666,
+    "peak_speed": 12.43,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 5,
+    "hand": "left",
+    "reaction_s": 0.916,
+    "reach_s": 1.264,
+    "peak_speed": 7.88,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 3,
+    "hand": "right",
+    "reaction_s": 0.82,
+    "reach_s": 2.374,
+    "peak_speed": 16.42,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 6,
+    "hand": "left",
+    "reaction_s": 0.66,
+    "reach_s": 1.229,
+    "peak_speed": 15.14,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 4,
+    "hand": "right",
+    "reaction_s": 0.603,
+    "reach_s": null,
+    "peak_speed": 19.32,
+    "reach_size": 1,
+    "reached": false
+   }
+  ]
+ }
+}
