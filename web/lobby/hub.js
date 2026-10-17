@@ -1,6 +1,7 @@
 // The top-down lobby: grandma walks between three game pads. Port of the Blender hub.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
+import { bestFor, starText } from './scores.js'
 import { TAU, blob, box, clamp, cyl, mat, mergeStatic, rng, sphere, textSprite, torus } from './util.js'
 
 const HALF_X = 9.6, HALF_Y = 6.1
@@ -21,10 +22,10 @@ export const PORTALS = [
 ]
 const TREES = [
   [-5.0, 4.9, 1.5], [-2.8, 4.4, 0.8], [-4.2, 2.1, 1.1], [5.4, 3.0, 1.0], [7.8, 4.7, 0.9], [6.5, 3.9, 0.7],
-  [3.2, 2.9, 1.0], [0.2, -1.6, 1.0], [-6.8, -4.2, 0.9], [7.3, -4.9, 1.3], [-8.6, 4.8, 0.8], [3.6, -3.6, 0.8],
+  [3.2, 2.9, 1.0], [1.8, -1.4, 1.0], [-6.8, -4.2, 0.9], [7.3, -4.9, 1.3], [-8.6, 4.8, 0.8], [5.2, -3.6, 0.8], // none sits on a path
 ]
 const KINDS = ['oak', 'pine', 'oak', 'autumn', 'pine', 'oak', 'birch', 'pine', 'oak', 'autumn', 'oak', 'pine']
-const ROCKS = [[-8.8, 3.7, 0.45], [3.9, 0.6, 0.5], [-4.7, -2.2, 0.8], [0.0, 0.2, 0.9], [3.6, -4.3, 0.5], [-1.4, -3.3, 0.4], [8.2, -2.6, 0.55]]
+const ROCKS = [[-8.8, 3.7, 0.45], [3.9, 0.6, 0.5], [-5.0, -2.6, 0.8], [-1.6, 0.2, 0.9], [3.6, -4.3, 0.5], [-1.4, -1.8, 0.4], [8.2, -2.6, 0.55]]
 const BENCH = [-3.0, -4.9, 0]
 const LAMPS = [[-3.6, -1.0], [3.6, -1.0], [-3.4, 2.7], [3.6, 2.8]]
 const COLLIDERS = [
@@ -306,7 +307,10 @@ export class Hub {
   }
 
   header() {
-    if (this.near) return `Press X (Cross) to enter ${this.near.title}`
+    if (this.near) {
+      const b = bestFor(this.near.game)
+      return `Press X (Cross) to enter ${this.near.title}   |   High score ${b.best} ${starText(b.stars)}`
+    }
     return 'Left stick: walk   |   Right stick: orbit/tilt   |   L1/R1: zoom   |   Triangle: camera   |   walk onto a glowing pad and press X'
   }
 }

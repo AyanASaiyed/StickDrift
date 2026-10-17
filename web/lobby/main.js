@@ -2,7 +2,8 @@
 import * as THREE from 'three'
 import './util.js'
 import { Input } from './input.js'
-import { Hub } from './hub.js'
+import { Hub, PORTALS } from './hub.js'
+import { bestFor, starText } from './scores.js'
 import { AppleGame } from './apple.js'
 import { FishGame } from './fish.js'
 import { RatGame } from './rat.js'
@@ -40,7 +41,20 @@ function resize() {
 window.addEventListener('resize', resize)
 resize()
 
+/** The high-score panel shown in the lobby. */
+function refreshScores() {
+  const el = $('scores')
+  el.innerHTML =
+    '<b>High scores</b>' +
+    PORTALS.map((p) => {
+      const b = bestFor(p.game)
+      return `<div class="row"><span>${p.title}</span><span>${b.best ? b.best + ' ' + starText(b.stars) : '-'}</span></div>`
+    }).join('')
+}
+refreshScores()
+
 function startGame(portal) {
+  $('scores').style.display = 'none'
   active = games[portal.game]
   active.start()
   live.enter(portal.game)
@@ -49,6 +63,8 @@ function leaveGame() {
   active = null
   live.enter('lobby')
   hub.reset()
+  refreshScores()
+  $('scores').style.display = ''
   setText(overlay.hud, '')
   setText(overlay.big, '')
   setText(overlay.label, '')

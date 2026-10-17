@@ -2,6 +2,7 @@
 // apple to grab it, drag it over the basket and it drops in. 15 seconds. Port of the Blender version.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
+import { MAX_STARS, record, resultLines, starText } from './scores.js'
 import { RETURN_DELAY, blob, box, clamp, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, sphere, torus, uniform, choice } from './util.js'
 
 const APPLE_TIME = 15, COUNTDOWN = 3
@@ -83,6 +84,7 @@ export class AppleGame {
     this.phase = 'countdown'
     this.score = { red: 0, blue: 0 }
     this.wrong = 0
+    this.rec = null
     this.pos = { red: [...HAND_START.red], blue: [...HAND_START.blue] }
     this.carry = { red: null, blue: null }
     this.apples = []
@@ -96,6 +98,16 @@ export class AppleGame {
     }
     this.big = ''
     this.applyHands(0)
+  }
+
+  /** 100 per apple in the basket, minus 25 each time a glove touched an apple of the wrong colour. */
+  points() {
+    return Math.max(0, (this.score.red + this.score.blue) * 100 - this.wrong * 25)
+  }
+
+  /** One star per 2 red + 2 blue apples (2R+2B = 1 star, 4R+4B = 2, 6R+6B = 3). */
+  stars() {
+    return Math.min(MAX_STARS, Math.floor(this.score.red / 2), Math.floor(this.score.blue / 2))
   }
 
   applyHands(dt) {
@@ -157,7 +169,12 @@ export class AppleGame {
     }
     if (this.phase === 'countdown') this.big = String(Math.ceil(-this.t))
     else if (this.phase === 'play' && this.t > 0.8) this.big = ''
-    else if (this.phase === 'done') this.big = `Time's up!\nRed ${this.score.red}   Blue ${this.score.blue}\nTotal ${this.score.red + this.score.blue}`
+    else if (this.phase === 'done') {
+      // save once the last apple has landed in the basket, so the score is final
+      if (!this.rec && !this.apples.some((a) => a.state === 'fall')) this.rec = record('apple', { score: this.points(), stars: this.stars() })
+      const s = this.score
+      this.big = `Time's up!\nRed ${s.red}   Blue ${s.blue}` + (this.rec ? '\n' + resultLines(this.points(), this.stars(), this.rec).join('\n') : '')
+    }
 
     if (this.phase === 'play') {
       if (this.t >= this.nextSpawn) {
@@ -231,8 +248,8 @@ export class AppleGame {
     let header
     if (this.phase === 'countdown') header = 'Apple Picking - get ready!   Left stick = RED hand   Right stick = BLUE hand'
     else if (this.phase === 'play') header = `Apple Picking   Time ${Math.max(0, APPLE_TIME - this.t).toFixed(1)}s   Red ${s.red}   Blue ${s.blue}   |   O: back`
-    else header = `Time's up!  Red ${s.red}  Blue ${s.blue}  Total ${s.red + s.blue}   |   returning to the lobby in ${Math.max(0, RETURN_DELAY - (this.t - APPLE_TIME)).toFixed(0)}s   |   O: back now`
+    else header = `Time's up!  Red ${s.red}  Blue ${s.blue}  Score ${this.points()} ${starText(this.stars())}   |   returning to the lobby in ${Math.max(0, RETURN_DELAY - (this.t - APPLE_TIME)).toFixed(0)}s   |   O: back now`
     const left = this.phase === 'countdown' ? APPLE_TIME : Math.max(0, Math.ceil(APPLE_TIME - this.t))
-    return { header, hud: `${left}s    Red ${s.red}   Blue ${s.blue}`, big: this.big }
+    return { header, hud: `${left}s    Red ${s.red}   Blue ${s.blue}    Score ${this.points()}`, big: this.big }
   }
 }

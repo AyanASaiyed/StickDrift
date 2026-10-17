@@ -24,3 +24,15 @@ Controls: left stick walk, right stick orbit/tilt the camera, L1/R1 zoom, Triang
 Chrome and Edge read PS5 pads best; press any button once so the browser exposes the controller.
 
 Keyboard fallback (no pad): WASD = left stick, IJKL or arrows = right stick, Space = Cross, O = Circle, T = Triangle, Q/E = L1/R1.
+
+## Scores and stars
+
+Each game ends with a score and 0-3 stars; the best score (and best stars) per game is saved in `localStorage`
+(`web/lobby/scores.js`) and shown in the lobby panel and next to each pad. Everything is stored per player id
+(`setPlayer(id)`), currently one placeholder player, so hooking up the dashboard's users later only needs that call.
+
+| Game | Score | Stars |
+|---|---|---|
+| Apple Picking | 100 per apple in the basket, -25 per wrong-colour touch | 1 per 2 red + 2 blue (2R+2B = 1, 4R+4B = 2, 6R+6B = 3) |
+| Harbour Fishing | per trace: 6 x % on the lane + 25 per second under 12 s (max 900) | average % on the lane: 60 = 1, 80 = 2, 92 = 3 |
+| Rat Catching | 300 per target caught, -100 wrong rat, -50 empty slam | 1 per 2 net catches (2 mistakes cancel 1 catch) |

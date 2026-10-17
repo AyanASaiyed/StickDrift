@@ -3,6 +3,7 @@
 // green and is caught; a wrong rat or an empty slam just makes the hand shake. 3 rounds, a new target each round.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
+import { MAX_STARS, record, resultLines, starText } from './scores.js'
 import { RETURN_DELAY, box, choice, clamp, cyl, makeHand, mat, mergeStatic, ownMat, perspectiveCam, setLens, shuffle, sphere, uniform } from './util.js'
 
 const TYPES = [
@@ -13,9 +14,9 @@ const TYPES = [
 const ROUNDS = 3
 const HAND_HOVER = 3.6, HAND_SLAM_Z = 0.9, HIT_HALF = 0.7, SLAM_TIME = 0.09
 const X0 = 9, X1 = -9 // run from the right hole to the left hole
-const SPEED = [3.0, 4.4]
+const SPEED = [7.3008, 10.70784] // m/s (original 3.0-4.4; +20%, +30%, +20%, +30% more)
 const SKIN = [0.85, 0.58, 0.42]
-const CARD = [-5.6, 3.4, -12]
+const CARD_DIST = 12, CARD_SCALE = 0.7 // the card sits in the top-left corner of the view at this scale
 
 function buildRat(t) {
   const g = new THREE.Group()
@@ -79,15 +80,15 @@ export class RatGame {
       this.scene.add(this.rats[t.key])
       // card: paper + the rat seen from above, fixed to the camera at the top-left of the view
       const card = new THREE.Group()
-      card.position.set(...CARD)
       box(card, [3.5, 2.7, 0.04], [0, 0, 0], mat([0.1, 0.07, 0.04]), [0, 0, 0], false)
       box(card, [3.3, 2.5, 0.05], [0, 0, 0.03], mat([0.97, 0.93, 0.8], { rough: 0.9 }), [0, 0, 0], false)
       const r = buildRat(t)
-      r.scale.setScalar(1.5)
-      r.position.z = 0.3
+      r.scale.setScalar(0.9) // fits inside the paper
+      r.position.set(-0.19, 0, 0.3)
       r.rotation.z = Math.PI
       r.traverse((o) => (o.castShadow = false))
       card.add(r)
+      card.scale.setScalar(CARD_SCALE)
       card.visible = false
       this.camera.add(card)
       this.cards[t.key] = card
@@ -97,10 +98,15 @@ export class RatGame {
 
   resize(aspect) {
     setLens(this.camera, 28, aspect)
+    // keep the card fully inside the top-left corner whatever the window shape (clear of the header bar)
+    const half = Math.tan(((this.camera.fov * Math.PI) / 180) / 2) * CARD_DIST
+    const halfH = half, halfW = half * aspect
+    this.cardPos = [-halfW + 0.35 + 1.75 * CARD_SCALE, halfH - 1.0 - 1.35 * CARD_SCALE]
+    for (const c of Object.values(this.cards)) c.position.set(this.cardPos[0], this.cardPos[1], -CARD_DIST)
   }
 
   labelPos() {
-    return this.camera.localToWorld(new THREE.Vector3(CARD[0], CARD[1] - 1.55, CARD[2]))
+    return this.camera.localToWorld(new THREE.Vector3(this.cardPos[0], this.cardPos[1] - 1.35 * CARD_SCALE - 0.1, -CARD_DIST))
   }
 
   setHandColor(state) {
@@ -188,7 +194,21 @@ export class RatGame {
     this.timer = 0
     for (const c of Object.values(this.cards)) c.visible = false
     this.cardName = ''
-    this.bigText = `Rat Catching complete!\nCaught ${s.caught}/${2 * ROUNDS} target rats\nWrong rat slammed: ${s.wrong}   Empty slams: ${s.empty}`
+    this.rec = record('rat', { score: this.points(), stars: this.stars() })
+    this.bigText = [`Rat Catching complete!`, `Caught ${s.caught}/${2 * ROUNDS}   Wrong ${s.wrong}   Empty ${s.empty}`, ...resultLines(this.points(), this.stars(), this.rec)].join('\n')
+  }
+
+  /** 300 per target rat caught, minus 100 for slamming a wrong rat and 50 for an empty slam. */
+  points() {
+    const s = this.stats
+    return Math.max(0, s.caught * 300 - s.wrong * 100 - s.empty * 50)
+  }
+
+  /** One star per 2 net catches; every 2 mistakes (wrong or empty slams) cancel one catch. 2 = 1 star, 4 = 2, 6 = 3. */
+  stars() {
+    const s = this.stats
+    const net = s.caught - Math.floor((s.wrong + s.empty) / 2)
+    return clamp(Math.floor(net / 2), 0, MAX_STARS)
   }
 
   /** True once per flick: either stick snaps up past 0.75 within ~0.15 s; it must come back down to re-arm. */
@@ -297,8 +317,8 @@ export class RatGame {
     const target = this.name(this.targets[Math.min(this.round, ROUNDS - 1)])
     const header =
       this.state === 'done'
-        ? `Rat Catching done - caught ${s.caught}/${2 * ROUNDS}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
+        ? `Rat Catching done - caught ${s.caught}/${2 * ROUNDS}   Score ${this.points()} ${starText(this.stars())}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
         : `Rat Catching   Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}   Caught ${s.caught}   |   flick a stick UP: slam the ${target}   |   O: back`
-    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Caught ${s.caught}`, big: this.bigText, label: this.cardName }
+    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Caught ${s.caught}    Score ${this.points()}`, big: this.bigText, label: this.cardName }
   }
 }
