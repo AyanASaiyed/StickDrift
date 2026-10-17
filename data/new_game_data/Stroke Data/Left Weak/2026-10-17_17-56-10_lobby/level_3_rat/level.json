@@ -1,0 +1,71 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "ad4d07c9-0f9f-4244-85e5-92a6eff42227",
+ "level": "rat",
+ "number": 3,
+ "completed": true,
+ "rows": 4298,
+ "duration_s": 43.672,
+ "score": 800.0,
+ "stars": 1,
+ "source": "gamepad",
+ "params": {
+  "hand": "either",
+  "activity": "target_reach",
+  "score": "300 per target caught, minus 100 for a wrong rat, minus 50 for an empty slam"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 0.986,
+    "reach_s": 1.021,
+    "peak_speed": 16.39,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "right",
+    "reaction_s": 0.798,
+    "reach_s": 0.826,
+    "peak_speed": 17.64,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 3,
+    "hand": "right",
+    "reaction_s": 0.937,
+    "reach_s": 0.965,
+    "peak_speed": 29.71,
+    "reach_size": 1,
+    "reached": false
+   },
+   {
+    "type": "trial",
+    "trial": 4,
+    "hand": "right",
+    "reaction_s": 0.694,
+    "reach_s": 0.736,
+    "peak_speed": 20.23,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 6,
+    "hand": "right",
+    "reaction_s": 0.771,
+    "reach_s": 0.798,
+    "peak_speed": 14.17,
+    "reach_size": 0.976,
+    "reached": false
+   }
+  ]
+ }
+}

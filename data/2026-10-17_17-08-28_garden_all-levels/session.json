@@ -1,0 +1,40 @@
+{
+ "protocol": "garden-v3",
+ "game": "garden",
+ "player": "anon",
+ "session": 1,
+ "label": "unlabeled",
+ "started": "2026-10-17T17:08:29",
+ "controller": "synthetic keyboard (60 Hz render loop)",
+ "screen": [
+  1280,
+  720
+ ],
+ "display_smoothing": 0.35,
+ "coordinates": "target_* and cursor_* are sticks normalized to -1..1 around calibration.centers (positive side divided by 255-centre, negative side by centre), y grows downward. Right-stick targets are the left-stick targets mirrored (x flipped).",
+ "columns": {
+  "t": "active seconds since the level started (breaks are skipped)",
+  "t_wall": "wall-clock seconds since the level started (includes breaks)",
+  "t_trial": "active seconds since the apple pair appeared / the flight began; empty while waiting",
+  "phase": "wait = resting in the middle or moving to the start, cue = apples showing, return = both apples picked and coming back, track = following a moving target",
+  "hand": "left, right or both: which stick(s) the level uses",
+  "reached_l / reached_r": "1 once that hand has picked its apple in this pair",
+  "cursor_*": "unsmoothed normalized stick positions (the drawn cursor is smoothed)"
+ },
+ "levels_requested": [
+  "apples",
+  "butterfly_left",
+  "butterfly_right",
+  "water"
+ ],
+ "levels": [],
+ "pauses": 0,
+ "disconnects": 0,
+ "presentation": "moonflower-garden-v1",
+ "is_synthetic": true,
+ "reduced_motion": false,
+ "navigation": "press X (or Space/Enter) to continue between screens; both sticks outward 1.4s to pause; hold either stick down 1.4s from pause to finish",
+ "renderer": "orthographic-3d-baked-sprites-v1",
+ "completed": false,
+ "ended": "2026-10-17T17:08:40"
+}

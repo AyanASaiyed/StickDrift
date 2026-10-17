@@ -4,6 +4,26 @@
 // Space = Cross, O/Backspace = Circle, T = Triangle, Q/E = L1/R1.
 const DEADZONE = 0.2
 
+// Standard Gamepad mapping (W3C). Fixed width so every recording row has the same columns.
+export const AXIS_COUNT = 8
+export const BUTTON_NAMES = [
+  'cross', 'circle', 'square', 'triangle', 'l1', 'r1', 'l2', 'r2',
+  'share', 'options', 'l3', 'r3', 'dpad_up', 'dpad_down', 'dpad_left', 'dpad_right', 'ps', 'touchpad',
+]
+
+function axesOf(values) {
+  const axes = Array(AXIS_COUNT).fill(0)
+  for (let i = 0; i < AXIS_COUNT; i++) axes[i] = Number(values?.[i]) || 0
+  return axes
+}
+
+function buttonsOf(flags) {
+  return BUTTON_NAMES.map((name) => {
+    const pressed = flags[name] ? 1 : 0
+    return { pressed, value: pressed }
+  })
+}
+
 function stick(x, y) {
   const m = Math.hypot(x, y)
   if (m < DEADZONE) return [0, 0, 0]
@@ -63,9 +83,34 @@ export class Input {
       return e
     }
     const look = stick(rx, ry)
+    const raw = [lx, ly, rx, ry] // unprocessed sticks, y up, for the caregiver's live view
+    let controller
+    if (gp) {
+      const buttons = BUTTON_NAMES.map((_, i) => {
+        const b = gp.buttons[i]
+        if (!b) return { pressed: 0, value: 0 }
+        const pressed = b.pressed ? 1 : 0
+        const value = typeof b.value === 'number' ? b.value : pressed
+        return { pressed, value }
+      })
+      controller = { axes: axesOf(gp.axes), buttons }
+    } else {
+      // Keyboard stands in for the pad: axes follow the same y-down sign as a Gamepad.
+      controller = {
+        axes: axesOf([raw[0], -raw[1], raw[2], -raw[3]]),
+        buttons: buttonsOf({
+          cross: k.has('Space') || k.has('Enter'),
+          circle: k.has('KeyO') || k.has('Backspace'),
+          triangle: k.has('KeyT'),
+          l1: k.has('KeyQ'),
+          r1: k.has('KeyE'),
+        }),
+      }
+    }
     return {
       source,
-      raw: [lx, ly, rx, ry], // unprocessed sticks, for the caregiver's live view
+      raw,
+      controller,
       move: stick(lx, ly),
       look: [look[0] * look[2], look[1] * look[2]],
       enter: edge(enter, 'enter'),

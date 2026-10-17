@@ -16,3 +16,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+study = [
+    "matplotlib>=3.11.2",
+    "scipy>=1.18.1",
+]

@@ -981,3 +981,6 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
 .game-table tbody th { font-size: 0.95rem; font-weight: 500; color: var(--ink); cursor: help; }
 .game-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .game-table thead th:not(:first-child) { text-align: right; }
+
+.report-btn { margin-left: auto; align-self: center; }
+.report-btn .error { margin: 6px 0 0; font-size: 0.85rem; }

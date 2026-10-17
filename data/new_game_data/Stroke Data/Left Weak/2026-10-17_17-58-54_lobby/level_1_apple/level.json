@@ -1,0 +1,102 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "77642a8e-9abb-484d-98de-257a404e8231",
+ "level": "apple",
+ "number": 1,
+ "completed": true,
+ "rows": 2175,
+ "duration_s": 21.016,
+ "score": 575.0,
+ "stars": 1,
+ "source": "gamepad",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "left",
+    "reaction_s": 0.611,
+    "reach_s": 1.014,
+    "peak_speed": 15.44,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 0.854,
+    "reach_s": 2.75,
+    "peak_speed": 11.34,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "left",
+    "reaction_s": 1.715,
+    "reach_s": 2.147,
+    "peak_speed": 16.7,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "right",
+    "reaction_s": 1.646,
+    "reach_s": 2.861,
+    "peak_speed": 17.86,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 3,
+    "hand": "left",
+    "reaction_s": 3.304,
+    "reach_s": 5.666,
+    "peak_speed": 25.77,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 3,
+    "hand": "right",
+    "reaction_s": 3.215,
+    "reach_s": 3.986,
+    "peak_speed": 16.49,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 4,
+    "hand": "left",
+    "reaction_s": 1.044,
+    "reach_s": null,
+    "peak_speed": 16.82,
+    "reach_size": 1,
+    "reached": false
+   },
+   {
+    "type": "trial",
+    "trial": 4,
+    "hand": "right",
+    "reaction_s": null,
+    "reach_s": null,
+    "peak_speed": 18.16,
+    "reach_size": 1,
+    "reached": false
+   }
+  ]
+ }
+}

@@ -1,0 +1,21 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "40130103-d8c3-4ca3-b06d-9e6da33d85fc",
+ "level": "fish",
+ "number": 2,
+ "completed": true,
+ "rows": 3743,
+ "duration_s": 33.377,
+ "score": 2999.0,
+ "stars": 3,
+ "source": "gamepad",
+ "params": {
+  "hand": "one at a time",
+  "activity": "target_tracking",
+  "rounds": 2,
+  "score": "6 x percent on the lane, plus 25 per second under 12 s"
+ },
+ "results": {
+  "trials": []
+ }
+}

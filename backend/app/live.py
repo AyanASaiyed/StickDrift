@@ -21,7 +21,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from .auth import current_caregiver, current_senior
 from .db import pool
 from .live_metrics import SessionMetrics, game_summary
+from .lobby_record import RecordingError, end_session, start_session, write_level
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["live"])
@@ -622,4 +623,57 @@ def live_snapshot(live_id: UUID, since: int = 0, limit: int = 2000, _: dict = De
     if st is None:
         raise HTTPException(404, "That live session was not found.")
     return {**st, "samples": samples_since(live_id, since, limit)}
+
+
+class RecordStart(BaseModel):
+    source: Literal["gamepad", "keyboard", "none"] = "keyboard"
+
+
+class RecordLevel(BaseModel):
+    live_id: str
+    folder: str = Field(max_length=40)
+    level: Literal["apple", "fish", "rat"]
+    completed: bool
+    duration_s: float
+    score: Optional[float] = None
+    stars: Optional[int] = None
+    source: Literal["gamepad", "keyboard", "none"] = "none"
+    trials: List[Dict[str, Any]] = Field(default_factory=list, max_length=500)
+    rows: List[List[Any]] = Field(max_length=20000)
+
+
+class RecordEnd(BaseModel):
+    live_id: str
+    folder: str = Field(max_length=40)
+
+
+def _recording_error(error: RecordingError) -> HTTPException:
+    return HTTPException(400, str(error))
+
+
+@router.post("/lobby/record/start", status_code=201)
+def lobby_record_start(body: RecordStart):
+    """Open a data/new_game_data folder for this lobby visit. No login required."""
+    try:
+        return start_session(body.source)
+    except RecordingError as error:
+        raise _recording_error(error) from error
+
+
+@router.post("/lobby/record/level")
+def lobby_record_level(body: RecordLevel):
+    """Write one finished game (apple, fish, or rat) into that visit's folder."""
+    try:
+        return write_level(body.live_id, body.folder, body.level, body.completed, body.duration_s,
+                           body.score, body.stars, body.source, body.trials, body.rows)
+    except RecordingError as error:
+        raise _recording_error(error) from error
+
+
+@router.post("/lobby/record/end", status_code=204)
+def lobby_record_end(body: RecordEnd):
+    try:
+        end_session(body.live_id, body.folder)
+    except RecordingError as error:
+        raise _recording_error(error) from error
 

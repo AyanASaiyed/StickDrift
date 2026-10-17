@@ -324,6 +324,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
 
+async function download(path: string): Promise<{ blob: Blob; filename: string; source: string }> {
+  let res: Response
+  try {
+    res = await fetch(`${API}${path}`)
+  } catch {
+    throw new ApiError(0, "Can't reach the Stick Drift server. Is the backend running?")
+  }
+  if (!res.ok) throw new ApiError(res.status, 'The report could not be created. Try again in a moment.')
+  const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
+  return { blob: await res.blob(), filename: match?.[1] ?? 'stick-drift-summary.pdf', source: res.headers.get('X-Report-Source') ?? '' }
+}
+
 export const api = {
   me: () => request<Me>('/auth/me'),
   loginSenior: (username: string, password: string) =>
@@ -344,6 +356,7 @@ export const api = {
     request<GardenSecond[]>(`/sessions/${sessionId}/garden-timeline`),
   caregiverResidents: () => request<ResidentRow[]>('/caregiver/residents'),
   caregiverResident: (id: string) => request<ResidentDetail>(`/caregiver/residents/${id}`),
+  residentReport: (id: string) => download(`/caregiver/residents/${id}/report.pdf`),
   caregiverLive: () => request<LiveBrief[]>('/caregiver/live'),
   caregiverLiveSnapshot: (id: string, since: number) =>
     request<LiveSnapshot>(`/caregiver/live/${id}?since=${since}`),
