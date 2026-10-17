@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../auth'
 
-function ProfileMenu({ username }: { username: string }) {
-  const { logout } = useAuth()
+function ProfileMenu() {
+  const { me, logout } = useAuth()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -28,6 +28,10 @@ function ProfileMenu({ username }: { username: string }) {
     }
   }, [open])
 
+  if (!me) return null
+  const isCaregiver = me.role === 'caregiver'
+  const home = isCaregiver ? '/caregiver' : '/'
+
   return (
     <div className="menu" ref={root}>
       <button
@@ -38,26 +42,29 @@ function ProfileMenu({ username }: { username: string }) {
         onClick={() => setOpen((o) => !o)}
       >
         <span className="avatar" aria-hidden>
-          {username[0].toUpperCase()}
+          {me.display_name[0].toUpperCase()}
         </span>
-        <span className="menu-name">{username}</span>
+        <span className="menu-name">
+          {me.display_name}
+          {isCaregiver && <span className="menu-role"> · care team</span>}
+        </span>
         <svg viewBox="0 0 12 12" className="caret" aria-hidden>
           <path d="M2 4l4 4 4-4" />
         </svg>
       </button>
       {open && (
         <div className="menu-list" role="menu">
-          <Link role="menuitem" className="menu-item" to="/history" onClick={() => setOpen(false)} autoFocus>
-            History
+          <Link role="menuitem" className="menu-item" to={isCaregiver ? '/caregiver' : '/history'} onClick={() => setOpen(false)} autoFocus>
+            {isCaregiver ? 'Residents' : 'History'}
           </Link>
           <button
             role="menuitem"
             className="menu-item"
             onClick={async () => {
               setOpen(false)
-              // Leave protected pages first, or their login guard redirects to /login.
-              navigate('/', { replace: true })
+              navigate(home, { replace: true })
               await logout()
+              navigate(isCaregiver ? '/caregiver/login' : '/login', { replace: true })
             }}
           >
             Log out
@@ -70,10 +77,11 @@ function ProfileMenu({ username }: { username: string }) {
 
 export function TopBar() {
   const { me, loading } = useAuth()
+  const home = me?.role === 'caregiver' ? '/caregiver' : '/'
   return (
     <header className="topbar">
       <div className="wrap topbar-inner">
-        <Link to="/" className="wordmark">
+        <Link to={home} className="wordmark">
           <svg viewBox="0 0 32 32" aria-hidden className="mark">
             <circle cx="10" cy="16" r="7" />
             <circle cx="22" cy="16" r="7" />
@@ -84,7 +92,7 @@ export function TopBar() {
         </Link>
         {!loading &&
           (me ? (
-            <ProfileMenu username={me.username} />
+            <ProfileMenu />
           ) : (
             <nav className="row">
               <Link className="btn btn-quiet btn-small" to="/login">

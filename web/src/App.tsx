@@ -1,122 +1,104 @@
-import { useCallback, useEffect, useState } from 'react'
-import { listParticipants, listSessions, type Participant, type SessionRow } from './api'
-import { ControllerCheck, type InputSource } from './components/ControllerCheck'
-import { ProfileHistory } from './components/ProfileHistory'
-import { ProfilePicker } from './components/ProfilePicker'
+import { Link, Navigate, Route, Routes } from 'react-router'
+import { AuthProvider, RequireRole, useAuth } from './auth'
+import { TopBar } from './components/TopBar'
+import AuthPage from './pages/AuthPage'
+import CaregiverDashboard from './pages/CaregiverDashboard'
+import CaregiverLogin from './pages/CaregiverLogin'
+import History from './pages/History'
+import Home from './pages/Home'
+import Play from './pages/Play'
+import ResidentDetail from './pages/ResidentDetail'
+
+function Welcome() {
+  return (
+    <main className="wrap">
+      <section className="hero">
+        <h1>A short game for two thumbs.</h1>
+        <p className="lede">
+          Arrows float up the screen. When one reaches the top, nudge the matching stick on your PS5 controller. It takes
+          about three minutes, missing an arrow is fine, and you can pause any time.
+        </p>
+        <div className="row">
+          <Link className="btn btn-big" to="/signup">
+            Create an account
+          </Link>
+          <Link className="btn btn-quiet btn-big" to="/login">
+            Log in
+          </Link>
+        </div>
+        <p className="muted">
+          Care team member? <Link to="/caregiver/login">Caregiver login</Link>
+        </p>
+      </section>
+      <section className="features" aria-label="How it works">
+        <div className="panel">
+          <h2>Follow the arrows</h2>
+          <p className="muted">Left-side arrows are for the left stick, right-side arrows for the right stick.</p>
+        </div>
+        <div className="panel">
+          <h2>Same game every time</h2>
+          <p className="muted">The arrows never speed up, so each session can be compared fairly with your last.</p>
+        </div>
+        <div className="panel">
+          <h2>Your care team can help</h2>
+          <p className="muted">Caregivers see your history and anything worth checking in on.</p>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function Root() {
+  const { me, loading } = useAuth()
+  if (loading) return <p className="wrap page-pad muted">Loading…</p>
+  if (me?.role === 'caregiver') return <Navigate to="/caregiver" replace />
+  if (me?.role === 'senior') return <Home />
+  return <Welcome />
+}
 
 export default function App() {
-  const [participants, setParticipants] = useState<Participant[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [sessions, setSessions] = useState<SessionRow[] | null>(null)
-  const [sessionsError, setSessionsError] = useState<string | null>(null)
-  const [useSimulator, setUseSimulator] = useState(false)
-  const [source, setSource] = useState<InputSource>({ kind: 'none' })
-  const [startNotice, setStartNotice] = useState(false)
-
-  const loadParticipants = useCallback(() => {
-    setLoadError(null)
-    setParticipants(null)
-    listParticipants()
-      .then(setParticipants)
-      .catch((e: Error) => setLoadError(e.message))
-  }, [])
-
-  useEffect(loadParticipants, [loadParticipants])
-
-  useEffect(() => {
-    if (!selectedId) return
-    let cancelled = false
-    setSessions(null)
-    setSessionsError(null)
-    listSessions(selectedId)
-      .then((rows) => !cancelled && setSessions(rows))
-      .catch((e: Error) => !cancelled && setSessionsError(e.message))
-    return () => {
-      cancelled = true
-    }
-  }, [selectedId])
-
-  const selected = participants?.find((p) => p.participant_id === selectedId) ?? null
-  const inputReady = source.kind !== 'none'
-  const canStart = inputReady && selected !== null
-
-  const missing = [!inputReady && 'connect the controller', !selected && 'choose a profile'].filter(Boolean)
-
   return (
-    <>
-      <header className="topbar">
-        <div className="wrap topbar-inner">
-          <span className="wordmark">
-            <svg viewBox="0 0 32 32" aria-hidden className="mark">
-              <circle cx="10" cy="16" r="7" />
-              <circle cx="22" cy="16" r="7" />
-              <circle cx="12" cy="13" r="2.5" className="mark-dot" />
-              <circle cx="24" cy="18" r="2.5" className="mark-dot" />
-            </svg>
-            Stick Drift
-          </span>
-        </div>
-      </header>
-
-      <main className="wrap">
-        <section className="hero">
-          <h1>A short game for two thumbs.</h1>
-          <p className="lede">
-            Follow the arrows with the left stick, the right stick, or both. It takes about three minutes. Missing an
-            arrow is fine, and you can pause or stop at any time.
-          </p>
-        </section>
-
-        <div className="steps">
-          <ControllerCheck
-            useSimulator={useSimulator}
-            onUseSimulatorChange={setUseSimulator}
-            onSourceChange={setSource}
-          />
-          <ProfilePicker
-            participants={participants}
-            loadError={loadError}
-            onRetry={loadParticipants}
-            selectedId={selectedId}
-            onSelect={(id) => {
-              setSelectedId(id)
-              setStartNotice(false)
-            }}
-            onCreated={(p) => {
-              setParticipants((prev) => [...(prev ?? []), p].sort((a, b) => a.alias.localeCompare(b.alias)))
-              setSelectedId(p.participant_id)
-            }}
-          />
-        </div>
-
-        <section className="start" aria-labelledby="start-heading">
-          <div>
-            <p className="step">Step 3</p>
-            <h2 id="start-heading">{selected ? `Ready when ${selected.alias} is` : 'Start the session'}</h2>
-            <p className="muted">
-              {canStart
-                ? 'A few practice arrows come first. They are not scored.'
-                : `To start, ${missing.join(' and ')}.`}
-            </p>
-            {startNotice && (
-              <p className="notice" role="status">
-                The assessment screen isn't built yet. This button will open it.
-              </p>
-            )}
-          </div>
-          <button className="btn btn-start" disabled={!canStart} onClick={() => setStartNotice(true)}>
-            Start
-          </button>
-        </section>
-
-        {selected && <ProfileHistory participant={selected} sessions={sessions} error={sessionsError} />}
-
-        <footer className="foot">
-          Stick Drift shows care teams changes worth checking. It does not diagnose any condition. If someone has a
-          sudden new symptom, follow your usual urgent-care procedure.
-        </footer>
-      </main>
-    </>
+    <AuthProvider>
+      <TopBar />
+      <Routes>
+        <Route path="/" element={<Root />} />
+        <Route path="/login" element={<AuthPage mode="login" key="login" />} />
+        <Route path="/signup" element={<AuthPage mode="signup" key="signup" />} />
+        <Route path="/caregiver/login" element={<CaregiverLogin />} />
+        <Route
+          path="/play"
+          element={
+            <RequireRole role="senior">
+              <Play />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireRole role="senior">
+              <History />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/caregiver"
+          element={
+            <RequireRole role="caregiver">
+              <CaregiverDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/caregiver/residents/:id"
+          element={
+            <RequireRole role="caregiver">
+              <ResidentDetail />
+            </RequireRole>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthProvider>
   )
 }

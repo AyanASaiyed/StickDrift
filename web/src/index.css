@@ -726,3 +726,41 @@ td.num {
   font-size: 0.85rem;
   max-width: 760px;
 }
+
+/* Caregiver dashboard */
+.menu-role { color: var(--muted); font-weight: 400; }
+.crumb { margin-bottom: 16px; }
+.dashboard-summary { margin-bottom: 20px; }
+.resident-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+}
+.resident-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+.resident-card:hover { border-color: var(--accent); }
+.resident-card-flag { border-left: 5px solid var(--bad); }
+.resident-card-head { display: flex; gap: 12px; align-items: center; }
+.resident-name { display: block; font-weight: 700; font-size: 1.1rem; }
+.resident-meta { display: block; color: var(--muted); font-size: 0.85rem; }
+.resident-flag { color: var(--bad); font-weight: 700; font-size: 0.9rem; }
+.resident-flag ul { margin: 8px 0 0; padding-left: 1.2em; font-weight: 400; color: var(--ink); }
+.resident-flag li { margin-bottom: 4px; }
+.flag-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); margin-right: 6px; }
+.resident-ok { color: var(--ok); font-weight: 700; font-size: 0.9rem; }
+.resident-foot { font-size: 0.8rem; margin-top: auto; }
+
+.review { padding: 16px; border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
+.review-ok { background: var(--accent-soft); }
+.review-flag { background: color-mix(in srgb, var(--bad) 12%, var(--surface)); border: 1px solid var(--bad); }
+.review ul { margin: 4px 0 0; padding-left: 1.2em; }
+.review li { margin-bottom: 4px; }

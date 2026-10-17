@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
-import { api, type Placement } from '../api'
+import { api, summarizeGame, type Placement } from '../api'
 import { assessmentChart, practiceChart, PROTOCOL_VERSION } from '../game/chart'
 import { Game, type GameResult } from '../game/Game'
 import { calibrate, GamepadReader, KeyboardReader, type Calibration, type InputReader, type RawSample } from '../game/input'
@@ -15,9 +15,8 @@ type Phase =
   | { name: 'howto' }
   | { name: 'practice' }
   | { name: 'ready' }
-  | { name: 'starting' }
-  | { name: 'main'; sessionId: string }
-  | { name: 'saving'; sessionId: string; result: GameResult; status: 'completed' | 'abandoned' }
+  | { name: 'main' }
+  | { name: 'saving'; result: GameResult; status: 'completed' | 'abandoned' }
   | { name: 'done'; sessionId: string }
   | { name: 'stopped' }
 
@@ -91,40 +90,33 @@ export default function Play() {
     requestAnimationFrame(tick)
   }, [reader, checking])
 
-  const starting = useRef(false)
-  const startMain = useCallback(async () => {
-    if (!reader || !calibration || !state || starting.current) return
-    starting.current = true
-    setPhase({ name: 'starting' })
+  const startMain = useCallback(() => {
+    if (!reader || !calibration || !state) return
     setError(null)
-    try {
-      const { session_id } = await api.startSession({
-        protocol_version: PROTOCOL_VERSION,
-        input_reader: reader.kind,
-        controller_id: reader.controllerId(),
-        connection: reader.kind === 'keyboard' ? 'simulated' : 'unknown',
-        placement: state.placement,
-        calibration: { ...calibration },
-      })
-      setPhase({ name: 'main', sessionId: session_id })
-    } catch (e) {
-      setError((e as Error).message)
-      setPhase({ name: 'ready' })
-    } finally {
-      starting.current = false
-    }
+    setPhase({ name: 'main' })
   }, [reader, calibration, state])
 
-  const save = useCallback(async (sessionId: string, result: GameResult, status: 'completed' | 'abandoned') => {
-    setPhase({ name: 'saving', sessionId, result, status })
-    setError(null)
-    try {
-      await api.completeSession(sessionId, { status, ...result })
-      setPhase(status === 'completed' ? { name: 'done', sessionId } : { name: 'stopped' })
-    } catch (e) {
-      setError((e as Error).message)
-    }
-  }, [])
+  const save = useCallback(
+    async (result: GameResult, status: 'completed' | 'abandoned') => {
+      if (!reader || !state) return
+      setPhase({ name: 'saving', result, status })
+      setError(null)
+      try {
+        const { session_id } = await api.saveGame({
+          ...summarizeGame({ status, ...result }),
+          protocol_version: PROTOCOL_VERSION,
+          input_reader: reader.kind,
+          connection: reader.kind === 'keyboard' ? 'simulated' : 'unknown',
+          placement: state.placement,
+          quality: 'good',
+        })
+        setPhase(status === 'completed' ? { name: 'done', sessionId: session_id } : { name: 'stopped' })
+      } catch (e) {
+        setError((e as Error).message)
+      }
+    },
+    [reader, state],
+  )
 
   const confirmAction: Record<string, (() => void) | undefined> = {
     calibrate: calibration?.ok ? () => setPhase({ name: 'howto' }) : runCalibration,
@@ -213,7 +205,6 @@ export default function Play() {
       )
 
     case 'ready':
-    case 'starting':
       return (
         <Screen title="Ready for the real round?">
           <p>
@@ -226,8 +217,8 @@ export default function Play() {
             </p>
           )}
           <div className="row">
-            <button className="btn btn-big" onClick={startMain} disabled={phase.name === 'starting'}>
-              {phase.name === 'starting' ? 'Starting…' : 'Start'}
+            <button className="btn btn-big" onClick={startMain}>
+              Start
             </button>
             <button className="btn btn-quiet" onClick={() => setPhase({ name: 'practice' })}>
               Practice again
@@ -244,8 +235,8 @@ export default function Play() {
           reader={reader}
           calibration={calibration!}
           practice={false}
-          onFinish={(r) => save(phase.sessionId, r, 'completed')}
-          onStop={(r) => save(phase.sessionId, r, 'abandoned')}
+          onFinish={(r) => save(r, 'completed')}
+          onStop={(r) => save(r, 'abandoned')}
         />
       )
 
@@ -258,7 +249,7 @@ export default function Play() {
                 {error}
               </p>
               <div className="row">
-                <button className="btn btn-big" onClick={() => save(phase.sessionId, phase.result, phase.status)}>
+                <button className="btn btn-big" onClick={() => save(phase.result, phase.status)}>
                   Try again
                 </button>
               </div>
@@ -283,7 +274,7 @@ export default function Play() {
                   aria-pressed={rating === i + 1}
                   onClick={() => {
                     setRating(i + 1)
-                    api.rateSession(phase.sessionId, i + 1).catch(() => setRating(null))
+                    api.rateGame(phase.sessionId, i + 1).catch(() => setRating(null))
                   }}
                 >
                   <span className="rating-num">{i + 1}</span>
