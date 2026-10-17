@@ -966,3 +966,6 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
 .feed-live::before { animation: feed-pulse 1.6s ease-in-out infinite; }
 @keyframes feed-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .feed-live::before { animation: none; } }
+
+.report-btn { margin-left: auto; align-self: center; }
+.report-btn .error { margin: 6px 0 0; font-size: 0.85rem; }

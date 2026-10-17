@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
-from . import assistant, auth, live, live_stream, views
+from . import assistant, auth, live, live_stream, report, views
 from .db import pool
 
 
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(views.router)
 app.include_router(assistant.router)
+app.include_router(report.router)
 app.include_router(live.router)
 app.include_router(live_stream.router)
 

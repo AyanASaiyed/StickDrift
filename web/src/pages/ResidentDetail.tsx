@@ -11,6 +11,40 @@ import { TabPanel, Tabs } from '../components/Tabs'
 import { GardenTrendCharts, TrendCharts } from '../components/TrendCharts'
 import { formatDateTime } from '../format'
 
+function ReportButton({ id }: { id: string }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const run = async () => {
+    setBusy(true)
+    setErr(null)
+    try {
+      const { blob, filename } = await api.residentReport(id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="report-btn">
+      <button className="btn btn-secondary btn-small" onClick={run} disabled={busy}>
+        {busy ? 'Writing report…' : 'Clinician report (PDF)'}
+      </button>
+      {err && (
+        <p className="error" role="alert">
+          {err}
+        </p>
+      )}
+    </div>
+  )
+}
+
 type TabKey = 'overview' | 'trends' | 'garden' | 'ask' | 'history'
 
 export default function ResidentDetail() {
@@ -71,6 +105,7 @@ export default function ResidentDetail() {
             {insights.synthetic && <span className="badge badge-synthetic">Includes simulated data</span>}
           </p>
         </div>
+        <ReportButton id={data.participant_id} />
       </header>
 
       <LiveNow participantId={data.participant_id} compact />
