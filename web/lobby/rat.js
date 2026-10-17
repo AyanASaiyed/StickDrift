@@ -3,7 +3,7 @@
 // green and is caught; a wrong rat or an empty slam just makes the hand shake. 3 rounds, a new target each round.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
-import { MAX_STARS, record, resultLines, starText } from './scores.js'
+import { MAX_STARS, record } from './scores.js'
 import { RETURN_DELAY, box, choice, clamp, cyl, makeHand, mat, mergeStatic, ownMat, perspectiveCam, setLens, shuffle, sphere, uniform } from './util.js'
 
 const TYPES = [
@@ -195,7 +195,7 @@ export class RatGame {
     for (const c of Object.values(this.cards)) c.visible = false
     this.cardName = ''
     this.rec = record('rat', { score: this.points(), stars: this.stars() })
-    this.bigText = [`Rat Catching complete!`, `Caught ${s.caught}/${2 * ROUNDS}   Wrong ${s.wrong}   Empty ${s.empty}`, ...resultLines(this.points(), this.stars(), this.rec)].join('\n')
+    this.bigText = ''
   }
 
   /** 300 per target rat caught, minus 100 for slamming a wrong rat and 50 for an empty slam. */
@@ -215,9 +215,12 @@ export class RatGame {
   flick(pad) {
     const mv = pad.move, lk = pad.look
     const up = Math.max(mv[1] * mv[2], lk[1])
-    this.hist = [...this.hist, up].slice(-9)
+    this.hist.push(up) // last ~0.15 s of stick height
+    if (this.hist.length > 9) this.hist.shift()
+    let low = 1
+    for (const h of this.hist) if (h < low) low = h
     if (up < 0.4) this.armed = true
-    else if (up > 0.75 && this.armed && Math.min(...this.hist) < 0.35) {
+    else if (up > 0.75 && this.armed && low < 0.35) {
       this.armed = false
       return true
     }
@@ -315,10 +318,25 @@ export class RatGame {
   ui() {
     const s = this.stats
     const target = this.name(this.targets[Math.min(this.round, ROUNDS - 1)])
-    const header =
-      this.state === 'done'
-        ? `Rat Catching done - caught ${s.caught}/${2 * ROUNDS}   Score ${this.points()} ${starText(this.stars())}   |   back to the lobby in ${Math.max(0, RETURN_DELAY - this.timer).toFixed(0)}s   |   O: back now`
-        : `Rat Catching   Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}   Caught ${s.caught}   |   flick a stick UP: slam the ${target}   |   O: back`
-    return { header, hud: `Round ${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}    Caught ${s.caught}    Score ${this.points()}`, big: this.bigText, label: this.cardName }
+    const chips = [
+      { k: 'Round', v: `${Math.min(this.round + 1, ROUNDS)}/${ROUNDS}` },
+      { k: 'Catch', v: target, tone: 'gold' },
+      { k: 'Caught', v: s.caught },
+      { k: 'Score', v: this.points(), tone: 'gold' },
+    ]
+    const hint = 'Flick either stick UP to slam the hand  ·  only the rat on the card counts  ·  O: back'
+    if (this.state === 'done') {
+      return {
+        hint, chips: chips.filter((c) => c.k !== 'Catch'), banner: null, label: '',
+        result: {
+          title: 'Rats caught!',
+          rows: [{ k: 'Target rats caught', v: `${s.caught}/${2 * ROUNDS}` }, { k: 'Wrong rats slammed', v: s.wrong }, { k: 'Empty slams', v: s.empty }],
+          score: this.points(), stars: this.stars(), isNewBest: this.rec.isNewBest, best: this.rec.best,
+          secs: Math.max(0, RETURN_DELAY - this.timer), total: RETURN_DELAY,
+        },
+      }
+    }
+    const lines = this.bigText ? this.bigText.split('\n') : []
+    return { hint, chips: this.state === 'intro' ? chips.filter((c) => c.k !== 'Catch') : chips, banner: lines.length ? { title: lines[0], lines: lines.slice(1) } : null, label: this.cardName }
   }
 }
