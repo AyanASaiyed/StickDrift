@@ -264,6 +264,86 @@ def review_from(insights: dict) -> dict:
     concerns = insights["concerns"]
     keys = {k for c in concerns for k in c["measurements"]}
     reasons = [f["text"] for f in insights["findings"] if f["key"] in keys]
+    reasons += [c["evidence"][0] for c in concerns if c["id"].startswith("model_") and c["evidence"]]
     if concerns and not reasons:
         reasons = [e for c in concerns for e in c["evidence"]]
     return {"flagged": bool(concerns), "reasons": reasons}
+
+
+# ---- TCN pattern model (garden game) -------------------------------------------
+
+MODEL_WATCH = 50.0
+MODEL_CHECK = 70.0
+
+# Model output keys -> wording shown to caregivers. The keys come from tcn/config.py.
+PATTERN_LABELS = {
+    "parkinson": "Slowed, smaller movements in both hands",
+    "stroke": "One-sided difference between hands",
+    "essential_tremor": "Shake during movement",
+}
+
+PATTERN_GUIDE = {
+    "parkinson": (
+        ["Tiredness or poor sleep", "A new or changed medication", "Stiffness or pain in both hands",
+         "Low mood or reduced energy"],
+        ["Ask how they slept and how they are feeling today.",
+         "Watch them do an everyday two-handed task (opening a container, buttoning) and note any slowness.",
+         "Review medication changes from the last two weeks with the pharmacist or prescriber.",
+         "Repeat the garden game in 1-2 days. If the pattern persists, request a nursing or physician assessment."],
+    ),
+    "stroke": (
+        ["Pain, stiffness or injury in one hand", "New numbness, tingling or weakness on one side",
+         "Difficulty seeing one side of the screen", "How the controller was held"],
+        ["Compare grip and finger movement between both hands.",
+         "Ask about new numbness, tingling or clumsiness on one side. If weakness, facial droop or speech "
+         "difficulty is new or sudden, follow your facility's urgent escalation protocol now.",
+         "Check the setup: glasses, seating and screen position.",
+         "Repeat the garden game in 1-2 days. If the difference persists, request a nursing or physician assessment."],
+    ),
+    "essential_tremor": (
+        ["Caffeine, anxiety or feeling cold", "A new or changed medication", "Tiredness",
+         "Shaking the controller on purpose or an unsteady grip"],
+        ["Watch their hands while they reach for a cup and while resting in their lap; note when the shake appears.",
+         "Ask about caffeine, stress, cold and recent medication changes.",
+         "If the shake is new or getting worse, mention it at the next nursing review."],
+    ),
+}
+
+
+def add_model_concerns(insights: dict, garden_sessions: List[dict]) -> dict:
+    """Add a concern when the newest TCN-judged garden session resembles a movement pattern.
+
+    Scores are 0-100 pattern resemblance from the model, not disease probabilities.
+    """
+    judged = [g for g in garden_sessions if g.get("tcn") and g["tcn"].get("scores")]
+    if not judged:
+        return insights
+    latest = judged[0]
+    when = latest["started_at"].strftime("%b %d") if hasattr(latest["started_at"], "strftime") else "latest"
+    simulated = " (simulated input)" if latest.get("is_synthetic") else ""
+    concerns = list(insights["concerns"])
+    for key, label in PATTERN_LABELS.items():
+        score = latest["tcn"]["scores"].get(key)
+        if score is None or score < MODEL_WATCH:
+            continue
+        contributors, checks = PATTERN_GUIDE[key]
+        concerns.append(_concern_raw(
+            f"model_{key}", f"Model pattern: {label.lower()}", "check" if score >= MODEL_CHECK else "watch",
+            f"At the end of the {when} garden session{simulated}, the movement pattern model rated this "
+            f"session {score:.0f} out of 100 for resemblance to this pattern.",
+            [f"{label}: {score:.0f}/100 pattern resemblance (garden session, {when})."]
+            + [f"{lv['level'].replace('_', ' ')}: {lv['scores'][key]:.0f}/100"
+               for lv in latest["tcn"].get("levels", []) if lv.get("scores", {}).get(key) is not None],
+            contributors, checks,
+        ))
+    risk = "check" if any(c["level"] == "check" for c in concerns) else "watch" if concerns else "none"
+    summary = "; ".join(c["title"] for c in concerns) + "." if concerns else insights["summary"]
+    return {**insights, "concerns": concerns, "risk": risk, "summary": summary}
+
+
+def _concern_raw(cid, title, level, summary, evidence, contributors, checks):
+    return {"id": cid, "title": title, "level": level, "summary": summary, "evidence": evidence,
+            "possible_contributors": contributors, "recommended_checks": checks,
+            "references": ["Stick Drift TCN pattern model (tcn/), trained on teammate-simulated and synthetic "
+                           "garden recordings. Scores are pattern resemblance, not clinical validation."],
+            "measurements": []}

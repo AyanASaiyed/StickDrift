@@ -1,8 +1,8 @@
-"""Read endpoints for seniors (own data) and caregivers (all residents).
+"""Caregiver read endpoints for residents' history and performance.
 
-Caregiver views carry deterministic, non-diagnostic insights from
-`insights.analyze`: measured findings against the resident's own baseline and
-potential concerns with recommended checks. Seniors only see their own sessions.
+Residents do not get a history view; only caregivers see results. Insights come
+from `insights.analyze` (arrow-game sessions compared with the resident's own
+baseline) plus the TCN pattern judgement of their latest garden session.
 """
 from typing import Any, List, Optional
 from uuid import UUID
@@ -10,9 +10,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from .auth import current_caregiver, current_senior
+from .auth import current_caregiver
 from .db import pool
-from .insights import analyze, review_from
+from .insights import add_model_concerns, analyze, review_from
 
 router = APIRouter(tags=["views"])
 
@@ -63,6 +63,16 @@ class ResidentRow(BaseModel):
     trend_right_ms: List[Optional[float]]
 
 
+class GardenSession(BaseModel):
+    session_id: UUID
+    started_at: Any
+    status: str
+    is_synthetic: bool
+    levels_completed: Optional[int]
+    tcn: Optional[dict]
+    live: Optional[dict]
+
+
 class ResidentDetail(BaseModel):
     participant_id: UUID
     username: Optional[str]
@@ -71,6 +81,7 @@ class ResidentDetail(BaseModel):
     review: Review
     insights: dict
     sessions: List[SessionSummary]
+    garden_sessions: List[GardenSession]
 
 
 def _fetch_sessions(conn, participant_id: UUID) -> List[dict]:
@@ -82,8 +93,21 @@ def _fetch_sessions(conn, participant_id: UUID) -> List[dict]:
                   ss.both_correct, ss.both_valid, ss.enjoyment
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
-           WHERE s.participant_id = %s
+           WHERE s.participant_id = %s AND s.protocol_version NOT LIKE 'garden-%%'
            ORDER BY s.started_at DESC""",
+        (participant_id,),
+    ).fetchall()
+
+
+def _fetch_garden(conn, participant_id: UUID) -> List[dict]:
+    return conn.execute(
+        """SELECT s.session_id, s.started_at, s.status, s.is_synthetic,
+                  (ss.metrics->>'levels_completed')::int AS levels_completed,
+                  ss.metrics->'tcn' AS tcn, ss.metrics->'live' AS live
+           FROM sessions s
+           LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
+           WHERE s.participant_id = %s AND s.protocol_version LIKE 'garden-%%'
+           ORDER BY s.started_at DESC LIMIT 50""",
         (participant_id,),
     ).fetchall()
 
@@ -96,11 +120,13 @@ def resident_profile(conn, participant_id: UUID) -> Optional[dict]:
     if p is None:
         return None
     sessions = _fetch_sessions(conn, participant_id)
-    insights = analyze(sessions)
+    garden = _fetch_garden(conn, participant_id)
+    insights = add_model_concerns(analyze(sessions), garden)
     return {
         "participant_id": p["participant_id"], "username": p["username"],
         "display_name": p["alias"], "dominant_hand": p["dominant_hand"],
         "review": review_from(insights), "insights": insights, "sessions": sessions,
+        "garden_sessions": garden,
     }
 
 
@@ -111,14 +137,6 @@ def all_profiles(conn) -> List[dict]:
            ORDER BY p.alias"""
     ).fetchall()
     return [resident_profile(conn, r["participant_id"]) for r in ids]
-
-
-# ---- senior (own data) ---------------------------------------------------
-
-@router.get("/me/sessions", response_model=List[SessionSummary])
-def my_sessions(me: dict = Depends(current_senior)):
-    with pool.connection() as conn:
-        return _fetch_sessions(conn, me["account_id"])
 
 
 # ---- caregiver (all residents) -------------------------------------------
@@ -134,11 +152,12 @@ def residents(_: dict = Depends(current_caregiver)):
     for p in profiles:
         sessions = p["sessions"]
         done = [s for s in reversed(sessions) if s["status"] == "completed"][-12:]
+        played = [x["started_at"] for x in sessions[:1] + p["garden_sessions"][:1]]
         out.append({
             "participant_id": p["participant_id"], "username": p["username"],
             "display_name": p["display_name"], "dominant_hand": p["dominant_hand"],
-            "session_count": len(sessions),
-            "last_played_at": sessions[0]["started_at"] if sessions else None,
+            "session_count": len(sessions) + len(p["garden_sessions"]),
+            "last_played_at": max(played) if played else None,
             "review": p["review"], "risk": p["insights"]["risk"],
             "concerns": p["insights"]["concerns"],
             "trend_left_ms": [s["left_median_latency_ms"] for s in done],

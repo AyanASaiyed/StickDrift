@@ -99,24 +99,27 @@ def sample_rows(csv_path, started, session_id, level, offset_ms, first_seq):
             count += 1
 
 
-def import_one(conn, folder, source_group, timezone):
+def import_one(conn, folder, source_group, timezone, participant_id=None):
+    """Import one folder. With participant_id, the session belongs to that resident
+    instead of an anonymous per-recording profile. Returns (status, rows, started, ended, session_id)."""
     source_hash = hashlib.sha256(str(folder.resolve()).encode("utf-8")).hexdigest()
     existing = conn.execute(
-        """SELECT s.started_at, COALESCE(s.completed_at, s.started_at + INTERVAL '10 minutes') AS ended_at
+        """SELECT s.session_id, s.started_at, COALESCE(s.completed_at, s.started_at + INTERVAL '10 minutes') AS ended_at
            FROM garden_imports i JOIN sessions s ON s.session_id = i.session_id
            WHERE i.source_hash = %s""", (source_hash,)
     ).fetchone()
     if existing:
-        return "skipped", 0, existing["started_at"], existing["ended_at"]
+        return "skipped", 0, existing["started_at"], existing["ended_at"], existing["session_id"]
     meta, started, ended, levels = read_recording(folder, timezone)
     session_id = uuid4()
     alias = f"Garden recording {source_hash[:12]}"
     with conn.transaction():
-        participant_id = conn.execute(
-            """INSERT INTO participants (alias, dominant_hand) VALUES (%s, 'unknown')
-               ON CONFLICT (alias) DO UPDATE SET alias = EXCLUDED.alias
-               RETURNING participant_id""", (alias,)
-        ).fetchone()["participant_id"]
+        if participant_id is None:
+            participant_id = conn.execute(
+                """INSERT INTO participants (alias, dominant_hand) VALUES (%s, 'unknown')
+                   ON CONFLICT (alias) DO UPDATE SET alias = EXCLUDED.alias
+                   RETURNING participant_id""", (alias,)
+            ).fetchone()["participant_id"]
         conn.execute(
             """INSERT INTO sessions
                (session_id, participant_id, mode, protocol_version, controller_id,
@@ -173,7 +176,7 @@ def import_one(conn, folder, source_group, timezone):
                VALUES (%s, %s, %s, %s)""",
             (source_hash, session_id, source_group, count),
         )
-    return "imported", count, started, started + timedelta(milliseconds=offset_ms)
+    return "imported", count, started, started + timedelta(milliseconds=offset_ms), session_id
 
 
 def folders_under(root):
@@ -205,7 +208,7 @@ def run(root, timezone, dry_run=False):
         for folder in folders:
             try:
                 group = str(folder.parent.relative_to(root)) if folder != root else None
-                status, count, start, end = import_one(conn, folder, group, timezone)
+                status, count, start, end, _ = import_one(conn, folder, group, timezone)
                 if status == "imported":
                     imported += 1
                 else:

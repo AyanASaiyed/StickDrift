@@ -12,7 +12,7 @@ export function RiskBadge({ risk }: { risk: Risk }) {
 
 /** Top-of-page alert shown to caregivers when a resident has a potential health concern. */
 export function RiskAlert({ name, insights }: { name: string; insights: Insights }) {
-  if (insights.status !== 'ok') {
+  if (insights.status !== 'ok' && insights.concerns.length === 0) {
     return (
       <div className="risk-alert risk-alert-none" role="status">
         <strong>Building a baseline</strong>

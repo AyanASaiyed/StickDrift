@@ -1,0 +1,214 @@
+"""Running movement measurements for a garden session that is being played.
+
+Fed one live sample at a time (~100 Hz). Each sample is
+    [t, trial, phase, lx, ly, rx, ry, tlx, tly, trx, try, reached_l, reached_r]
+with stick and target positions normalized to -1..1 (see garden.py).
+
+Groups follow the movement patterns the games are designed to show:
+  * speed and size of reaches (apples): reaction time, time to reach, peak speed,
+    reach size, and how speed changes from the first apples to the last;
+  * steadiness and tracking (butterfly, watering): distance from the moving
+    target, time on target, and leftover shake once the slow path is removed;
+  * left-right difference for every measurement both hands produce.
+These describe movement only. They are not a diagnosis.
+"""
+import math
+from collections import deque
+from statistics import mean, median
+from typing import Dict, List, Optional
+
+REST_R = 0.20           # garden.py's resting zone
+ONSET_R = 0.25          # stick has clearly left the resting zone
+ON_TARGET_R = 0.20      # same as the butterfly sparkle radius
+SHAKE_WINDOW = 25       # samples (~250 ms) in the slow path, as in tcn/stretch.py
+SHAKE_DEADBAND = 0.002  # ignore sign flips smaller than sensor noise
+HANDS = ("left", "right")
+
+
+def _r(x, y):
+    return math.hypot(x, y)
+
+
+class _ReachTrial:
+    def __init__(self, trial, t0):
+        self.trial, self.t0 = trial, t0
+        self.hand = {h: {"onset": None, "reach": None, "peak_r": 0.0, "peak_speed": 0.0,
+                         "target_r": None, "prev": None, "speed": 0.0, "rested": False} for h in HANDS}
+
+    def update(self, t, pos, targets, reached):
+        for h in HANDS:
+            st, (x, y), target = self.hand[h], pos[h], targets[h]
+            if target is None:
+                continue
+            r = _r(x, y)
+            # After a pick the game points that hand home (0, 0); keep the apple's distance.
+            if st["reach"] is None and _r(*target) > REST_R:
+                st["target_r"] = _r(*target)
+            if st["prev"] is not None:
+                pt, px, py = st["prev"]
+                dt = t - pt
+                if dt > 0:
+                    st["speed"] = 0.7 * st["speed"] + 0.3 * (_r(x - px, y - py) / dt)
+                    st["peak_speed"] = max(st["peak_speed"], st["speed"])
+            st["prev"] = (t, x, y)
+            # Reaction time only counts from rest; a stick still out from the last apple has none.
+            if r < ONSET_R:
+                st["rested"] = True
+            elif st["onset"] is None and st["rested"]:
+                st["onset"] = t - self.t0
+            if st["reach"] is None:
+                st["peak_r"] = max(st["peak_r"], r)
+                if reached[h]:
+                    st["reach"] = t - self.t0
+
+    def result(self):
+        out = {"trial": self.trial}
+        for h, st in self.hand.items():
+            if st["target_r"] is None:
+                continue
+            out[h] = {
+                "reaction_s": None if st["onset"] is None else round(st["onset"], 3),
+                "reach_s": None if st["reach"] is None else round(st["reach"], 3),
+                "peak_speed": round(st["peak_speed"], 2),
+                "reach_size": round(min(st["peak_r"] / st["target_r"], 1.5), 3) if st["target_r"] else None,
+                "reached": st["reach"] is not None,
+            }
+        return out
+
+
+class _Tracker:
+    """Distance from a moving target plus leftover shake, for one hand."""
+
+    def __init__(self):
+        self.n = 0
+        self.err_sum = 0.0
+        self.on = 0
+        self.window = deque(maxlen=SHAKE_WINDOW)
+        self.res_n = 0
+        self.res_sq = [0.0, 0.0]
+        self.flips = [0, 0]
+        self.last_sign = [0, 0]
+        self.t_first = None
+        self.t_last = None
+
+    def update(self, t, x, y, tx, ty):
+        self.t_first = t if self.t_first is None else self.t_first
+        self.t_last = t
+        err = _r(x - tx, y - ty)
+        self.n += 1
+        self.err_sum += err
+        self.on += err <= ON_TARGET_R
+        self.window.append((x, y))
+        if len(self.window) == SHAKE_WINDOW:
+            cx, cy = self.window[SHAKE_WINDOW // 2]
+            mx = sum(p[0] for p in self.window) / SHAKE_WINDOW
+            my = sum(p[1] for p in self.window) / SHAKE_WINDOW
+            self.res_n += 1
+            for axis, res in enumerate((cx - mx, cy - my)):
+                self.res_sq[axis] += res * res
+                if abs(res) > SHAKE_DEADBAND:
+                    sign = 1 if res > 0 else -1
+                    if self.last_sign[axis] and sign != self.last_sign[axis]:
+                        self.flips[axis] += 1
+                    self.last_sign[axis] = sign
+
+    def result(self):
+        if self.n == 0:
+            return None
+        shake = math.sqrt(sum(self.res_sq) / self.res_n) if self.res_n else None
+        span = (self.t_last - self.t_first) if self.t_first is not None else 0
+        axis = 0 if self.res_sq[0] >= self.res_sq[1] else 1
+        hz = self.flips[axis] / 2 / span if span > 1 else None
+        return {"tracking_error": round(self.err_sum / self.n, 4), "on_target": round(self.on / self.n, 3),
+                "shake": None if shake is None else round(shake, 4),
+                "shake_hz": None if hz is None or not shake or shake < 0.004 else round(hz, 1),
+                "samples": self.n}
+
+
+class SessionMetrics:
+    def __init__(self):
+        self.level: Optional[str] = None
+        self.reach_trials: List[dict] = []
+        self.open_trial: Optional[_ReachTrial] = None
+        self.trackers: Dict[str, Dict[str, _Tracker]] = {}
+
+    def start_level(self, level):
+        self.close_trial()
+        self.level = level
+
+    def close_trial(self):
+        if self.open_trial is not None:
+            self.reach_trials.append(self.open_trial.result())
+            self.open_trial = None
+
+    def add(self, s):
+        t, trial, phase = s[0], s[1], s[2]
+        pos = {"left": (s[3], s[4]), "right": (s[5], s[6])}
+        targets = {"left": None if s[7] is None else (s[7], s[8]),
+                   "right": None if s[9] is None else (s[9], s[10])}
+        if self.level == "apples":
+            if phase == "cue":
+                if self.open_trial is None or self.open_trial.trial != trial:
+                    self.close_trial()
+                    self.open_trial = _ReachTrial(trial, t)
+                self.open_trial.update(t, pos, targets, {"left": s[11], "right": s[12]})
+            else:
+                # The game ends a pair on the same sample as the last pick, so record it first.
+                if self.open_trial is not None and self.open_trial.trial == trial:
+                    self.open_trial.update(t, pos, targets, {"left": s[11], "right": s[12]})
+                self.close_trial()
+        elif phase == "track" and self.level:
+            level = self.trackers.setdefault(self.level, {})
+            for h in HANDS:
+                if targets[h] is not None:
+                    level.setdefault(h, _Tracker()).update(t, *pos[h], *targets[h])
+
+    # ---- summaries -----------------------------------------------------------
+
+    def summary(self) -> dict:
+        trials = self.reach_trials + ([self.open_trial.result()] if self.open_trial else [])
+        hands = {h: self._hand_summary(h, trials) for h in HANDS}
+        diff = {}
+        for key in ("reaction_s", "reach_s", "peak_speed", "reach_size", "tracking_error", "shake"):
+            a, b = hands["left"].get(key), hands["right"].get(key)
+            if a is not None and b is not None and (a + b) > 0:
+                diff[key] = round((a - b) / ((a + b) / 2) * 100, 1)
+        tracking = {lv: {h: tr.result() for h, tr in by_hand.items()} for lv, by_hand in self.trackers.items()}
+        return {"hands": hands, "left_right_difference_pct": diff, "reach_trials": trials, "tracking": tracking}
+
+    def _hand_summary(self, hand, trials) -> dict:
+        rows = [t[hand] for t in trials if hand in t]
+        out: Dict[str, Optional[float]] = {}
+
+        def med(key, src=rows):
+            vals = [r[key] for r in src if r.get(key) is not None]
+            return round(median(vals), 3) if vals else None
+
+        out["reaction_s"] = med("reaction_s")
+        out["reach_s"] = med("reach_s")
+        out["peak_speed"] = med("peak_speed")
+        out["reach_size"] = med("reach_size")
+        out["apples_reached"] = sum(r["reached"] for r in rows) if rows else None
+        out["apples_total"] = len(rows) if rows else None
+        speeds = [r["peak_speed"] for r in rows if r.get("peak_speed")]
+        if len(speeds) >= 4:
+            half = len(speeds) // 2
+            first, last = mean(speeds[:half]), mean(speeds[-half:])
+            out["speed_change_pct"] = round((last - first) / first * 100, 1) if first else None
+        else:
+            out["speed_change_pct"] = None
+
+        tracks = [tr.result() for by_hand in self.trackers.values() for h, tr in by_hand.items() if h == hand]
+        tracks = [x for x in tracks if x]
+        total = sum(x["samples"] for x in tracks)
+        if total:
+            out["tracking_error"] = round(sum(x["tracking_error"] * x["samples"] for x in tracks) / total, 4)
+            out["on_target"] = round(sum(x["on_target"] * x["samples"] for x in tracks) / total, 3)
+            shakes = [x for x in tracks if x["shake"] is not None]
+            out["shake"] = (round(sum(x["shake"] * x["samples"] for x in shakes) / sum(x["samples"] for x in shakes), 4)
+                            if shakes else None)
+            hz = [x["shake_hz"] for x in tracks if x["shake_hz"]]
+            out["shake_hz"] = round(median(hz), 1) if hz else None
+        else:
+            out.update(tracking_error=None, on_target=None, shake=None, shake_hz=None)
+        return out

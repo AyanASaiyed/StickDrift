@@ -54,9 +54,11 @@ function ProfileMenu() {
       </button>
       {open && (
         <div className="menu-list" role="menu">
-          <Link role="menuitem" className="menu-item" to={isCaregiver ? '/caregiver' : '/history'} onClick={() => setOpen(false)} autoFocus>
-            {isCaregiver ? 'Residents' : 'History'}
-          </Link>
+          {isCaregiver && (
+            <Link role="menuitem" className="menu-item" to="/caregiver" onClick={() => setOpen(false)} autoFocus>
+              Residents
+            </Link>
+          )}
           <button
             role="menuitem"
             className="menu-item"

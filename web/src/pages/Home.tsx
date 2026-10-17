@@ -1,76 +1,146 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import type { Placement } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
+import { api, type GardenStatus, type LiveStatus } from '../api'
 import { useAuth } from '../auth'
-import { ControllerCheck, type InputSource } from '../components/ControllerCheck'
-import type { PlayState } from './Play'
 
-const PLACEMENTS: { value: Placement; label: string }[] = [
-  { value: 'hands', label: 'In my hands' },
-  { value: 'table', label: 'On a table' },
-  { value: 'lap', label: 'On my lap' },
-]
+const MESSAGE: Partial<Record<LiveStatus, { title: string; body: string }>> = {
+  starting: { title: 'Opening the garden…', body: 'The game window will appear on this computer in a moment.' },
+  waiting: { title: 'The garden is open', body: 'Switch on the controller or plug it in with the cable.' },
+  ready: { title: 'Mabel is waiting for you', body: 'Look for the game window. Press X to continue.' },
+  playing: { title: 'Enjoy the garden!', body: 'Pip and Poppy are flying. Hold both sticks outward any time to rest.' },
+  paused: { title: 'Taking a break', body: 'Rest as long as you like. Press X in the game when you’re ready.' },
+  saving: { title: 'Saying goodbye…', body: 'Tidying up the garden for next time.' },
+}
 
 export default function Home() {
   const { me } = useAuth()
-  const navigate = useNavigate()
-  const [useSimulator, setUseSimulator] = useState(false)
-  const [source, setSource] = useState<InputSource>({ kind: 'none' })
-  const [placement, setPlacement] = useState<Placement>('hands')
+  const [status, setStatus] = useState<GardenStatus | null>(null)
+  const [keyboard, setKeyboard] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [finished, setFinished] = useState(false)
+  const wasActive = useRef(false)
 
-  const ready = source.kind !== 'none'
-  const start = () => {
-    const state: PlayState = { input: source.kind === 'simulated' ? 'keyboard' : 'gamepad', placement }
-    navigate('/play', { state })
+  useEffect(() => {
+    let stop = false
+    const poll = () =>
+      api
+        .myGarden()
+        .then((s) => {
+          if (stop) return
+          if (wasActive.current && !s.active) setFinished(true)
+          wasActive.current = s.active
+          setStatus(s)
+        })
+        .catch(() => undefined)
+    void poll()
+    const id = window.setInterval(poll, 2000)
+    return () => {
+      stop = true
+      window.clearInterval(id)
+    }
+  }, [])
+
+  async function open() {
+    setBusy(true)
+    setError(null)
+    setFinished(false)
+    try {
+      const s = await api.launchGarden(keyboard)
+      wasActive.current = s.active
+      setStatus(s)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
+
+  const active = status?.active ?? false
+  const msg = status?.status ? MESSAGE[status.status] : undefined
 
   return (
     <main className="wrap">
       <section className="hero hero-small">
         <h1>Hi, {me?.display_name}.</h1>
-        <p className="lede">Ready for today’s game? It takes about three minutes.</p>
+        <p className="lede">Mabel would love some help in the garden today.</p>
       </section>
 
-      <div className="steps">
-        <ControllerCheck useSimulator={useSimulator} onUseSimulatorChange={setUseSimulator} onSourceChange={setSource} />
-
-        <section className="panel" aria-labelledby="placement-heading">
-          <p className="step">Step 2</p>
-          <h2 id="placement-heading">Where is the controller?</h2>
-          <p className="muted">Use the same spot each time so sessions compare fairly.</p>
-          <div className="segmented segmented-stack" role="radiogroup" aria-labelledby="placement-heading">
-            {PLACEMENTS.map((p) => (
-              <label key={p.value} className={placement === p.value ? 'on' : ''}>
-                <input
-                  type="radio"
-                  name="placement"
-                  value={p.value}
-                  checked={placement === p.value}
-                  onChange={() => setPlacement(p.value)}
-                />
-                {p.label}
-              </label>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <section className="start" aria-labelledby="start-heading">
-        <div>
-          <p className="step">Step 3</p>
-          <h2 id="start-heading">Start the game</h2>
-          <p className="muted">
-            {ready ? 'A quick stick check and six practice arrows come first.' : 'To start, connect the controller.'}
-          </p>
+      <section className="garden-launch" aria-labelledby="garden-heading">
+        <div className="garden-art" aria-hidden>
+          <svg viewBox="0 0 320 180">
+            <rect width="320" height="180" rx="20" className="ga-sky" />
+            <circle cx="262" cy="42" r="20" className="ga-sun" />
+            <path d="M0 128 Q80 92 160 120 T320 112 V180 H0Z" className="ga-hill" />
+            <path d="M0 150 Q100 130 200 148 T320 140 V180 H0Z" className="ga-grass" />
+            <rect x="52" y="78" width="14" height="52" rx="4" className="ga-trunk" />
+            <circle cx="59" cy="70" r="30" className="ga-tree" />
+            <circle cx="48" cy="64" r="5" className="ga-apple" />
+            <circle cx="70" cy="76" r="5" className="ga-apple" />
+            <g className="ga-bird ga-bird-l">
+              <ellipse cx="138" cy="70" rx="14" ry="10" />
+              <circle cx="148" cy="64" r="7" />
+            </g>
+            <g className="ga-bird ga-bird-r">
+              <ellipse cx="196" cy="84" rx="14" ry="10" />
+              <circle cx="186" cy="78" r="7" />
+            </g>
+            <circle cx="248" cy="138" r="7" className="ga-flower" />
+            <circle cx="270" cy="146" r="6" className="ga-flower" />
+          </svg>
         </div>
-        <button className="btn btn-start" disabled={!ready} onClick={start}>
-          Start
-        </button>
+        <div className="garden-copy">
+          <p className="step">Today’s visit</p>
+          <h2 id="garden-heading">Mabel’s Moonflower Garden</h2>
+
+          {active && msg ? (
+            <div className="garden-status" role="status">
+              <span className="pulse" aria-hidden />
+              <div>
+                <strong>{msg.title}</strong>
+                <p>{msg.body}</p>
+              </div>
+            </div>
+          ) : finished ? (
+            <div className="garden-status garden-status-done" role="status">
+              <div>
+                <strong>Thank you for visiting!</strong>
+                <p>Mabel and the birds had a lovely time. See you next time.</p>
+              </div>
+            </div>
+          ) : (
+            <p className="muted">
+              Pick apples with Pip and Poppy, follow a butterfly through the meadow, and water the moonflowers before
+              the picnic. It takes about five minutes.
+            </p>
+          )}
+
+          {!active && (
+            <>
+              <button className="btn btn-start" onClick={open} disabled={busy}>
+                {busy ? 'Opening…' : finished ? 'Visit again' : 'Open the garden'}
+              </button>
+              <label className="check">
+                <input type="checkbox" checked={keyboard} onChange={(e) => setKeyboard(e.target.checked)} />
+                No controller? Use the keyboard instead
+              </label>
+            </>
+          )}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
       </section>
+
+      <p className="muted alt-game">
+        Prefer something quicker? <Link to="/arrows">Play the arrow game in your browser</Link>.
+      </p>
 
       <footer className="foot">
-        Stick Drift shows care teams changes worth checking. It does not diagnose any condition. If someone has a sudden
-        new symptom, follow your usual urgent-care procedure.
+        Stick Drift helps care teams notice changes worth checking. It does not diagnose any condition. If someone has
+        a sudden new symptom, follow your usual urgent-care procedure.
       </footer>
     </main>
   )

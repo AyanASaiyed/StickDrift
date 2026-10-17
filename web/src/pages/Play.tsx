@@ -285,10 +285,7 @@ export default function Play() {
             {rating && <p className="hint">Thanks for telling us.</p>}
           </fieldset>
           <div className="row">
-            <Link className="btn btn-big" to="/history">
-              See my history
-            </Link>
-            <Link className="btn btn-quiet" to="/">
+            <Link className="btn btn-big" to="/">
               Back to home
             </Link>
           </div>
@@ -302,9 +299,6 @@ export default function Play() {
           <div className="row">
             <Link className="btn btn-big" to="/">
               Back to home
-            </Link>
-            <Link className="btn btn-quiet" to="/history">
-              See my history
             </Link>
           </div>
         </Screen>

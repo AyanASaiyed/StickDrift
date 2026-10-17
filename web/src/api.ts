@@ -141,6 +141,62 @@ export interface ResidentRow {
   trend_right_ms: (number | null)[]
 }
 
+export type PatternKey = 'parkinson' | 'stroke' | 'essential_tremor'
+export type PatternScores = Record<PatternKey, number | null>
+
+export interface TcnLevel {
+  level: string
+  completed: boolean
+  scores: PatternScores
+  stretches?: { left: number; right: number }
+  duration_s?: number
+  error?: string
+}
+
+export interface TcnResult {
+  scores: PatternScores
+  levels: TcnLevel[]
+  meaning: string
+  is_synthetic: boolean
+}
+
+export interface HandLive {
+  reaction_s: number | null
+  reach_s: number | null
+  peak_speed: number | null
+  reach_size: number | null
+  apples_reached: number | null
+  apples_total: number | null
+  speed_change_pct: number | null
+  tracking_error: number | null
+  on_target: number | null
+  shake: number | null
+  shake_hz: number | null
+}
+
+export interface ReachTrial {
+  trial: number
+  left?: { reaction_s: number | null; reach_s: number | null; peak_speed: number; reach_size: number | null; reached: boolean }
+  right?: { reaction_s: number | null; reach_s: number | null; peak_speed: number; reach_size: number | null; reached: boolean }
+}
+
+export interface LiveMetrics {
+  hands: { left: HandLive; right: HandLive }
+  left_right_difference_pct: Partial<Record<keyof HandLive, number>>
+  reach_trials: ReachTrial[]
+  tracking: Record<string, Record<string, { tracking_error: number; on_target: number; shake: number | null }>>
+}
+
+export interface GardenSession {
+  session_id: string
+  started_at: string
+  status: string
+  is_synthetic: boolean
+  levels_completed: number | null
+  tcn: TcnResult | null
+  live: LiveMetrics | null
+}
+
 export interface ResidentDetail {
   participant_id: string
   username: string | null
@@ -149,6 +205,58 @@ export interface ResidentDetail {
   review: Review
   insights: Insights
   sessions: SessionSummary[]
+  garden_sessions: GardenSession[]
+}
+
+export type LiveStatus =
+  | 'starting'
+  | 'waiting'
+  | 'ready'
+  | 'playing'
+  | 'paused'
+  | 'saving'
+  | 'scoring'
+  | 'finished'
+  | 'failed'
+  | 'stopped'
+
+export interface LiveBrief {
+  live_id: string
+  participant_id: string
+  name: string
+  status: LiveStatus
+  level: string | null
+  levels: string[]
+  levels_done: string[]
+  synthetic: boolean
+  started_at: string
+  elapsed_s: number
+  tcn_scores: PatternScores | null
+  db_session_id: string | null
+  error: string | null
+}
+
+/** [seq, level, t, trial, phase, lx, ly, rx, ry, tlx, tly, trx, try, reached_l, reached_r] */
+export type LiveSample = [
+  number, string, number, number | null, string,
+  number, number, number, number,
+  number | null, number | null, number | null, number | null,
+  number, number,
+]
+
+export interface LiveSnapshot extends LiveBrief {
+  trial: number | null
+  phase: string | null
+  seq: number
+  samples: LiveSample[]
+  metrics: LiveMetrics
+  result: TcnResult | null
+}
+
+export interface GardenStatus {
+  active: boolean
+  status: LiveStatus | null
+  level: string | null
 }
 
 export interface ChatTurn {
@@ -277,7 +385,8 @@ export const api = {
     post<Me>('/auth/caregiver/login', { username, password }),
   logout: () => post<void>('/auth/logout'),
 
-  mySessions: () => request<SessionSummary[]>('/me/sessions'),
+  myGarden: () => request<GardenStatus>('/me/garden'),
+  launchGarden: (keyboard: boolean) => post<GardenStatus>('/me/garden/launch', { keyboard }),
   saveGame: (body: GameSave) => post<{ session_id: string; status: string }>('/me/games', body),
   rateGame: (sessionId: string, enjoyment: number) =>
     request<void>(`/me/games/${sessionId}/rating`, {
@@ -290,6 +399,9 @@ export const api = {
     request<GardenSecond[]>(`/sessions/${sessionId}/garden-timeline`),
   caregiverResidents: () => request<ResidentRow[]>('/caregiver/residents'),
   caregiverResident: (id: string) => request<ResidentDetail>(`/caregiver/residents/${id}`),
+  caregiverLive: () => request<LiveBrief[]>('/caregiver/live'),
+  caregiverLiveSnapshot: (id: string, since: number) =>
+    request<LiveSnapshot>(`/caregiver/live/${id}?since=${since}`),
   askAssistant: (question: string, history: ChatTurn[], participantId?: string) =>
     post<AssistantAnswer>('/caregiver/assistant', { question, history, participant_id: participantId ?? null }),
 }

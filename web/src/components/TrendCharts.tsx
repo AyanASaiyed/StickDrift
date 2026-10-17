@@ -238,14 +238,14 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
         series={[
           {
             label: 'Left hand',
-            color: 'var(--accent)',
+            color: 'var(--hand-left)',
             points: usable.map((s) => secs(s.left_median_latency_ms)),
             baseline: base('left_latency', (v) => v / 1000),
             flagged: flaggedFor('left_latency'),
           },
           {
             label: 'Right hand',
-            color: 'var(--warn)',
+            color: 'var(--hand-right)',
             points: usable.map((s) => secs(s.right_median_latency_ms)),
             baseline: base('right_latency', (v) => v / 1000),
             flagged: flaggedFor('right_latency'),
@@ -263,21 +263,21 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
         series={[
           {
             label: 'Left hand',
-            color: 'var(--accent)',
+            color: 'var(--hand-left)',
             points: usable.map((s) => pct(s.left_correct, s.left_valid)),
             baseline: base('left_accuracy', (v) => v * 100),
             flagged: flaggedFor('left_accuracy'),
           },
           {
             label: 'Right hand',
-            color: 'var(--warn)',
+            color: 'var(--hand-right)',
             points: usable.map((s) => pct(s.right_correct, s.right_valid)),
             baseline: base('right_accuracy', (v) => v * 100),
             flagged: flaggedFor('right_accuracy'),
           },
           {
             label: 'Both hands',
-            color: 'var(--synthetic)',
+            color: 'var(--hand-both)',
             points: usable.map((s) => pct(s.both_correct, s.both_valid)),
             flagged: flaggedFor('both_accuracy'),
           },
@@ -292,7 +292,7 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
         series={[
           {
             label: 'Left minus right',
-            color: 'var(--accent)',
+            color: 'var(--hand-left)',
             points: usable.map((s) =>
               s.left_median_latency_ms != null && s.right_median_latency_ms != null
                 ? (s.left_median_latency_ms - s.right_median_latency_ms) / 1000

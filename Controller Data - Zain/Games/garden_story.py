@@ -499,6 +499,7 @@ class StoryGame(core.Game):
             self.in_card = False
         self.centers = {k: statistics.median(r[k] for r in samples) for k in samples[0]}
         self.rec.centers = self.centers
+        self.rec.live.event("calibrated")
         self.meta["calibration"] = {
             "centers": self.centers, "samples_60hz": len(samples),
             "rest_sd": {k: round(statistics.pstdev(r[k] for r in samples), 3) for k in self.centers},

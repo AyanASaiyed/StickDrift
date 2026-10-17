@@ -39,6 +39,7 @@ from pathlib import Path
 
 import pygame
 
+import live
 from read_data import CSV_HEADER, Reader, parse, to_row
 
 PROTOCOL = "garden-v3"
@@ -224,6 +225,7 @@ class Recorder:
         self.depth = 0
         self.offset = 0.0
         self._t_suspend = 0.0
+        self.live = live.from_env()
 
     def active(self, now=None):
         return (time.perf_counter() if now is None else now) - self.offset
@@ -232,6 +234,8 @@ class Recorder:
         with self.lock:
             if self.depth == 0:
                 self._t_suspend = time.perf_counter()
+                if self.w is not None:
+                    self.live.event("paused")
             self.depth += 1
 
     def resume(self):
@@ -239,6 +243,8 @@ class Recorder:
             self.depth -= 1
             if self.depth == 0:
                 self.offset += time.perf_counter() - self._t_suspend
+                if self.w is not None:
+                    self.live.event("resumed")
 
     def open(self, folder, level):
         os.makedirs(folder, exist_ok=True)
@@ -249,6 +255,7 @@ class Recorder:
             self.f, self.w, self.level, self.ctx, self.rows = f, w, level, None, 0
             self.t0_wall = time.perf_counter()
             self.a0 = self.t0_wall - self.offset
+        self.live.event("level_start", level=level)
 
     def close(self):
         """Close the level file; returns (rows, active seconds)."""
@@ -267,13 +274,15 @@ class Recorder:
             a = now - self.offset
             dt = None if ctx.trial_t0 is None else a - ctx.trial_t0
             lt, rt = ctx.target(dt)
+            cur = cursor(s, self.centers)
             xy = lambda p: ["", ""] if p is None else [f"{p[0]:.4f}", f"{p[1]:.4f}"]
             self.w.writerow(
                 to_row(a - self.a0, s)
                 + [self.label, self.level, ctx.trial, ctx.hand, ctx.phase, "" if dt is None else f"{dt:.4f}"]
-                + xy(lt) + xy(rt) + [f"{v:.4f}" for v in cursor(s, self.centers)]
+                + xy(lt) + xy(rt) + [f"{v:.4f}" for v in cur]
                 + [ctx.reached[0], ctx.reached[1], f"{now - self.t0_wall:.4f}"])
             self.rows += 1
+            self.live.sample(a - self.a0, ctx, (lt, rt), cur)
 
 
 class GardenReader(Reader):
@@ -649,6 +658,7 @@ class Game:
             "rest_range": {k: [min(r[k] for r in samples), max(r[k] for r in samples)] for k in self.centers},
         }
         self.rec.centers = self.centers
+        self.rec.live.event("calibrated")
         self.write_session()
 
     def meet_helpers(self):
@@ -863,12 +873,16 @@ class Game:
                                         "completed": info["completed"], "rows": info["rows"],
                                         "duration_s": info["duration_s"]})
             self.write_session()
+            self.rec.live.event("level_end", level=lv, completed=info["completed"],
+                                duration_s=info["duration_s"], results=self.results)
         self.done.append(lv)
         self.play("chime")
         self.card([CHEERS[lv]], auto_s=1.8)
 
     def run(self):
         completed = False
+        self.rec.live.event("session_start", folder=os.path.abspath(self.folder),
+                            synthetic=bool(self.meta.get("is_synthetic")), levels=list(self.levels))
         try:
             self.wait_for_controller()
             self.calibrate()
@@ -885,6 +899,8 @@ class Game:
             self.meta["completed"] = completed
             self.meta["ended"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             self.write_session()
+            self.rec.live.event("session_end", completed=completed, folder=os.path.abspath(self.folder))
+            self.rec.live.close()
             pygame.quit()
             print(f"Saved to {self.folder}")
             for lv in self.meta["levels"]:

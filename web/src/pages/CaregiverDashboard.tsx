@@ -4,6 +4,7 @@ import { api, type ResidentRow } from '../api'
 import { Assistant } from '../components/Assistant'
 import { GardenAnalytics } from '../components/GardenAnalytics'
 import { RiskBadge } from '../components/Insights'
+import { LiveNow } from '../components/LiveNow'
 import { formatDateTime } from '../format'
 
 function Sparkline({ left, right }: { left: (number | null)[]; right: (number | null)[] }) {
@@ -27,12 +28,12 @@ function Sparkline({ left, right }: { left: (number | null)[]; right: (number | 
         role="img"
         aria-label="Response time trend, left and right hand"
       >
-        <path d={path(left)} className="spark-line" style={{ stroke: 'var(--accent)' }} />
-        <path d={path(right)} className="spark-line" style={{ stroke: 'var(--warn)' }} />
+        <path d={path(left)} className="spark-line" style={{ stroke: 'var(--hand-left)' }} />
+        <path d={path(right)} className="spark-line" style={{ stroke: 'var(--hand-right)' }} />
       </svg>
       <figcaption>
-        <span className="spark-key" style={{ background: 'var(--accent)' }} aria-hidden /> Left
-        <span className="spark-key" style={{ background: 'var(--warn)' }} aria-hidden /> Right · response time
+        <span className="spark-key" style={{ background: 'var(--hand-left)' }} aria-hidden /> Left
+        <span className="spark-key" style={{ background: 'var(--hand-right)' }} aria-hidden /> Right · response time
       </figcaption>
     </figure>
   )
@@ -59,6 +60,8 @@ export default function CaregiverDashboard() {
           <h1>Residents</h1>
         </div>
       </div>
+
+      <LiveNow />
 
       {error ? (
         <p className="error" role="alert">
