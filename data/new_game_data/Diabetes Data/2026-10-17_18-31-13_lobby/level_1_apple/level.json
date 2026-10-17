@@ -1,0 +1,72 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "150032d8-821f-472f-befa-2b69eca45192",
+ "level": "apple",
+ "number": 1,
+ "completed": true,
+ "rows": 2032,
+ "duration_s": 21.01,
+ "score": 275.0,
+ "stars": 0,
+ "source": "gamepad",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 1.166,
+    "reach_s": 3.173,
+    "peak_speed": 21.83,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 1,
+    "hand": "left",
+    "reaction_s": 4.749,
+    "reach_s": 6.582,
+    "peak_speed": 16.46,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "left",
+    "reaction_s": 1.979,
+    "reach_s": 2.458,
+    "peak_speed": 21.61,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "trial": 3,
+    "hand": "left",
+    "reaction_s": 0.611,
+    "reach_s": null,
+    "peak_speed": 19.25,
+    "reach_size": 1,
+    "reached": false
+   },
+   {
+    "type": "trial",
+    "trial": 2,
+    "hand": "right",
+    "reaction_s": null,
+    "reach_s": null,
+    "peak_speed": 20.41,
+    "reach_size": 1,
+    "reached": false
+   }
+  ]
+ }
+}
