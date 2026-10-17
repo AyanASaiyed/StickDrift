@@ -18,6 +18,7 @@ import psycopg
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from starlette.requests import HTTPConnection
 from pydantic import BaseModel, Field
 
 from .db import pool
@@ -88,7 +89,8 @@ def _start_session(conn, role: Role, account_id, response: Response) -> None:
     )
 
 
-def _lookup(request: Request) -> Optional[dict]:
+def _lookup(request: HTTPConnection) -> Optional[dict]:
+    """The signed-in account for a request or a WebSocket (both carry the login cookie)."""
     token = request.cookies.get(COOKIE_NAME)
     if not token:
         return None
@@ -117,6 +119,9 @@ def _lookup(request: Request) -> Optional[dict]:
             return None
         return {"role": "caregiver", "account_id": row["account_id"], "username": row["username"],
                 "display_name": row["display_name"], "dominant_hand": None}
+
+
+lookup = _lookup
 
 
 def current_account(request: Request) -> dict:

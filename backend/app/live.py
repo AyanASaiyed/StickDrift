@@ -43,6 +43,8 @@ LOG_DIR = ROOT / "data" / ".live-logs"
 API_URL = os.environ.get("STICKDRIFT_API_URL", "http://127.0.0.1:8000")
 TIMEZONE = os.environ.get("GARDEN_RECORDING_TIMEZONE", "America/Toronto")
 HOST = socket.gethostname()
+CHANNEL = "stickdrift_live"  # NOTIFY channel; caregiver APIs LISTEN on it (see live_stream.py)
+NOTIFY_MAX = 7000            # Postgres caps a payload at 8000 bytes; bigger batches send only a pointer
 
 ACTIVE = {"starting", "waiting", "ready", "playing", "paused", "saving", "scoring"}
 STATE_EVERY_S = 0.5      # how often the running state/metrics row is rewritten
@@ -169,6 +171,8 @@ def _persist(s: LiveSession, with_metrics: bool = True):
                      error = EXCLUDED.error, ended_at = EXCLUDED.ended_at, updated_at = now()""",
                 values,
             )
+            # Same transaction, so watchers are only told once the row is committed.
+            conn.execute("SELECT pg_notify(%s, %s)", (CHANNEL, json.dumps({"i": str(s.id), "st": 1})))
         s.last_state_write = time.monotonic()
     except Exception:
         log.exception("Could not write live session %s to TigerData", s.id)
@@ -187,6 +191,12 @@ def _store_samples(rows: List[tuple]):
                    ON CONFLICT DO NOTHING""",
                 rows,
             )
+            # Small batches ride in the notification itself, so watchers don't need to read the table.
+            live_id = str(rows[0][0])
+            payload = json.dumps({"i": live_id, "s": [list(r[1:]) for r in rows]}, separators=(",", ":"))
+            if len(payload) > NOTIFY_MAX:
+                payload = json.dumps({"i": live_id, "q": rows[-1][1]})
+            cur.execute("SELECT pg_notify(%s, %s)", (CHANNEL, payload))
     except Exception:
         log.exception("Could not write live samples to TigerData")
 
@@ -467,25 +477,37 @@ def live_list(_: dict = Depends(current_caregiver)):
     return [_brief(r) for r in rows]
 
 
-@router.get("/caregiver/live/{live_id}")
-def live_snapshot(live_id: UUID, since: int = 0, limit: int = 2000, _: dict = Depends(current_caregiver)):
-    limit = max(1, min(limit, 4000))
+def state(live_id: UUID) -> Optional[dict]:
+    """Everything about a live session except its samples, or None if it doesn't exist."""
     with pool.connection() as conn:
         row = conn.execute(
             f"SELECT {BRIEF_COLUMNS}, trial, phase, seq, metrics, result FROM live_sessions WHERE live_id = %s",
             (STALE_S, live_id),
         ).fetchone()
-        if row is None:
-            raise HTTPException(404, "That live session was not found.")
-        samples = conn.execute(
+    if row is None:
+        return None
+    return {**_brief(row), "trial": row["trial"], "phase": row["phase"], "seq": row["seq"],
+            "metrics": row["metrics"] or SessionMetrics().summary(), "result": row["result"]}
+
+
+def samples_since(live_id: UUID, since: int, limit: int) -> List[list]:
+    """The newest `limit` samples after `since`, oldest first."""
+    with pool.connection() as conn:
+        rows = conn.execute(
             """SELECT seq, level, t, trial, phase, lx, ly, rx, ry, tgt_lx, tgt_ly, tgt_rx, tgt_ry,
                       reached_l, reached_r, cur_lx, cur_ly, cur_rx, cur_ry
                FROM live_samples WHERE live_id = %s AND seq > %s
                ORDER BY seq DESC LIMIT %s""",
             (live_id, max(since, 0), limit),
         ).fetchall()
-    return {
-        **_brief(row), "trial": row["trial"], "phase": row["phase"], "seq": row["seq"],
-        "samples": [list(r.values()) for r in reversed(samples)],
-        "metrics": row["metrics"] or SessionMetrics().summary(), "result": row["result"],
-    }
+    return [list(r.values()) for r in reversed(rows)]
+
+
+@router.get("/caregiver/live/{live_id}")
+def live_snapshot(live_id: UUID, since: int = 0, limit: int = 2000, _: dict = Depends(current_caregiver)):
+    limit = max(1, min(limit, 4000))
+    st = state(live_id)
+    if st is None:
+        raise HTTPException(404, "That live session was not found.")
+    return {**st, "samples": samples_since(live_id, since, limit)}
+

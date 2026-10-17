@@ -124,7 +124,7 @@ async function init() {
   for (const v of [hub, ...Object.values(games)]) renderer.compile(v.scene, v.camera)
   refreshScores()
   // handy for debugging / automated checks
-  window.__lobby = { hub, games, input, get active() { return active }, startGame, leaveGame, renderer, renderUi }
+  window.__lobby = { hub, games, input, live, get active() { return active }, startGame, leaveGame, renderer, renderUi }
 }
 
 $('go').addEventListener('click', () => {

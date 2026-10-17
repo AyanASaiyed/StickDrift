@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { api, type HandLive, type LiveSample, type LiveSnapshot, type LiveStatus } from '../api'
+import { type HandLive, type LiveStatus } from '../api'
 import { DiffBars, PatternBars, ReachTrialsChart, RollingChart, StickFields } from '../components/LiveCharts'
 import { handPoint, handPos, handTarget, levelName, pct, secs } from '../components/liveData'
 import { TabPanel, Tabs } from '../components/Tabs'
+import { useLiveFeed } from '../components/useLiveFeed'
 
-const KEEP = 100 * 40
 const DONE: LiveStatus[] = ['finished', 'failed', 'stopped', 'lost', 'ended']
 
 const STATUS_TEXT: Record<LiveStatus, string> = {
@@ -94,43 +94,9 @@ function tiles(h: { left: HandLive; right: HandLive }, lobby: boolean) {
 
 export default function LiveSession() {
   const { id = '' } = useParams()
-  const [snap, setSnap] = useState<LiveSnapshot | null>(null)
-  const [samples, setSamples] = useState<LiveSample[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const since = useRef(0)
+  const { snap, samples, error, mode } = useLiveFeed(id)
   const [chart, setChart] = useState<'distance' | 'tilt'>('distance')
   const [mTab, setMTab] = useState<'speed' | 'steady' | 'diff'>('speed')
-
-  useEffect(() => {
-    let stop = false
-    let timer = 0
-    since.current = 0
-    setSamples([])
-    const tick = async () => {
-      try {
-        const s = await api.caregiverLiveSnapshot(id, since.current)
-        if (stop) return
-        setError(null)
-        setSnap(s)
-        if (s.samples.length) {
-          const fresh = s.samples.filter((x) => x[0] > since.current)
-          since.current = s.seq
-          setSamples((prev) => [...prev, ...fresh].slice(-KEEP))
-        }
-        const done = DONE.includes(s.status)
-        if (!done || !s.result) timer = window.setTimeout(tick, done ? 3000 : 250)
-      } catch (e) {
-        if (stop) return
-        setError((e as Error).message)
-        timer = window.setTimeout(tick, 2000)
-      }
-    }
-    void tick()
-    return () => {
-      stop = true
-      window.clearTimeout(timer)
-    }
-  }, [id])
 
   if (!snap) {
     return (
@@ -163,7 +129,7 @@ export default function LiveSession() {
 
       <div className="page-head">
         <div>
-          <p className="step">{live ? 'Live session' : 'Garden session'}</p>
+          <p className="step">{live ? 'Live session' : lobby ? 'Game session' : 'Garden session'}</p>
           <h1>
             {snap.name}{' '}
             <span className={`live-pill live-${snap.status}`}>
@@ -174,6 +140,11 @@ export default function LiveSession() {
           </h1>
           <p className="muted">
             {elapsed(snap.elapsed_s)} since opening
+            {live && (
+              <span className={`feed-mode feed-${mode}`} title={mode === 'polling' ? 'The live stream could not connect, so this page is checking every quarter second.' : undefined}>
+                {mode === 'live' ? 'Streaming' : mode === 'polling' ? 'Refreshing' : 'Connecting…'}
+              </span>
+            )}
             {snap.trial != null && snap.level === 'apples' ? ` · apple ${snap.trial}` : ''}
             {snap.synthetic && <span className="badge badge-synthetic">Keyboard / simulated input</span>}
           </p>

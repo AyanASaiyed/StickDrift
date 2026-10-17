@@ -13,6 +13,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
+        ws: true, // the caregiver's live view streams over a WebSocket
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },

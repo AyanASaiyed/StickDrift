@@ -958,3 +958,11 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
 .btn-role-care { background: var(--role-care); border-color: var(--role-care); color: var(--role-care-ink); }
 .btn-role-resident { color: #17613c; border-color: var(--role-resident); }
 @media (prefers-color-scheme: dark) { .btn-role-resident { color: var(--role-resident); } }
+
+/* live view: how the page is getting updates */
+.feed-mode { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 0.85rem; color: var(--muted); }
+.feed-mode::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.feed-live { color: var(--ok); }
+.feed-live::before { animation: feed-pulse 1.6s ease-in-out infinite; }
+@keyframes feed-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .feed-live::before { animation: none; } }
