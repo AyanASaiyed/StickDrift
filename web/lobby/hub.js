@@ -10,6 +10,9 @@ const SPEED = 2.1 // m/s
 const PORTAL_R = 1.9
 const PLAYER_R = 0.38
 const START = [0, -5]
+// The exit door sits in the south fence, right behind where grandma starts. Walk up to it and press X to end the session.
+const DOOR = [0, -(HALF_Y + 0.35)]
+const DOOR_R = 1.2, DOOR_GAP = 1.0, DOOR_OPEN = 1.45
 const CAM_DIST = 22
 const MAX_TILT = (45 * Math.PI) / 180
 const ORBIT_SPEED = (120 * Math.PI) / 180
@@ -96,16 +99,44 @@ function buildGround(g) {
   }
   cyl(g, 1.6, 0.04, [START[0], START[1] + 0.3, 0.02], path, 24, null, false)
   const fx = HALF_X + 0.35, fy = HALF_Y + 0.35
-  for (const sy of [fy, -fy]) {
-    box(g, [2 * fx, 0.12, 0.12], [0, sy, 0.55], wood)
-    box(g, [2 * fx, 0.12, 0.12], [0, sy, 0.95], wood)
+  for (const z of [0.55, 0.95]) {
+    box(g, [2 * fx, 0.12, 0.12], [0, fy, z], wood) // north side: full length
+    const len = fx - DOOR_GAP // south side: two pieces with the doorway between them
+    box(g, [len, 0.12, 0.12], [-(DOOR_GAP + len / 2), -fy, z], wood)
+    box(g, [len, 0.12, 0.12], [DOOR_GAP + len / 2, -fy, z], wood)
   }
   for (const sx of [-fx, fx]) {
     box(g, [0.12, 2 * fy, 0.12], [sx, 0, 0.55], wood)
     box(g, [0.12, 2 * fy, 0.12], [sx, 0, 0.95], wood)
   }
-  for (let i = -10; i <= 10; i++) for (const y of [fy, -fy]) box(g, [0.16, 0.16, 1.2], [(i * fx) / 10, y, 0.6], stone)
+  for (let i = -10; i <= 10; i++) for (const y of [fy, -fy]) if (!(y < 0 && Math.abs((i * fx) / 10) < DOOR_GAP + 0.05)) box(g, [0.16, 0.16, 1.2], [(i * fx) / 10, y, 0.6], stone)
   for (let j = -6; j <= 6; j++) for (const x of [fx, -fx]) box(g, [0.16, 0.16, 1.2], [x, (j * fy) / 6, 0.6], stone)
+}
+
+/** The exit door: a low frame, warm light outside, a doormat and a leaf that swings open when you are near.
+ *  Static parts go in `g` (merged); the leaf is returned so it can be animated. */
+function buildDoor(g, scene) {
+  const [dx, dy] = DOOR
+  const frame = mat([0.3, 0.19, 0.09], { rough: 0.9 })
+  const wood = mat([0.5, 0.33, 0.17], { rough: 0.85 }), dark = mat([0.28, 0.17, 0.08], { rough: 0.9 })
+  const light = mat([1, 0.9, 0.6], { rough: 0.4, emit: [1, 0.85, 0.5], emitK: 2.2 })
+  const matGreen = mat([0.2, 0.75, 0.35], { rough: 0.6, emit: [0.2, 0.8, 0.35], emitK: 1.2 })
+  for (const sx of [-DOOR_GAP - 0.08, DOOR_GAP + 0.08]) box(g, [0.2, 0.28, 1.7], [dx + sx, dy, 0.85], frame)
+  box(g, [2 * DOOR_GAP + 0.55, 0.28, 0.2], [dx, dy, 1.72], frame) // low lintel and no roof, so the doorway stays visible from above
+  box(g, [2 * DOOR_GAP, 0.05, 1.6], [dx, dy - 0.32, 0.8], light, [0, 0, 0], false) // warm light outside the doorway
+  box(g, [1.9, 0.8, 0.03], [dx, dy + 0.55, 0.03], matGreen, [0, 0, 0], false) // doormat
+  const label = textSprite('EXIT', { size: 0.42, width: 3 })
+  label.position.set(dx, dy + 0.55, 0.06)
+  scene.add(label)
+  // the leaf is hinged on the left post and swings into the garden when grandma is close
+  const hinge = new THREE.Group()
+  hinge.position.set(dx - DOOR_GAP, dy, 0)
+  box(hinge, [2 * DOOR_GAP, 0.1, 1.6], [DOOR_GAP, 0, 0.8], wood)
+  box(hinge, [2 * DOOR_GAP - 0.2, 0.12, 0.08], [DOOR_GAP, 0, 1.2], dark)
+  box(hinge, [2 * DOOR_GAP - 0.2, 0.12, 0.08], [DOOR_GAP, 0, 0.45], dark)
+  sphere(hinge, 0.07, [2 * DOOR_GAP - 0.2, 0.1, 0.85], mat([0.9, 0.75, 0.3], { rough: 0.3 }), [1, 1, 1], 8)
+  scene.add(hinge)
+  return hinge
 }
 
 function buildLamp(g, x, y) {
@@ -193,10 +224,13 @@ export class Hub {
     ROCKS.forEach(([x, y, s], i) => buildRock(g, i, x, y, s))
     buildBench(g)
     LAMPS.forEach(([x, y]) => buildLamp(g, x, y))
+    this.doorLeaf = buildDoor(g, this.scene)
+    this.doorAngle = 0
+    this.nearDoor = false
     this.portals = PORTALS.map((p) => buildPortal(g, this.scene, p))
     mergeStatic(g)
     const gl = textSprite('Grandma', { size: 0.4, width: 3 })
-    gl.position.set(START[0], START[1] - 1, 0.03)
+    gl.position.set(START[0] + 2.3, START[1], 0.03) // beside her, so it stays off the doormat
     this.scene.add(gl)
 
     const m = buildGrandma()
@@ -278,6 +312,11 @@ export class Hub {
     const before = this.near
     this.near = PORTALS.find((q) => Math.hypot(p.x - q.x, p.y - q.y) < PORTAL_R) || null
     if (this.near && this.near !== before) sfx.padEnter()
+    const nearDoor = Math.hypot(p.x - DOOR[0], p.y - DOOR[1]) < DOOR_R
+    if (nearDoor && !this.nearDoor) sfx.padEnter()
+    this.nearDoor = nearDoor
+    this.doorAngle += ((nearDoor ? DOOR_OPEN : 0) - this.doorAngle) * Math.min(1, 6 * dt)
+    this.doorLeaf.rotation.z = this.doorAngle
     for (const pt of this.portals) {
       const near = this.near === pt.p
       pt.crystal.rotation.z = this.clock * (near ? 2.2 : 0.9)
@@ -290,7 +329,9 @@ export class Hub {
       }
     }
     this.updateCamera(dt)
-    return this.near && pad.enter ? this.near : null
+    if (!pad.enter) return null
+    if (this.nearDoor) return { door: true } // press X at the door: leave and end the session
+    return this.near
   }
 
   updateCamera(dt) {
@@ -314,7 +355,8 @@ export class Hub {
   ui(pad) {
     if (pad.source === 'none') return { hint: 'No controller found  ·  connect a PS5 pad and press a button (or use the keyboard)', prompt: null }
     let prompt = null
-    if (this.near) {
+    if (this.nearDoor) prompt = { title: 'Exit door', exit: true }
+    else if (this.near) {
       if (this.promptFor !== this.near.game) {
         this.promptFor = this.near.game
         this.promptBest = bestFor(this.near.game)

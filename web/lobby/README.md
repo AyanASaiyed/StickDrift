@@ -44,3 +44,9 @@ Each game has its own generated music loop (lobby, apple, fishing with lapping w
 entering pads, countdowns, picking/dropping apples, tracing, the splash, rat squeaks, the slam, and result fanfares
 (more stars = longer fanfare, plus a sparkle for a new high score). The speaker button (bottom right) or the **M** key mutes;
 the choice is remembered. Sound starts after you click Start (browsers block audio before a click).
+
+## Exit door
+
+There is an exit door in the garden fence, right behind where grandma starts. Walk to it (the leaf swings open) and press
+Cross: the live session is ended (`live.end()`) and the page goes back to the dashboard at `/`. The Blender version has the
+same door; it stops the play loop and opens `DASHBOARD_URL` (set near the top of `blender_hub/hub_world.py`) in your browser.
