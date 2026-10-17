@@ -3,3 +3,4 @@ uvicorn[standard]==0.32.1
 psycopg[binary]==3.2.13
 psycopg-pool==3.2.4
 python-dotenv==1.0.1
+argon2-cffi==23.1.0

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
+from . import auth, games, views
 from .db import pool
 
 
@@ -26,7 +27,11 @@ app.add_middleware(
     allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,  # the login cookie needs this on cross-origin calls
 )
+app.include_router(auth.router)
+app.include_router(views.router)
+app.include_router(games.router)
 
 
 class ParticipantIn(BaseModel):
