@@ -1,68 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { api, type GardenStatus, type LiveStatus } from '../api'
 import { useAuth } from '../auth'
-
-const MESSAGE: Partial<Record<LiveStatus, { title: string; body: string }>> = {
-  starting: { title: 'Opening the garden…', body: 'The game window will appear on this computer in a moment.' },
-  waiting: { title: 'The garden is open', body: 'Switch on the controller or plug it in with the cable.' },
-  ready: { title: 'Mabel is waiting for you', body: 'Look for the game window. Press X to continue.' },
-  playing: { title: 'Enjoy the garden!', body: 'Pip and Poppy are flying. Hold both sticks outward any time to rest.' },
-  paused: { title: 'Taking a break', body: 'Rest as long as you like. Press X in the game when you’re ready.' },
-  saving: { title: 'Saying goodbye…', body: 'Tidying up the garden for next time.' },
-}
 
 export default function Home() {
   const { me } = useAuth()
-  const [status, setStatus] = useState<GardenStatus | null>(null)
-  const [keyboard, setKeyboard] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [finished, setFinished] = useState(false)
-  const wasActive = useRef(false)
-
-  useEffect(() => {
-    let stop = false
-    const poll = () =>
-      api
-        .myGarden()
-        .then((s) => {
-          if (stop) return
-          if (wasActive.current && !s.active) setFinished(true)
-          wasActive.current = s.active
-          setStatus(s)
-        })
-        .catch(() => undefined)
-    void poll()
-    const id = window.setInterval(poll, 2000)
-    return () => {
-      stop = true
-      window.clearInterval(id)
-    }
-  }, [])
-
-  async function open() {
-    setBusy(true)
-    setError(null)
-    setFinished(false)
-    try {
-      const s = await api.launchGarden(keyboard)
-      wasActive.current = s.active
-      setStatus(s)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const active = status?.active ?? false
-  const msg = status?.status ? MESSAGE[status.status] : undefined
 
   return (
     <main className="wrap">
       <section className="hero hero-small">
         <h1>Hi, {me?.display_name}.</h1>
-        <p className="lede">Mabel would love some help in the garden today.</p>
+        <p className="lede">Ready for a game today?</p>
       </section>
 
       <section className="garden-launch" aria-labelledby="garden-heading">
@@ -89,47 +34,15 @@ export default function Home() {
           </svg>
         </div>
         <div className="garden-copy">
-          <p className="step">Today’s visit</p>
-          <h2 id="garden-heading">Mabel’s Moonflower Garden</h2>
+          <p className="step">Game lobby</p>
+          <h2 id="garden-heading">Pick a game</h2>
 
-          {active && msg ? (
-            <div className="garden-status" role="status">
-              <span className="pulse" aria-hidden />
-              <div>
-                <strong>{msg.title}</strong>
-                <p>{msg.body}</p>
-              </div>
-            </div>
-          ) : finished ? (
-            <div className="garden-status garden-status-done" role="status">
-              <div>
-                <strong>Thank you for visiting!</strong>
-                <p>Mabel and the birds had a lovely time. See you next time.</p>
-              </div>
-            </div>
-          ) : (
-            <p className="muted">
-              Pick apples with Pip and Poppy, follow a butterfly through the meadow, and water the moonflowers before
-              the picnic. It takes about five minutes.
-            </p>
-          )}
-
-          {!active && (
-            <>
-              <button className="btn btn-start" onClick={open} disabled={busy}>
-                {busy ? 'Opening…' : finished ? 'Visit again' : 'Open the garden'}
-              </button>
-              <label className="check">
-                <input type="checkbox" checked={keyboard} onChange={(e) => setKeyboard(e.target.checked)} />
-                No controller? Use the keyboard instead
-              </label>
-            </>
-          )}
-          {error && (
-            <p className="error" role="alert">
-              {error}
-            </p>
-          )}
+          <p className="muted">
+            Step into the lobby and pick a game: apple picking, harbour fishing or rat catching. It opens in a new tab.
+          </p>
+          <a className="btn btn-start" href="/lobby.html" target="_blank" rel="noopener noreferrer">
+            Open the lobby
+          </a>
         </div>
       </section>
 
