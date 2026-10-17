@@ -4,11 +4,13 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
 from tcn import fit, load_examples, score
 from tcn.config import HAND_CHANNELS
+from tcn.dataset import _target
 from tcn.prepare import prepare
 from tcn.recording import Example, Recording, RecordingError
 from tcn.score import _aggregate
@@ -125,6 +127,29 @@ class PatternModelTest(unittest.TestCase):
             self.assertEqual(float(left.target[1]), 100.0)
             self.assertEqual(right.weak_hand, "right")
             self.assertIsNone(by_name["Baseline Data/session/level_1_apples/controller_data.csv"].weak_hand)
+
+    def test_a_mix_splits_shared_slowness_and_the_gap(self):
+        recording = _recording(_flat(1.2, 0), _flat(1.2, 0), _flat(1.2, 0), _flat(1.2, 0))
+        mixed = Example(recording, 50, 35, 70, weak_hand="left", tremor_hand="left")
+        left = _target(mixed, SimpleNamespace(hand="left"))
+        right = _target(mixed, SimpleNamespace(hand="right"))
+        self.assertEqual(float(left[0]), 70.0)
+        self.assertEqual(float(right[0]), 0.0)
+        self.assertEqual(float(left[1]), 85.0)
+        self.assertEqual(float(right[1]), 50.0)
+
+    def test_synthetic_folder_names_are_the_mix_labels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_level(root / "Synthetic" / "Parkinson and Tremor" / "apples_s1")
+            _write_level(root / "Synthetic" / "Stroke Right and Tremor" / "apples_s1")
+            by_name = {item.recording.name: item for item in load_examples(root)}
+            both = by_name["Synthetic/Parkinson and Tremor/apples_s1/controller_data.csv"]
+            sided = by_name["Synthetic/Stroke Right and Tremor/apples_s1/controller_data.csv"]
+            self.assertEqual(both.target.tolist(), [70.0, 0.0, 70.0])
+            self.assertEqual(sided.weak_hand, "right")
+            self.assertEqual(sided.tremor_hand, "both")
+            self.assertEqual(sided.target.tolist(), [0.0, 70.0, 70.0])
 
     def test_a_stroke_target_needs_the_weak_hand(self):
         recording = _recording(_flat(1.2, 0), _flat(1.2, 0), _flat(1.2, 0), _flat(1.2, 0))

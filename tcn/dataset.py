@@ -94,13 +94,16 @@ def normalization(items: list[StretchItem]) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _target(example: Example, stretch: Stretch) -> np.ndarray:
-    tremor = float(example.target[SCORES.index("essential_tremor")])
+    tremor_score = float(example.target[SCORES.index("essential_tremor")])
+    tremor = tremor_score if example.tremor_hand in ("both", stretch.hand) else 0.0
+    parkinson = float(example.target[SCORES.index("parkinson")])
+    stroke = float(example.target[SCORES.index("stroke")])
     if example.weak_hand is None:
-        impairment = float(example.target[SCORES.index("parkinson")])
+        impairment = parkinson
     elif stretch.hand == example.weak_hand:
-        impairment = float(example.target[SCORES.index("stroke")])
+        impairment = min(100.0, parkinson + stroke)
     else:
-        impairment = 0.0
+        impairment = parkinson
     target = np.asarray([tremor, impairment], dtype=np.float32)
     if len(target) != len(HAND_SCORES):
         raise RecordingError("Hand targets do not match the network outputs.")

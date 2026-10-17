@@ -110,10 +110,9 @@ class Example:
     """A recording plus the pattern it should match.
 
     `parkinson`, `stroke`, and `essential_tremor` are recording-level resemblance
-    targets from 0 to 100. `weak_hand` is set when the stroke target belongs to
-    one hand. That hand is trained on the stroke score and the other hand on 0.
-    Parkinson is trained onto both hands only when `weak_hand` is empty, because
-    a one-sided impairment is the stroke score.
+    targets from 0 to 100. The weak hand is trained on the shared Parkinson
+    score plus the stroke gap. The other hand is trained on the shared score.
+    `tremor_hand` limits the tremor target to one hand.
     """
 
     def __init__(
@@ -123,6 +122,7 @@ class Example:
         stroke: float,
         essential_tremor: float,
         weak_hand: str | None = None,
+        tremor_hand: str | None = None,
     ):
         target = np.asarray([parkinson, stroke, essential_tremor], dtype=np.float32)
         for score_name, value in zip(SCORES, target, strict=True):
@@ -134,9 +134,12 @@ class Example:
             raise RecordingError("A stroke target needs weak_hand set to left or right.")
         if weak_hand is not None and float(stroke) <= 0.0:
             raise RecordingError("weak_hand is set, but the stroke target is 0.")
+        if tremor_hand not in (None, "both", "left", "right"):
+            raise RecordingError("tremor_hand must be both, left, right, or empty.")
         self.recording = recording
         self.target = target
         self.weak_hand = weak_hand
+        self.tremor_hand = "both" if tremor_hand is None else tremor_hand
 
 
 def _resolve_columns(columns: Mapping[str, Sequence[float]], name: str) -> dict[str, np.ndarray]:
