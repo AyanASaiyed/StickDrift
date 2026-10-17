@@ -1,4 +1,4 @@
-"""Resample a Recording onto a uniform grid and cut it into windows."""
+"""Resample a Recording onto a uniform grid."""
 
 from dataclasses import dataclass
 
@@ -14,10 +14,11 @@ class Prepared:
 
     `values` has shape (channels, time). Each channel has had its own median
     removed, which takes out stick-center offset, gyro bias, and gravity.
-    Dataset-level standardization happens later, using statistics from training.
+    `time_s` is the uniform grid those columns sit on.
     """
 
     values: np.ndarray
+    time_s: np.ndarray
     duration_s: float
     sample_hz: int
     name: str
@@ -50,37 +51,12 @@ def prepare(recording: Recording, sample_hz: int = SAMPLE_HZ) -> Prepared:
         resampled[:, index] = np.interp(grid, timestamps, samples[:, index])
     centered = resampled - np.median(resampled, axis=0, keepdims=True)
     return Prepared(
-        values=np.ascontiguousarray(centered.T, dtype=np.float32),
+        values=np.ascontiguousarray(centered.T, dtype=np.float64),
+        time_s=grid,
         duration_s=duration,
         sample_hz=sample_hz,
         name=recording.name,
     )
-
-
-def windows(values: np.ndarray, sample_hz: int, window_s: float, hop_s: float) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Cut (channels, time) into fixed windows and a validity mask for each.
-
-    A recording shorter than one window is replicate-padded. The mask is 0 on
-    padded steps so the pooled score ignores them. Longer recordings use a
-    sliding window and always include the final window.
-    """
-    count = values.shape[1]
-    width = int(round(window_s * sample_hz))
-    hop = int(round(hop_s * sample_hz))
-    if width < 2 or hop < 1:
-        raise RecordingError("Window and hop must cover at least one sample.")
-    if count <= width:
-        padded = np.repeat(values[:, -1:], width, axis=1)
-        padded[:, :count] = values
-        mask = np.zeros(width, dtype=np.float32)
-        mask[:count] = 1.0
-        return [(padded, mask)]
-
-    starts = list(range(0, count - width + 1, hop))
-    if starts[-1] != count - width:
-        starts.append(count - width)
-    full = np.ones(width, dtype=np.float32)
-    return [(values[:, start:start + width], full.copy()) for start in starts]
 
 
 def _grid(start: float, end: float, sample_hz: int) -> np.ndarray:

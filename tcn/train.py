@@ -1,10 +1,8 @@
-"""Train the pattern TCN on Recording objects.
+"""Train the shared per-hand pattern model.
 
-    from tcn import Example, Recording, fit
+    from tcn import Example, fit, load_examples
 
-    fit([
-        Example(recording, parkinson=90, stroke=5, essential_tremor=10),
-    ])
+    fit(load_examples("data"))
 """
 
 from pathlib import Path
@@ -16,21 +14,21 @@ from torch.utils.data import DataLoader
 
 from tcn.checkpoint import save_checkpoint
 from tcn.config import (
-    CHANNELS,
+    DEFAULT_SEGMENT,
     DROPOUT,
+    HAND_CHANNELS,
+    HAND_SCORES,
     HIDDEN,
-    HOP_S,
     KERNEL,
     LEVELS,
     SAMPLE_HZ,
     SCORE_MEANING,
     SCORES,
-    WINDOW_S,
+    Segment,
 )
-from tcn.dataset import WindowDataset, load_windows, normalization, split_items
+from tcn.dataset import StretchDataset, load_stretches, normalization, split_items
 from tcn.network import PatternTCN
-from tcn.prepare import RecordingError
-from tcn.recording import Example
+from tcn.recording import Example, RecordingError
 
 
 def fit(
@@ -43,8 +41,7 @@ def fit(
     seed: int = 7,
     device: str = "auto",
     sample_hz: int = SAMPLE_HZ,
-    window_s: float = WINDOW_S,
-    hop_s: float = HOP_S,
+    segment: Segment = DEFAULT_SEGMENT,
     hidden: int = HIDDEN,
     levels: int = LEVELS,
     kernel: int = KERNEL,
@@ -55,26 +52,26 @@ def fit(
         raise RecordingError("fit needs at least one labeled recording.")
     seed_everything(seed)
     torch_device = _device(device)
-    items = load_windows(examples, sample_hz=sample_hz, window_s=window_s, hop_s=hop_s)
+    items = load_stretches(examples, sample_hz=sample_hz, segment=segment)
     train_items, val_items = split_items(items, val_ratio, seed)
     mean, std = normalization(train_items)
     train_loader = _loader(train_items, mean, std, batch_size, shuffle=True)
     val_loader = _loader(val_items, mean, std, batch_size, shuffle=False) if val_items else None
 
     model = PatternTCN(
-        in_channels=len(CHANNELS),
+        in_channels=len(HAND_CHANNELS),
         hidden=hidden,
         levels=levels,
         kernel=kernel,
         dropout=dropout,
-        n_scores=len(SCORES),
+        n_scores=len(HAND_SCORES),
     ).to(torch_device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
 
     recordings = len({item.recording for item in items})
     print(
-        f"Pattern TCN  recordings={recordings}  train_windows={len(train_items)}  "
-        f"val_windows={len(val_items)}  device={torch_device}"
+        f"Pattern TCN  recordings={recordings}  train_stretches={len(train_items)}  "
+        f"val_stretches={len(val_items)}  device={torch_device}"
     )
     print(SCORE_MEANING)
     if not val_items and val_ratio > 0:
@@ -104,9 +101,9 @@ def fit(
         mean,
         std,
         sample_hz=sample_hz,
-        window_s=window_s,
-        hop_s=hop_s,
-        channels=CHANNELS,
+        segment=segment,
+        channels=HAND_CHANNELS,
+        hand_scores=HAND_SCORES,
         scores=SCORES,
     )
     held = f"  best_val_mae={best_mae:.2f}" if best_mae is not None else ""
@@ -124,13 +121,12 @@ def _epoch(
     model.train(training)
     absolute = 0.0
     count = 0
-    for inputs, mask, target in loader:
+    for inputs, target in loader:
         inputs = inputs.to(device)
-        mask = mask.to(device)
         target = target.to(device)
         if training:
             optimizer.zero_grad(set_to_none=True)
-        predicted = model(inputs, mask)
+        predicted = model(inputs)
         loss = nn.functional.mse_loss(predicted / 100.0, target / 100.0)
         if training:
             loss.backward()
@@ -142,7 +138,7 @@ def _epoch(
 
 def _loader(items, mean, std, batch_size: int, shuffle: bool) -> DataLoader:
     return DataLoader(
-        WindowDataset(items, mean, std),
+        StretchDataset(items, mean, std),
         batch_size=min(batch_size, len(items)),
         shuffle=shuffle,
     )

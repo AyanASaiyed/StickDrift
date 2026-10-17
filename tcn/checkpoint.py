@@ -1,11 +1,12 @@
-"""Save and load a trained pattern model."""
+"""Save and load a trained per-hand pattern model."""
 
+from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 import torch
 
-from tcn.config import SCHEMA_VERSION, SCORE_MEANING
+from tcn.config import SCHEMA_VERSION, SCORE_MEANING, Segment
 from tcn.network import PatternTCN
 
 
@@ -15,9 +16,9 @@ def save_checkpoint(
     mean: np.ndarray,
     std: np.ndarray,
     sample_hz: int,
-    window_s: float,
-    hop_s: float,
+    segment: Segment,
     channels: tuple[str, ...],
+    hand_scores: tuple[str, ...],
     scores: tuple[str, ...],
 ) -> None:
     path = Path(path)
@@ -32,9 +33,9 @@ def save_checkpoint(
             "kernel": model.kernel,
             "dropout": model.dropout,
             "sample_hz": sample_hz,
-            "window_s": window_s,
-            "hop_s": hop_s,
+            "segment": asdict(segment),
             "channels": list(channels),
+            "hand_scores": list(hand_scores),
             "scores": list(scores),
             "norm_mean": mean.astype(np.float32),
             "norm_std": std.astype(np.float32),
@@ -55,7 +56,7 @@ def load_checkpoint(path: Path, device: torch.device) -> tuple[PatternTCN, dict]
         levels=int(blob["levels"]),
         kernel=int(blob["kernel"]),
         dropout=float(blob["dropout"]),
-        n_scores=len(blob["scores"]),
+        n_scores=len(blob["hand_scores"]),
     )
     model.load_state_dict(blob["model"])
     model.to(device)
