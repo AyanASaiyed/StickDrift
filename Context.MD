@@ -18,7 +18,8 @@
 | API | **Built, tested on local Postgres, not yet on Tiger Data.** FastAPI: `GET /health`, `GET/POST /participants`, `GET /participants/{id}`, `GET /participants/{id}/sessions`. | `backend/app/main.py` |
 | Database schema | **Written, tested on plain Postgres.** Tables: `participants`, `sessions`, `session_summaries`, `trials`, `responses`, `raw_samples` (hypertable). The TimescaleDB lines have not run yet. | `backend/schema.sql` |
 | Synthetic demo data | **Built.** Two profiles × 7 sessions, all `is_synthetic = true`. "Demo Resident B" has slower left-hand results in the last two sessions to exercise the review card. | `backend/scripts/seed_synthetic.py` |
-| Calibration screen | Not started. | — |
+| Garden Rescue (`garden-v2`) | **Built, smoke-tested headless with a simulated reader; v1 was tried on hardware and was too hard, long and clinical.** Pygame garden story, ~60-90 s of play: apples (both sticks, mirrored, 6 pairs), butterfly left (12 s), butterfly right (12 s, mirrored), watering (both sticks, mirrored, 15 s). Calibrates stick centres at start. One folder per level with `controller_data.csv` (every HID report, Example PS5 Data columns + task context, recorded only while the level runs) and `level.json`. `--label` tags simulated-pattern demos; no scoring. | `Controller Data - Zain/Games/garden.py` |
+| Calibration screen | Not started in the web app (Garden Rescue has its own). | — |
 | Assessment game (practice + 3 blocks) | Not started. The Start button shows a "not built yet" notice. | — |
 | Event detection / scoring | Not started. | — |
 | Baseline + review rules | Not started. | — |
@@ -236,5 +237,7 @@ These sources inform the direction; none validate *this joystick protocol*.
 | 2026-10-16 | **Use Tiger Data (Postgres + TimescaleDB) instead of local SQLite.** | Shared database for the team; hypertable for raw samples. Consequence: data leaves the laptop, so pseudonyms only. |
 | 2026-10-16 | Name the fixed assessment protocol `assess-v1`. | Every session stores its protocol version; any change to blocks, timing or thresholds needs a new version and its own baseline. |
 | 2026-10-16 | DualSense IMU (gyro/accelerometer) is recorded by the HID tool but excluded from v1 metrics. | Too easy to oversell as tremor detection; not part of the validated-by-us task. |
+| 2026-10-17 | Add Garden Rescue (`garden-v1`) as a fixed-course data-collection game for teammate-simulated movement patterns, separate from `assess-v1`. | Position-mapped sticks (not velocity) so reduced range shows up; no random layouts so recordings are comparable. The game only records; a teammate builds the model. Labels are demo tags, never diagnoses. |
+| 2026-10-17 | Garden Rescue `garden-v2`: shorter (4 levels, ~60-90 s), easier (bigger tolerances, slower near-round butterfly), friendlier garden visuals and wording, both sticks at once with mirrored targets for apples and watering, butterfly one stick per level; one data folder per level. | v1 felt too hard, too long and like a clinical test. Butterfly stays one-handed because two-stick tracking was the hardest part. v1 and v2 recordings are not comparable. |
 
 **Editing rule:** When changing this document, update §0, the protocol version/assumptions, this decision log, and the demo claims together. Preserve the mission and evidence boundaries unless the team explicitly decides to pivot.
