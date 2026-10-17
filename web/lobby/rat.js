@@ -215,9 +215,12 @@ export class RatGame {
   flick(pad) {
     const mv = pad.move, lk = pad.look
     const up = Math.max(mv[1] * mv[2], lk[1])
-    this.hist = [...this.hist, up].slice(-9)
+    this.hist.push(up) // last ~0.15 s of stick height
+    if (this.hist.length > 9) this.hist.shift()
+    let low = 1
+    for (const h of this.hist) if (h < low) low = h
     if (up < 0.4) this.armed = true
-    else if (up > 0.75 && this.armed && Math.min(...this.hist) < 0.35) {
+    else if (up > 0.75 && this.armed && low < 0.35) {
       this.armed = false
       return true
     }

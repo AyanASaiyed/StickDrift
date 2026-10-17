@@ -184,7 +184,7 @@ export class Hub {
   constructor() {
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color().setRGB(0.09, 0.14, 0.11, THREE.LinearSRGBColorSpace)
-    addSun(this.scene, { intensity: 6.5, fill: 1.7, extent: 17 })
+    addSun(this.scene, { intensity: 6.5, fill: 1.7, extent: 17, size: 1536 })
     const g = new THREE.Group() // static scenery, merged below
     this.scene.add(g)
     buildGround(g)
