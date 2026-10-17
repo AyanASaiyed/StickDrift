@@ -10,3 +10,4 @@ venv/
 .DS_Store
 # Local project data and context for hreem
 hreem-folder/
+runs/

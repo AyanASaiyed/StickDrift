@@ -5,6 +5,9 @@ Contains:
   * DataWriter : writes {game}_{player}_{session}_{timestamp}_raw.csv / _events.csv / _meta.json
   * Session    : pygame window, fixed 60 Hz loop, controller reading, logging
 
+The raw CSV includes both stick positions and the controller gyro/accelerometer.
+That is the recording the pattern model trains on.
+
 Controller input comes from the existing script (dualsense_viewer.py, UNMODIFIED).
 Its Reader thread keeps reading HID reports; every frame we simply grab the latest state.
 
@@ -50,7 +53,8 @@ class QuitGame(Exception):
 class Frame:
     """Input snapshot for one frame."""
 
-    def __init__(self, frame, t, raw_x, raw_y, raw_rx, raw_ry, button, pressed, mx, my):
+    def __init__(self, frame, t, raw_x, raw_y, raw_rx, raw_ry, button, pressed, mx, my,
+                 gyro=None, accel=None):
         self.frame = frame      # frame index (0,1,2,...) since game start
         self.t = t              # seconds since game start
         self.raw_x = raw_x      # raw stick X (0..255 int as read, None if controller lost)
@@ -61,6 +65,8 @@ class Frame:
         self.pressed = pressed  # True only on the frame the button goes 0 -> 1
         self.mx = mx            # movement X after deadzone/scaling, -1..1 (for gameplay only)
         self.my = my            # movement Y after deadzone/scaling, -1..1
+        self.gyro = gyro        # (x, y, z) raw int16, or None if the controller is missing
+        self.accel = accel      # (x, y, z) raw int16, or None if the controller is missing
 
 
 def stick_to_move(raw_x, raw_y):
@@ -74,6 +80,13 @@ def stick_to_move(raw_x, raw_y):
         return 0.0, 0.0
     scale = min(1.0, (m - DEADZONE) / (1.0 - DEADZONE)) / m
     return x * scale, y * scale
+
+
+def _cell(value):
+    """CSV cell. Missing controller samples stay blank rather than becoming 0."""
+    if value is None:
+        return ""
+    return value
 
 
 class DataWriter:
@@ -90,17 +103,23 @@ class DataWriter:
         self._raw = csv.writer(self._raw_f, lineterminator="\n")
         self._ev = csv.writer(self._ev_f, lineterminator="\n")
         self._raw.writerow(["t", "raw_x", "raw_y", "raw_rx", "raw_ry", "button",
-                            "char_x", "char_y", "frame"])
+                            "char_x", "char_y", "frame",
+                            "gyro_x", "gyro_y", "gyro_z", "acc_x", "acc_y", "acc_z"])
         self._ev.writerow(["t", "event", "trial", "data"])
         self.write_meta(meta)  # written early so a crash still leaves a meta file
         self.paths = (base + "_raw.csv", base + "_events.csv", self.meta_path)
 
-    def raw(self, t, raw_x, raw_y, raw_rx, raw_ry, button, cx, cy, frame):
-        blank = lambda v: "" if v is None else v
-        self._raw.writerow([f"{t:.6f}", blank(raw_x), blank(raw_y), blank(raw_rx), blank(raw_ry),
-                            blank(button),
+    def raw(self, t, raw_x, raw_y, raw_rx, raw_ry, button, cx, cy, frame, gyro=None, accel=None):
+        if gyro is None:
+            gyro = (None, None, None)
+        if accel is None:
+            accel = (None, None, None)
+        self._raw.writerow([f"{t:.6f}", _cell(raw_x), _cell(raw_y), _cell(raw_rx), _cell(raw_ry),
+                            _cell(button),
                             "" if cx is None else round(cx, 3),
-                            "" if cy is None else round(cy, 3), frame])
+                            "" if cy is None else round(cy, 3), frame,
+                            *[_cell(v) for v in gyro],
+                            *[_cell(v) for v in accel]])
 
     def event(self, t, name, trial, data):
         self._ev.writerow([f"{t:.6f}", name, trial, json.dumps(data, separators=(",", ":"))])
@@ -143,7 +162,8 @@ class Session:
             "controller": "Sony DualSense / DualSense Edge (HID via dualsense_viewer.Reader)",
             "screen": [W, H], "fps_target": FPS, "movement_deadzone": DEADZONE,
             "raw_note": ("raw_x/raw_y are left-stick bytes and raw_rx/raw_ry are right-stick bytes; "
-                         "all are unmodified 0-255 values, centre ~128, y grows downward"),
+                         "all are unmodified 0-255 values, centre ~128, y grows downward. "
+                         "gyro_* and acc_* are the raw DualSense motion-sensor samples at this frame."),
             "params": dict(params or {}),
         }
         self.writer = None
@@ -181,11 +201,13 @@ class Session:
                 raise QuitGame()
 
         st = self.reader.state                       # latest controller report (or None)
+        gyro = accel = None
         if st is None:
             raw_x = raw_y = raw_rx = raw_ry = button = None
         else:
             raw_x, raw_y, button = st["lx"], st["ly"], st["Cross"]  # Cross = "A" / button 0
             raw_rx, raw_ry = st["rx"], st["ry"]
+            gyro, accel = st["gyro"], st["accel"]
 
         pressed = bool(button) and not self._prev_button
         self._prev_button = button or 0
@@ -201,7 +223,8 @@ class Session:
                     self.slow_frames += 1
             self._last_stamp = stamp
         self.cur = Frame(self.frame_no if self.t0 is not None else -1,
-                         t, raw_x, raw_y, raw_rx, raw_ry, button, pressed, mx, my)
+                         t, raw_x, raw_y, raw_rx, raw_ry, button, pressed, mx, my,
+                         gyro=gyro, accel=accel)
         return self.cur
 
     def present(self, char=None):
@@ -210,7 +233,7 @@ class Session:
         if self.writer is not None:
             cx, cy = char if char else (None, None)
             self.writer.raw(f.t, f.raw_x, f.raw_y, f.raw_rx, f.raw_ry,
-                            f.button, cx, cy, f.frame)
+                            f.button, cx, cy, f.frame, f.gyro, f.accel)
             self.frame_no += 1
         if f.raw_x is None and self.t0 is not None:
             self.text(["CONTROLLER LOST"], y=10, big_first=False)
