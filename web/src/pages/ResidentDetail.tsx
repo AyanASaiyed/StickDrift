@@ -8,7 +8,7 @@ import { PATTERN_LABELS, pct, secs } from '../components/liveData'
 import { LiveNow } from '../components/LiveNow'
 import { SessionTable } from '../components/SessionTable'
 import { TabPanel, Tabs } from '../components/Tabs'
-import { TrendCharts } from '../components/TrendCharts'
+import { GardenTrendCharts, TrendCharts } from '../components/TrendCharts'
 import { formatDateTime } from '../format'
 
 type TabKey = 'overview' | 'trends' | 'garden' | 'ask' | 'history'
@@ -85,21 +85,15 @@ export default function ResidentDetail() {
           { key: 'trends', label: 'Trends' },
           { key: 'garden', label: 'Garden visits', badge: data.garden_sessions.length || null },
           { key: 'ask', label: 'Ask the assistant' },
-          { key: 'history', label: 'History', badge: data.sessions.length || null },
+          ...(data.sessions.length > 0
+            ? [{ key: 'history' as const, label: 'Earlier sessions', badge: data.sessions.length }]
+            : []),
         ]}
       />
 
       <TabPanel>
         {tab === 'overview' && <Overview data={data} insights={insights} />}
-        {tab === 'trends' && (
-          <section className="panel">
-            <p className="muted panel-lede">
-              Each point is one session. The dashed line is their usual level; a red ring marks a reading that moved
-              enough to count as a change.
-            </p>
-            <TrendCharts sessions={data.sessions} insights={insights} />
-          </section>
-        )}
+        {tab === 'trends' && <Trends data={data} insights={insights} />}
         {tab === 'garden' && <GardenVisits visits={data.garden_sessions} />}
         {tab === 'ask' && (
           <Assistant
@@ -115,6 +109,8 @@ export default function ResidentDetail() {
         )}
         {tab === 'history' && (
           <section className="panel">
+            <h2>Earlier sessions</h2>
+            <p className="muted panel-lede">Sessions recorded before the garden game, kept for comparison.</p>
             <SessionTable sessions={data.sessions} />
           </section>
         )}
@@ -284,5 +280,42 @@ function GardenVisits({ visits }: { visits: GardenSession[] }) {
         <p className="hint">Pattern scores are 0–100 resemblance from the TCN model, not a diagnosis.</p>
       </section>
     </>
+  )
+}
+
+function Trends({ data, insights }: { data: Detail; insights: Insights }) {
+  const hasGarden = data.garden_sessions.length > 0
+  const [mode, setMode] = useState<'garden' | 'earlier'>(hasGarden ? 'garden' : 'earlier')
+  const both = hasGarden && data.sessions.length > 0
+
+  return (
+    <section className="panel">
+      {both && (
+        <Tabs
+          variant="pills"
+          label="Which game"
+          value={mode}
+          onChange={setMode}
+          items={[
+            { key: 'garden', label: 'Garden visits', badge: data.garden_sessions.length },
+            { key: 'earlier', label: 'Earlier sessions', badge: data.sessions.length },
+          ]}
+        />
+      )}
+      {mode === 'garden' && hasGarden ? (
+        <>
+          <p className="muted panel-lede">Each point is one garden visit, oldest on the left.</p>
+          <GardenTrendCharts visits={data.garden_sessions} />
+        </>
+      ) : (
+        <>
+          <p className="muted panel-lede">
+            Each point is one session. The dashed line is their usual level; a red ring marks a reading that moved
+            enough to count as a change.
+          </p>
+          <TrendCharts sessions={data.sessions} insights={insights} />
+        </>
+      )}
+    </section>
   )
 }

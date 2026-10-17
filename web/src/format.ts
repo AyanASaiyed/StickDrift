@@ -24,3 +24,11 @@ export function formatOffset(ms: number | null): string {
   if (Math.abs(ms) < 20) return 'On time'
   return `${(Math.abs(ms) / 1000).toFixed(2)} s ${ms > 0 ? 'late' : 'early'}`
 }
+
+const shortFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+/** Axis labels for visits: the date, or date and time when several fall on the same day. */
+export function visitLabels(isoTimes: string[]): string[] {
+  const dates = isoTimes.map(formatDate)
+  return new Set(dates).size === dates.length ? dates : isoTimes.map((t) => shortFmt.format(new Date(t)))
+}

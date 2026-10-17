@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
 import { api, type GardenStatus, type LiveStatus } from '../api'
 import { useAuth } from '../auth'
 
@@ -133,10 +132,6 @@ export default function Home() {
           )}
         </div>
       </section>
-
-      <p className="muted alt-game">
-        Prefer something quicker? <Link to="/arrows">Play the arrow game in your browser</Link>.
-      </p>
 
       <footer className="foot">
         Stick Drift helps care teams notice changes worth checking. It does not diagnose any condition. If someone has

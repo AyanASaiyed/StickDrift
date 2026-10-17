@@ -1,7 +1,7 @@
 """Caregiver read endpoints for residents' history and performance.
 
 Residents do not get a history view; only caregivers see results. Insights come
-from `insights.analyze` (arrow-game sessions compared with the resident's own
+from `insights.analyze` (earlier session summaries compared with the resident's own
 baseline) plus the TCN pattern judgement of their latest garden session.
 """
 from typing import Any, List, Optional

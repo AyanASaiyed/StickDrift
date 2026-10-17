@@ -97,11 +97,11 @@ export function TopBar() {
             <ProfileMenu />
           ) : (
             <nav className="row">
-              <Link className="btn btn-quiet btn-small" to="/login">
-                Log in
+              <Link className="btn btn-quiet btn-small btn-role-resident" to="/login">
+                Resident log in
               </Link>
-              <Link className="btn btn-small" to="/signup">
-                Create account
+              <Link className="btn btn-small btn-role-care" to="/caregiver/login">
+                Care team
               </Link>
             </nav>
           ))}

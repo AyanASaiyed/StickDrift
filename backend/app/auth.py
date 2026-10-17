@@ -4,8 +4,12 @@ Seniors are rows in `participants` with a username + password. Caregivers are
 rows in `caregivers`. A login cookie (HttpOnly) maps to an `auth_sessions` row.
 """
 import hashlib
+import os
 import re
 import secrets
+import threading
+import time
+from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any, List, Literal, Optional
 from uuid import UUID
@@ -38,6 +42,13 @@ class SeniorSignup(BaseModel):
     username: str = Field(max_length=64)
     password: str = Field(max_length=128)
     dominant_hand: Literal["left", "right", "unknown"] = "unknown"
+
+
+class CaregiverSignup(BaseModel):
+    username: str = Field(max_length=64)
+    password: str = Field(max_length=128)
+    display_name: str = Field(default="", max_length=40)
+    invite_code: str = Field(max_length=128)
 
 
 class Login(BaseModel):
@@ -191,6 +202,56 @@ def caregiver_login(body: Login, response: Response):
         if row is None:
             raise HTTPException(401, "Username or password is incorrect.")
         _start_session(conn, "caregiver", row["caregiver_id"], response)
+    return {"role": "caregiver", "account_id": row["caregiver_id"], "username": row["username"],
+            "display_name": row["display_name"], "dominant_hand": None}
+
+
+# Caregivers can read every resident's results, so registering needs a care-team
+# access code from CAREGIVER_INVITE_CODE in backend/.env. With no code set,
+# registration is off. Wrong codes are rate limited per client address.
+_FAIL_WINDOW_S = 15 * 60
+_FAIL_LIMIT = 8
+_failures: dict = defaultdict(deque)
+_failures_lock = threading.Lock()
+
+
+def _check_invite(request: Request, code: str) -> None:
+    expected = os.environ.get("CAREGIVER_INVITE_CODE", "").strip()
+    if not expected:
+        raise HTTPException(403, "Care team registration is turned off. Ask the person who runs Stick Drift "
+                                 "to set an access code.")
+    who = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with _failures_lock:
+        recent = _failures[who]
+        while recent and now - recent[0] > _FAIL_WINDOW_S:
+            recent.popleft()
+        if len(recent) >= _FAIL_LIMIT:
+            raise HTTPException(429, "Too many wrong access codes. Please wait 15 minutes and try again.")
+        if not secrets.compare_digest(code.strip().encode(), expected.encode()):
+            recent.append(now)
+            raise HTTPException(403, "That access code isn't right. Check with your care team lead.")
+
+
+@router.post("/auth/caregiver/signup", response_model=Me, status_code=201)
+def caregiver_signup(body: CaregiverSignup, request: Request, response: Response):
+    _check_invite(request, body.invite_code)
+    username = _normalize_username(body.username)
+    if not USERNAME_RE.match(username):
+        raise HTTPException(422, "Usernames are 3–24 letters, numbers, spaces, - or _.")
+    if len(body.password) < 8:
+        raise HTTPException(422, "Passwords need at least 8 characters.")
+    display = _normalize_username(body.display_name) or username
+    try:
+        with pool.connection() as conn:
+            row = conn.execute(
+                """INSERT INTO caregivers (username, password_hash, display_name)
+                   VALUES (%s, %s, %s) RETURNING caregiver_id, username, display_name""",
+                (username, hasher.hash(body.password), display),
+            ).fetchone()
+            _start_session(conn, "caregiver", row["caregiver_id"], response)
+    except psycopg.errors.UniqueViolation:
+        raise HTTPException(409, "That username is taken. Try another.")
     return {"role": "caregiver", "account_id": row["caregiver_id"], "username": row["username"],
             "display_name": row["display_name"], "dominant_hand": None}
 

@@ -3,43 +3,7 @@
 const API = '/api'
 
 export type Hand = 'left' | 'right' | 'unknown'
-export type Direction = 'up' | 'down' | 'left' | 'right'
-export type Placement = 'hands' | 'table' | 'lap' | 'other'
 export type Role = 'senior' | 'caregiver'
-
-// ---- game record shapes (produced by the arrow game) ----
-
-export interface TrialRecord {
-  trial_id: number
-  block: 'left' | 'right' | 'both'
-  direction_l: Direction | null
-  direction_r: Direction | null
-  spawn_ms: number
-  target_ms: number
-}
-
-export interface ResponseRecord {
-  trial_id: number
-  hand: 'left' | 'right'
-  outcome: 'hit' | 'wrong_direction' | 'missed' | 'invalid'
-  detected_dir: Direction | null
-  move_ms: number | null
-  offset_ms: number | null
-}
-
-/** [epoch_ms, game_ms, lx, ly, rx, ry, connected] */
-export type SampleRecord = [number, number, number, number, number, number, boolean]
-
-export interface SessionComplete {
-  status: 'completed' | 'abandoned'
-  trials: TrialRecord[]
-  responses: ResponseRecord[]
-  samples: SampleRecord[]
-  stray_moves: number
-  disconnects: number
-}
-
-// ---- account + data shapes ----
 
 export interface Me {
   role: Role
@@ -121,6 +85,8 @@ export interface Insights {
   disclaimer: string
   synthetic: boolean
   usable_sessions: number
+  garden_visits?: number
+  garden_judged?: number
   baseline_sessions: number
   recent_session_ids: string[]
   findings: Finding[]
@@ -326,74 +292,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
 
-export interface GameSave {
-  protocol_version: string
-  input_reader: 'gamepad_api' | 'keyboard'
-  connection: 'usb' | 'bluetooth' | 'simulated' | 'unknown'
-  placement: Placement
-  status: 'completed' | 'abandoned'
-  quality: 'good' | 'flagged' | 'invalid'
-  left_hits: number
-  left_notes: number
-  right_hits: number
-  right_notes: number
-  both_hits: number
-  both_trials: number
-  left_median_offset_ms: number | null
-  right_median_offset_ms: number | null
-  stray_moves: number
-  enjoyment?: number | null
-}
-
-const median = (xs: number[]): number | null =>
-  xs.length === 0 ? null : [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
-
-/** Summarize the arrow game into the counts the backend stores. */
-export function summarizeGame(result: SessionComplete): Omit<GameSave, 'protocol_version' | 'input_reader' | 'connection' | 'placement' | 'quality'> {
-  const blockOf = new Map(result.trials.map((t) => [t.trial_id, t.block]))
-  const inBlock = (hand: 'left' | 'right') =>
-    result.responses.filter((r) => r.hand === hand && blockOf.get(r.trial_id) === hand)
-  const left = inBlock('left')
-  const right = inBlock('right')
-  const bothTrials = result.trials.filter((t) => t.block === 'both')
-  const bothHits = bothTrials.filter((t) => {
-    const rs = result.responses.filter((r) => r.trial_id === t.trial_id)
-    return rs.length > 0 && rs.every((r) => r.outcome === 'hit')
-  }).length
-  const offsets = (rs: ResponseRecord[]) =>
-    median(rs.filter((r) => r.outcome === 'hit' && r.offset_ms !== null).map((r) => r.offset_ms as number))
-  return {
-    status: result.status,
-    left_hits: left.filter((r) => r.outcome === 'hit').length,
-    left_notes: left.length,
-    right_hits: right.filter((r) => r.outcome === 'hit').length,
-    right_notes: right.length,
-    both_hits: bothHits,
-    both_trials: bothTrials.length,
-    left_median_offset_ms: offsets(left),
-    right_median_offset_ms: offsets(right),
-    stray_moves: result.stray_moves,
-  }
-}
-
 export const api = {
   me: () => request<Me>('/auth/me'),
   loginSenior: (username: string, password: string) =>
     post<Me>('/auth/senior/login', { username, password }),
   signupSenior: (username: string, password: string, dominant_hand: Hand) =>
     post<Me>('/auth/senior/signup', { username, password, dominant_hand }),
+  signupCaregiver: (username: string, password: string, display_name: string, invite_code: string) =>
+    post<Me>('/auth/caregiver/signup', { username, password, display_name, invite_code }),
   loginCaregiver: (username: string, password: string) =>
     post<Me>('/auth/caregiver/login', { username, password }),
   logout: () => post<void>('/auth/logout'),
 
   myGarden: () => request<GardenStatus>('/me/garden'),
   launchGarden: (keyboard: boolean) => post<GardenStatus>('/me/garden/launch', { keyboard }),
-  saveGame: (body: GameSave) => post<{ session_id: string; status: string }>('/me/games', body),
-  rateGame: (sessionId: string, enjoyment: number) =>
-    request<void>(`/me/games/${sessionId}/rating`, {
-      method: 'PATCH',
-      body: JSON.stringify({ enjoyment }),
-    }),
 
   gardenRecordings: () => request<GardenRecording[]>('/garden/recordings'),
   gardenTimeline: (sessionId: string) =>

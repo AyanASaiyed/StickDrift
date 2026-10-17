@@ -316,6 +316,14 @@ def add_model_concerns(insights: dict, garden_sessions: List[dict]) -> dict:
     Scores are 0-100 pattern resemblance from the model, not disease probabilities.
     """
     judged = [g for g in garden_sessions if g.get("tcn") and g["tcn"].get("scores")]
+    visits, n_judged = len(garden_sessions), len(judged)
+    insights = {**insights, "garden_visits": visits, "garden_judged": n_judged}
+    if insights["status"] == "insufficient" and visits:
+        # A baseline from earlier session summaries needs 4 sessions; garden visits are judged on their own.
+        insights["summary"] = (
+            f"{visits} garden {'visit' if visits == 1 else 'visits'} recorded"
+            f"{f', {n_judged} judged by the pattern model' if n_judged else ''}."
+        )
     if not judged:
         return insights
     latest = judged[0]
@@ -337,7 +345,12 @@ def add_model_concerns(insights: dict, garden_sessions: List[dict]) -> dict:
             contributors, checks,
         ))
     risk = "check" if any(c["level"] == "check" for c in concerns) else "watch" if concerns else "none"
-    summary = "; ".join(c["title"] for c in concerns) + "." if concerns else insights["summary"]
+    if concerns:
+        summary = "; ".join(c["title"] for c in concerns) + "."
+    elif insights["status"] == "insufficient":
+        summary = f"{insights['summary']} The latest visit showed no movement pattern worth flagging."
+    else:
+        summary = insights["summary"]
     return {**insights, "concerns": concerns, "risk": risk, "summary": summary}
 
 

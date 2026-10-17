@@ -97,7 +97,7 @@ Each session records the controller ID, connection type and how the controller w
 
 ## Tech stack
 
-- **Web app:** Vite, React, TypeScript, Gamepad API (resident game at `/play`, care dashboard at `/care`)
+- **Web app:** Vite, React, TypeScript. Residents log in and open the 3D garden game from their home page (the game runs as a desktop window, not in the browser); caregivers log in at `/caregiver/login` for the dashboard, live session view and resident profiles
 - **Backend:** Python, FastAPI, psycopg
 - **Database:** Tiger Data (PostgreSQL + TimescaleDB)
 - **Analysis:** pandas, NumPy, PyTorch (optional)
@@ -240,7 +240,7 @@ backend/
   app/main.py                API: profiles and session history
   scripts/seed_synthetic.py  Labeled synthetic demo data
 web/
-  src/App.tsx                Landing page: controller check, profile picker, start, history
+  src/App.tsx                Routes: resident home (opens the garden game), caregiver dashboard, live view, resident profiles
   src/useGamepad.ts          DualSense input via the Gamepad API
 ```
 

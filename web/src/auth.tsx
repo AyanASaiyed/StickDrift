@@ -8,6 +8,7 @@ interface AuthState {
   loginSenior: (username: string, password: string) => Promise<void>
   signupSenior: (username: string, password: string, hand: Hand) => Promise<void>
   loginCaregiver: (username: string, password: string) => Promise<void>
+  signupCaregiver: (username: string, password: string, displayName: string, inviteCode: string) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -32,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (u: string, p: string, h: Hand) => setMe(await api.signupSenior(u, p, h)),
     [],
   )
+  const signupCaregiver = useCallback(
+    async (u: string, p: string, d: string, c: string) => setMe(await api.signupCaregiver(u, p, d, c)),
+    [],
+  )
   const loginCaregiver = useCallback(async (u: string, p: string) => setMe(await api.loginCaregiver(u, p)), [])
   const logout = useCallback(async () => {
     await api.logout().catch(() => undefined)
@@ -39,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ me, loading, loginSenior, signupSenior, loginCaregiver, logout }}>
+    <AuthContext.Provider value={{ me, loading, loginSenior, signupSenior, loginCaregiver, signupCaregiver, logout }}>
       {children}
     </AuthContext.Provider>
   )

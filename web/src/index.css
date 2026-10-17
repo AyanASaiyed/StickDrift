@@ -13,9 +13,17 @@
   --wait: #6b7280;
   --synthetic: #6b4fa0;
   /* Hand identity for charts: validated categorical slots 1-3 (dataviz reference palette). */
+  /* Who's signing in: green for residents, indigo for the care team. */
+  --role-resident: #1e7a4c;
+  --role-resident-ink: #ffffff;
+  --role-care: #4a55b8;
+  --role-care-ink: #ffffff;
   --hand-left: #2a78d6;
   --hand-right: #eb6834;
   --hand-both: #1baf7a;
+  --pat-1: #1baf7a;
+  --pat-2: #6250d6;
+  --pat-3: #eda100;
   --radius: 14px;
   --font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --topbar: 68px;
@@ -37,16 +45,21 @@
     --bad: #f2867e;
     --wait: #9aa1a9;
     --synthetic: #b8a2e6;
+    --role-resident: #5cc48d;
+    --role-resident-ink: #0b2417;
+    --role-care: #9aa5f0;
+    --role-care-ink: #0f1330;
     --hand-left: #3987e5;
     --hand-right: #d95926;
     --hand-both: #199e70;
+    --pat-1: #199e70;
+    --pat-2: #9085e9;
+    --pat-3: #c98500;
     color-scheme: dark;
   }
 }
 
-*,
-*::before,
-*::after {
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
@@ -63,8 +76,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1,
-h2 {
+h1, h2 {
   line-height: 1.15;
   margin: 0;
 }
@@ -77,8 +89,7 @@ a {
   color: var(--accent);
 }
 
-button,
-input {
+button, input {
   font: inherit;
   color: inherit;
 }
@@ -113,11 +124,6 @@ kbd {
   gap: 12px;
   flex-wrap: wrap;
   align-items: center;
-}
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
 }
 
 /* Header */
@@ -220,8 +226,7 @@ kbd {
   text-decoration: none;
   cursor: pointer;
 }
-.menu-item:hover,
-.menu-item:focus-visible {
+.menu-item:hover, .menu-item:focus-visible {
   background: var(--accent-soft);
 }
 
@@ -252,13 +257,6 @@ kbd {
 .features h2 {
   font-size: 1.1rem;
 }
-
-/* Panels */
-.steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 20px;
-}
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -269,8 +267,7 @@ kbd {
   gap: 16px;
   min-width: 0;
 }
-.panel h2,
-.start h2 {
+.panel h2, .start h2 {
   font-size: 1.35rem;
 }
 .step {
@@ -322,88 +319,6 @@ kbd {
 .garden-analytics .chart-key { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
 .garden-analytics .chart-key-left { background: var(--hand-left); }
 .garden-analytics .chart-key-right { background: var(--hand-right); }
-
-/* Status */
-.status {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 14px 16px;
-  border-radius: 10px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-}
-.status p {
-  color: var(--muted);
-  font-size: 0.9rem;
-  overflow-wrap: anywhere;
-}
-.status-light {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  margin-top: 6px;
-  background: var(--wait);
-}
-.status-ok .status-light {
-  background: var(--ok);
-}
-.status-warn .status-light {
-  background: var(--warn);
-}
-.status-wait .status-light {
-  animation: pulse 1.6s ease-in-out infinite;
-}
-@keyframes pulse {
-  50% {
-    opacity: 0.3;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .status-wait .status-light {
-    animation: none;
-  }
-}
-
-/* Stick preview */
-.sticks {
-  display: flex;
-  justify-content: center;
-  gap: 28px;
-}
-.sticks-idle {
-  opacity: 0.45;
-}
-.stick {
-  margin: 0;
-  text-align: center;
-  font-weight: 700;
-}
-.stick svg {
-  width: 132px;
-  height: 132px;
-  display: block;
-}
-.stick-well {
-  fill: var(--bg);
-  stroke: var(--line);
-  stroke-width: 2;
-}
-.stick-threshold {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1;
-  stroke-dasharray: 3 4;
-}
-.stick-axis {
-  stroke: var(--line);
-  stroke-width: 1;
-}
-.stick-dot {
-  fill: var(--accent);
-}
-
 /* Checkbox */
 .check {
   display: flex;
@@ -453,12 +368,6 @@ kbd {
   padding: 0 30px;
   font-size: 1.1rem;
 }
-.btn-ghost {
-  min-height: 44px;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #f2f0eb;
-}
 
 /* Forms */
 .auth {
@@ -477,8 +386,7 @@ kbd {
   padding: 0;
   margin: 0;
 }
-.field label[for],
-.field legend {
+.field label[for], .field legend {
   font-weight: 700;
 }
 .field legend {
@@ -507,9 +415,6 @@ kbd {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-}
-.segmented-stack {
-  flex-direction: column;
 }
 .segmented label {
   min-height: 52px;
@@ -559,108 +464,6 @@ kbd {
   min-height: 72px;
   min-width: 200px;
   font-size: 1.4rem;
-}
-
-/* Play screens */
-.screen {
-  max-width: 720px;
-  margin: 0 auto;
-  gap: 20px;
-}
-.screen h1 {
-  font-size: 1.8rem;
-}
-.howto {
-  margin: 0;
-  padding-left: 1.4em;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.rating {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.rating legend {
-  font-weight: 700;
-  margin-bottom: 10px;
-}
-.rating-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 8px;
-}
-.rating-option {
-  min-height: 72px;
-  padding: 8px;
-  border-radius: 10px;
-  border: 2px solid var(--line);
-  background: var(--bg);
-  cursor: pointer;
-  font-size: 0.85rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-.rating-option.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  font-weight: 700;
-}
-.rating-num {
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-/* Game stage */
-.stage {
-  position: relative;
-  height: calc(100vh - var(--topbar));
-  min-height: 480px;
-  background: #14161a;
-}
-.stage-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.stage-hud {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-  left: 16px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgba(10, 11, 13, 0.72);
-}
-.overlay-card {
-  width: min(520px, 100%);
-  background: var(--surface);
-  color: var(--ink);
-  border-radius: var(--radius);
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.overlay-card h2 {
-  font-size: 1.6rem;
 }
 
 /* History */
@@ -736,14 +539,6 @@ td.num {
 }
 .badge-flagged {
   color: var(--warn);
-  border-color: currentColor;
-}
-.badge-quiet {
-  color: #c9ced4;
-  border-color: rgba(255, 255, 255, 0.35);
-}
-.badge-sim {
-  color: #d9c9ff;
   border-color: currentColor;
 }
 
@@ -1106,3 +901,60 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
   .risk-alert-body { flex-basis: calc(100% - 50px); }
   .risk-alert .btn { width: 100%; }
 }
+
+.link-btn { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+
+/* ===== Resident vs care team: login, signup and welcome ===== */
+.auth-resident, .who-resident, .role-tab-resident { --role: var(--role-resident); --role-ink: var(--role-resident-ink); }
+.auth-caregiver, .who-caregiver, .role-tab-caregiver { --role: var(--role-care); --role-ink: var(--role-care-ink); }
+.role-icon { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.role-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 520px; margin: 0 auto 18px; }
+.role-tab { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; text-decoration: none;
+  color: var(--ink); background: var(--surface); border: 2px solid var(--line); font-weight: 700; line-height: 1.2; }
+.role-tab small { display: block; font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+.role-tab .role-icon { color: var(--role); }
+.role-tab:hover:not(.on) { border-color: var(--role); }
+.role-tab.on { background: var(--role); border-color: var(--role); color: var(--role-ink); box-shadow: 0 4px 14px color-mix(in srgb, var(--role) 35%, transparent); }
+.role-tab.on small, .role-tab.on .role-icon { color: var(--role-ink); }
+.role-tab.on small { opacity: 0.85; }
+@media (max-width: 480px) { .role-tab { flex-direction: column; text-align: center; gap: 6px; } }
+
+.auth-page .auth { border-top: 6px solid var(--role); }
+.role-badge { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; margin: 0; padding: 5px 14px 5px 10px;
+  border-radius: 999px; font-weight: 700; font-size: 0.9rem; color: var(--role-fg, var(--role));
+  background: color-mix(in srgb, var(--role) 14%, var(--surface)); }
+.role-badge .role-icon { width: 20px; height: 20px; }
+.auth-resident .role-badge, .who-resident .role-badge { --role-fg: #17613c; }
+.auth-caregiver .role-badge, .who-caregiver .role-badge { --role-fg: #3a4496; }
+@media (prefers-color-scheme: dark) {
+  .auth-resident .role-badge, .who-resident .role-badge, .auth-caregiver .role-badge, .who-caregiver .role-badge { --role-fg: var(--role); }
+}
+.auth-page .field input:not([type='radio']):focus { border-color: var(--role); outline-color: var(--role); }
+.auth-page .segmented label.on { border-color: var(--role); background: color-mix(in srgb, var(--role) 14%, var(--surface)); }
+
+.btn-role { background: var(--role); border-color: var(--role); color: var(--role-ink); }
+.btn-role:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-outline-role { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 56px; padding: 10px 18px;
+  border-radius: 12px; border: 2px solid var(--role); color: var(--role-fg, var(--role)); font-weight: 700; text-decoration: none; background: transparent; width: 100%; }
+.btn-outline-role:hover { background: color-mix(in srgb, var(--role) 12%, transparent); }
+.auth-swap { padding-top: 6px; border-top: 1px solid var(--line); }
+.auth-swap .btn-outline-role { margin-top: 16px; }
+.auth-resident .btn-outline-role { --role-fg: #17613c; }
+.auth-caregiver .btn-outline-role { --role-fg: #3a4496; }
+@media (prefers-color-scheme: dark) { .auth-resident .btn-outline-role, .auth-caregiver .btn-outline-role { --role-fg: var(--role); } }
+
+.who { display: grid; grid-template-columns: 1fr; gap: 16px; margin: 8px 0 28px; }
+@media (min-width: 760px) { .who { grid-template-columns: 1fr 1fr; } }
+.who-card { background: var(--surface); border: 1px solid var(--line); border-top: 6px solid var(--role); border-radius: var(--radius);
+  padding: 24px; display: flex; flex-direction: column; gap: 10px; }
+.who-card h2 { margin: 4px 0 0; font-size: 1.5rem; }
+.who-card p.muted { margin: 0; }
+.who-actions { display: flex; flex-direction: column; gap: 12px; margin-top: auto; padding-top: 12px; }
+.who-resident .btn-outline-role { --role-fg: #17613c; }
+.who-caregiver .btn-outline-role { --role-fg: #3a4496; }
+@media (prefers-color-scheme: dark) { .who-resident .btn-outline-role, .who-caregiver .btn-outline-role { --role-fg: var(--role); } }
+
+.btn-role-care { background: var(--role-care); border-color: var(--role-care); color: var(--role-care-ink); }
+.btn-role-resident { color: #17613c; border-color: var(--role-resident); }
+@media (prefers-color-scheme: dark) { .btn-role-resident { color: var(--role-resident); } }
