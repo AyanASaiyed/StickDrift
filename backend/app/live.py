@@ -54,7 +54,7 @@ HEARTBEAT_S = 5          # the launching API touches the row while the game runs
 STALE_S = 20             # an active row older than this lost its launching API
 RECENT_H = 6             # finished sessions listed under "Just finished"
 LOBBY_GAMES = ("apple", "fish", "rat")
-KEEP_EVENTS = {"trial", "wrong", "basket", "expired", "result", "trace", "slam", "miss"}
+KEEP_EVENTS = {"trial", "wrong", "basket", "expired", "result", "trace", "slam", "miss", "card_rat"}
 MAX_FRAMES = 24000       # a visit is a few minutes at 60 Hz; stop rather than grow without bound
 _FRAME_KEYS = (
     "t", "trial", "phase", "lx", "ly", "rx", "ry",

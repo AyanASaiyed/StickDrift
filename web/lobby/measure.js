@@ -209,6 +209,7 @@ class RatWatch {
     this.flickSpeed = null
     this.otherStick = false
     this.reported = false
+    this.seenRats = 0
   }
 
   frame(g, t, sticks, emit) {
@@ -236,6 +237,12 @@ class RatWatch {
       if (g.caughtThis) this.caught = true
       if (!runKey && g.hs !== 'down') this.finish(t, emit) // the rat is gone and the slam has landed
     }
+    if (g.timed) {
+      while (this.seenRats < g.timed.length) {
+        const row = g.timed[this.seenRats++]
+        emit({ type: 'card_rat', t, round: row.round, caught: row.caught, reaction_s: row.reaction_s })
+      }
+    }
     this.outcomes(g, t, emit)
     return out
   }
@@ -262,9 +269,13 @@ class RatWatch {
     }
     if (g.state === 'done' && !this.reported) {
       this.reported = true
+      const timing = g.timingReport ? g.timingReport() : null
       emit({
         type: 'result', t, score: g.points(), stars: g.stars(),
         caught: stats.caught, missed: stats.missed, wrong: stats.wrong, empty: stats.empty,
+        target_rats: timing ? timing.target_rats : null,
+        correctness_pct: timing ? timing.correctness_pct : null,
+        median_reaction_s: timing ? timing.median_reaction_s : null,
       })
     }
   }

@@ -178,6 +178,23 @@ class VisitReportTest(unittest.TestCase):
         self.assertIn("error", report["model"]["by_game"]["apple"])
         self.assertIsNone(report["model"]["scores"])
 
+    def test_card_rat_times_come_from_the_game(self):
+        report = finish_visit({
+            "rat": {"events": [
+                {"type": "card_rat", "round": 1, "caught": True, "reaction_s": 0.42},
+                {"type": "card_rat", "round": 1, "caught": False, "reaction_s": None},
+                {"type": "result", "score": 300, "stars": 0, "caught": 1, "missed": 1, "wrong": 0, "empty": 0,
+                 "target_rats": 2, "correctness_pct": 50.0, "median_reaction_s": 0.42},
+            ]},
+        }, score=_score)
+        rat = report["games"]["rat"]
+        self.assertEqual(rat["correctness_pct"], 50.0)
+        self.assertEqual(rat["target_rats"], 2)
+        self.assertEqual(rat["median_reaction_s"], 0.42)
+        self.assertEqual(rat["card_rats"][0]["reaction_s"], 0.42)
+        self.assertIsNone(rat["card_rats"][1]["reaction_s"])
+        self.assertIsNone(report["model"]["scores"])
+
     def test_cli_prints_the_report_and_drops_frames(self):
         payload = {"rat": {"events": [
             {"type": "result", "score": 0, "stars": 0, "caught": 0, "missed": 0, "wrong": 0, "empty": 0},

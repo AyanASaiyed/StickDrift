@@ -281,7 +281,17 @@ def _rat(frames, events):
         empty = _int(result.get("empty")) or 0
         missed = _int(result.get("missed")) or 0
     total = caught + wrong + empty + missed
-    reactions = [slam["reaction_s"] for slam in slams if slam["reaction_s"] is not None]
+    cards = [
+        {"round": event.get("round"), "caught": bool(event.get("caught")), "reaction_s": _num(event.get("reaction_s"))}
+        for event in events if event.get("type") == "card_rat"
+    ]
+    if cards:
+        reactions = [card["reaction_s"] for card in cards if card["reaction_s"] is not None]
+    else:
+        reactions = [slam["reaction_s"] for slam in slams if slam["reaction_s"] is not None]
+    correctness = _num(result.get("correctness_pct"))
+    if correctness is None and cards:
+        correctness = round(100 * sum(card["caught"] for card in cards) / len(cards), 1)
     per_hand = {}
     for hand in HANDS:
         mine = [slam for slam in slams if slam["hand"] == hand]
@@ -300,6 +310,9 @@ def _rat(frames, events):
         "wrong": wrong,
         "empty": empty,
         "accuracy": None if not total else round(caught / total, 3),
+        "target_rats": len(cards) if cards else _int(result.get("target_rats")),
+        "correctness_pct": correctness,
+        "card_rats": cards,
         "median_reaction_s": _median(reactions),
         "reaction_spread_s": None if len(reactions) < 2 else round(max(reactions) - min(reactions), 3),
         "early_slams": sum(1 for slam in slams if slam["early"]),
