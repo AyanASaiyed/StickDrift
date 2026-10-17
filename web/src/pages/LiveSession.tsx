@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, type HandLive, type LiveSample, type LiveSnapshot, type LiveStatus } from '../api'
 import { DiffBars, PatternBars, ReachTrialsChart, RollingChart, StickFields } from '../components/LiveCharts'
-import { handPos, handTarget, levelName, pct, secs } from '../components/liveData'
+import { handPoint, handPos, handTarget, levelName, pct, secs } from '../components/liveData'
 import { TabPanel, Tabs } from '../components/Tabs'
 
 const KEEP = 100 * 40
@@ -49,25 +49,43 @@ function Tile({ label, left, right, hint }: { label: string; left: string; right
   )
 }
 
-function tiles(h: { left: HandLive; right: HandLive }) {
+function tiles(h: { left: HandLive; right: HandLive }, lobby: boolean) {
   const both = (f: (x: HandLive) => string) => [f(h.left), f(h.right)] as const
   const shake = (x: HandLive) => (x.shake == null ? '—' : `${(x.shake * 100).toFixed(1)}%${x.shake_hz ? ` · ${x.shake_hz} Hz` : ''}`)
   const change = (x: HandLive) =>
     x.speed_change_pct == null ? '—' : `${x.speed_change_pct > 0 ? '+' : ''}${x.speed_change_pct.toFixed(0)}%`
   return {
     speed: [
-      { label: 'Reaction time', vals: both((x) => secs(x.reaction_s)), hint: 'Apple appears → stick starts moving' },
-      { label: 'Time to reach', vals: both((x) => secs(x.reach_s)) },
-      { label: 'Peak speed', vals: both((x) => (x.peak_speed == null ? '—' : `${x.peak_speed.toFixed(1)} tilts/s`)) },
-      { label: 'Reach size', vals: both((x) => pct(x.reach_size)), hint: 'Furthest point ÷ distance to the apple' },
-      { label: 'Speed, first → last apples', vals: both(change), hint: 'Negative = slowing down as it went on' },
       {
-        label: 'Apples picked',
+        label: 'Reaction time',
+        vals: both((x) => secs(x.reaction_s)),
+        hint: lobby ? 'Target appears → stick pushed toward it' : 'Apple appears → stick starts moving',
+      },
+      {
+        label: lobby ? 'Time to pick / slam' : 'Time to reach',
+        vals: both((x) => secs(x.reach_s)),
+        hint: lobby ? 'Apple Picking: until the glove grabs it · Rat Catching: until the flick' : undefined,
+      },
+      { label: 'Peak speed', vals: both((x) => (x.peak_speed == null ? '—' : `${x.peak_speed.toFixed(1)} tilts/s`)) },
+      lobby
+        ? { label: 'Stick push', vals: both((x) => pct(x.reach_size)), hint: 'How far the stick was pushed, at most' }
+        : { label: 'Reach size', vals: both((x) => pct(x.reach_size)), hint: 'Furthest point ÷ distance to the apple' },
+      {
+        label: lobby ? 'Speed, first → last tries' : 'Speed, first → last apples',
+        vals: both(change),
+        hint: 'Negative = slowing down as it went on',
+      },
+      {
+        label: lobby ? 'Apples picked / rats caught' : 'Apples picked',
         vals: both((x) => (x.apples_total ? `${x.apples_reached}/${x.apples_total}` : '—')),
       },
     ],
     steady: [
-      { label: 'Distance from target', vals: both((x) => pct(x.tracking_error)), hint: 'Share of full stick range' },
+      {
+        label: 'Distance from target',
+        vals: both((x) => pct(x.tracking_error)),
+        hint: lobby ? 'Fishing lure to the lane, as a share of the water' : 'Share of full stick range',
+      },
       { label: 'Time on target', vals: both((x) => pct(x.on_target)) },
       { label: 'Shake', vals: both(shake), hint: 'Leftover wobble after the smooth path · rhythm' },
     ],
@@ -93,11 +111,7 @@ export default function LiveSession() {
         const s = await api.caregiverLiveSnapshot(id, since.current)
         if (stop) return
         setError(null)
-        // Lobby games have no targets, so start on the stick-tilt chart for them.
-        setSnap((prev) => {
-          if (!prev && s.levels.includes('lobby')) setChart('tilt')
-          return s
-        })
+        setSnap(s)
         if (s.samples.length) {
           const fresh = s.samples.filter((x) => x[0] > since.current)
           since.current = s.seq
@@ -136,7 +150,8 @@ export default function LiveSession() {
   }
 
   const live = !DONE.includes(snap.status) && snap.status !== 'scoring'
-  const t = tiles(snap.metrics.hands)
+  const lobby = snap.levels.includes('lobby')
+  const t = tiles(snap.metrics.hands, lobby)
   const reachTrials = snap.metrics.reach_trials
 
   return (
@@ -221,11 +236,17 @@ export default function LiveSession() {
           />
         </div>
         <div className="live-grid">
-          <StickFields samples={samples} />
+          <StickFields samples={samples} inGame={lobby} />
           {chart === 'distance' ? (
             <RollingChart
               title="Distance from target"
-              caption="How far each stick is from where the game wants it. Lower is closer."
+              caption={
+                !lobby
+                  ? 'How far each stick is from where the game wants it. Lower is closer.'
+                  : snap.level === 'rat'
+                    ? 'Rat Catching is about timing, so it has no target to follow. See Stick tilt for the flicks.'
+                    : 'How far the in-game hand or lure is from its target, as a share of the play area. Lower is closer.'
+              }
               samples={samples}
               windowS={20}
               max={1}
@@ -233,7 +254,7 @@ export default function LiveSession() {
               value={(s, h) => {
                 const tg = handTarget(s, h)
                 if (!tg) return null
-                const [x, y] = handPos(s, h)
+                const [x, y] = handPoint(s, h)
                 return Math.hypot(x - tg[0], y - tg[1])
               }}
             />
@@ -281,7 +302,7 @@ export default function LiveSession() {
                   <Tile key={x.label} label={x.label} left={x.vals[0]} right={x.vals[1]} hint={x.hint} />
                 ))}
               </div>
-              <ReachTrialsChart trials={reachTrials} />
+              <ReachTrialsChart trials={reachTrials} lobby={lobby} level={snap.level} />
             </>
           )}
           {mTab === 'steady' && (

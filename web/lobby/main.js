@@ -8,6 +8,7 @@ import { AppleGame } from './apple.js'
 import { FishGame } from './fish.js'
 import { RatGame } from './rat.js'
 import { LiveStream } from './live.js'
+import { Measure } from './measure.js'
 
 const canvas = document.getElementById('c')
 const $ = (id) => document.getElementById(id)
@@ -31,6 +32,7 @@ const hub = new Hub()
 const games = { apple: new AppleGame(), fish: new FishGame(), rat: new RatGame() }
 let active = null // the running game, or null while in the lobby
 const live = new LiveStream()
+const measure = new Measure()
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight
@@ -58,10 +60,12 @@ function startGame(portal) {
   active = games[portal.game]
   active.start()
   live.enter(portal.game)
+  measure.enter(portal.game)
 }
 function leaveGame() {
   active = null
   live.enter('lobby')
+  measure.enter(null)
   hub.reset()
   refreshScores()
   $('scores').style.display = ''
@@ -77,7 +81,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
   if (!running) return
   const pad = input.read()
-  live.sample(...pad.raw)
+  live.sample(measure.frame(active, live.now(), pad.raw, (e) => live.event(e.type, e)))
   if (active) {
     if (active.update(dt, pad)) leaveGame()
   } else {

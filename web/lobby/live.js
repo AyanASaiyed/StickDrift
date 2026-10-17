@@ -48,14 +48,17 @@ export class LiveStream {
     this.event('level_start', { level })
   }
 
-  /** Raw stick positions, -1..1 with up positive. The lobby games have no fixed targets. */
-  sample(lx, ly, rx, ry) {
+  /** Seconds since the stream opened; the clock the samples use. */
+  now() {
+    return (performance.now() - this.t0) / 1000
+  }
+
+  /** One 17-value sample from measure.js: t, trial, phase, sticks, targets, on-target flags, in-game hands. */
+  sample(item) {
     if (!this.token) return
-    const t = (performance.now() - this.t0) / 1000
-    if (t - this.lastSample < 1 / SAMPLE_HZ) return
-    this.lastSample = t
-    const r = (v) => Math.round(v * 1e4) / 1e4
-    this.queue.push([r(t), null, null, r(lx), r(ly), r(rx), r(ry), null, null, null, null, 0, 0])
+    if (item[0] - this.lastSample < 1 / SAMPLE_HZ) return
+    this.lastSample = item[0]
+    this.queue.push(item)
     if (this.queue.length > MAX_QUEUE) this.queue.splice(0, this.queue.length - MAX_QUEUE)
   }
 

@@ -91,11 +91,12 @@ class LiveSession:
             for item in items:
                 if isinstance(item, dict):
                     changed |= self._event(item)
-                elif isinstance(item, list) and len(item) == 13 and self.level:
+                elif isinstance(item, list) and len(item) in (13, 17) and self.level:
+                    # garden: 13 values; web lobby: 17, adding the in-game hand position
                     self.seq += 1
                     self.metrics.add(item)
                     self.trial, self.phase = item[1], item[2]
-                    rows.append((self.id, self.seq, self.level, *item))
+                    rows.append((self.id, self.seq, self.level, *item, *[None] * (17 - len(item))))
         return rows, changed
 
     def _event(self, e: dict) -> bool:
@@ -120,6 +121,8 @@ class LiveSession:
             if e.get("level") and e.get("completed"):
                 self.levels_done.append(str(e["level"]))
             self.status, self.level, self.trial, self.phase = "ready", None, None, None
+        elif kind == "trial" and self.level:
+            self.metrics.add_trial(e)
         elif kind == "session_end":
             self.folder = e.get("folder") or self.folder
             self.status = "saving"
@@ -179,8 +182,8 @@ def _store_samples(rows: List[tuple]):
             cur.executemany(
                 """INSERT INTO live_samples
                    (live_id, seq, level, t, trial, phase, lx, ly, rx, ry,
-                    tgt_lx, tgt_ly, tgt_rx, tgt_ry, reached_l, reached_r)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    tgt_lx, tgt_ly, tgt_rx, tgt_ry, reached_l, reached_r, cur_lx, cur_ly, cur_rx, cur_ry)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT DO NOTHING""",
                 rows,
             )
@@ -476,7 +479,7 @@ def live_snapshot(live_id: UUID, since: int = 0, limit: int = 2000, _: dict = De
             raise HTTPException(404, "That live session was not found.")
         samples = conn.execute(
             """SELECT seq, level, t, trial, phase, lx, ly, rx, ry, tgt_lx, tgt_ly, tgt_rx, tgt_ry,
-                      reached_l, reached_r
+                      reached_l, reached_r, cur_lx, cur_ly, cur_rx, cur_ry
                FROM live_samples WHERE live_id = %s AND seq > %s
                ORDER BY seq DESC LIMIT %s""",
             (live_id, max(since, 0), limit),

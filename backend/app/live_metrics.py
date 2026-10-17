@@ -11,6 +11,11 @@ Groups follow the movement patterns the games are designed to show:
     target, time on target, and leftover shake once the slow path is removed;
   * left-right difference for every measurement both hands produce.
 These describe movement only. They are not a diagnosis.
+
+Web lobby games move an in-game hand with the stick instead of placing it, so
+their samples add [cx_l, cy_l, cx_r, cy_r]: where that hand is, in the same
+-1..1 space as the targets. Their reaches arrive as finished `trial` events
+measured by the game, because only the game knows when a target appeared.
 """
 import math
 from collections import deque
@@ -91,14 +96,16 @@ class _Tracker:
         self.t_first = None
         self.t_last = None
 
-    def update(self, t, x, y, tx, ty):
+    def update(self, t, x, y, tx, ty, shake_xy=None, on=None):
+        """(x, y) is compared with the target; shake is read from `shake_xy` (default the same point).
+        `on` lets a game use its own idea of on target (the fishing lane is narrower than ON_TARGET_R)."""
         self.t_first = t if self.t_first is None else self.t_first
         self.t_last = t
         err = _r(x - tx, y - ty)
         self.n += 1
         self.err_sum += err
-        self.on += err <= ON_TARGET_R
-        self.window.append((x, y))
+        self.on += (err <= ON_TARGET_R) if on is None else bool(on)
+        self.window.append(shake_xy or (x, y))
         if len(self.window) == SHAKE_WINDOW:
             cx, cy = self.window[SHAKE_WINDOW // 2]
             mx = sum(p[0] for p in self.window) / SHAKE_WINDOW
@@ -141,11 +148,29 @@ class SessionMetrics:
             self.reach_trials.append(self.open_trial.result())
             self.open_trial = None
 
+    def add_trial(self, e: dict):
+        """A finished reach measured by a web lobby game: {trial, hand, reaction_s, reach_s, ...}."""
+        hand = e.get("hand")
+        if hand not in HANDS:
+            return
+        num = lambda k: e[k] if isinstance(e.get(k), (int, float)) and not isinstance(e.get(k), bool) else None
+        self.reach_trials.append({"trial": e.get("trial"), "game": self.level, hand: {
+            "reaction_s": num("reaction_s"), "reach_s": num("reach_s"), "peak_speed": num("peak_speed"),
+            "reach_size": num("reach_size"), "reached": bool(e.get("reached"))}})
+
     def add(self, s):
         t, trial, phase = s[0], s[1], s[2]
         pos = {"left": (s[3], s[4]), "right": (s[5], s[6])}
         targets = {"left": None if s[7] is None else (s[7], s[8]),
                    "right": None if s[9] is None else (s[9], s[10])}
+        if len(s) == 17:  # web lobby: distance from the in-game hand, shake from the stick itself
+            if phase == "track" and self.level:
+                level = self.trackers.setdefault(self.level, {})
+                for i, h in enumerate(HANDS):
+                    cur = (s[13 + 2 * i], s[14 + 2 * i])
+                    if targets[h] is not None and cur[0] is not None:
+                        level.setdefault(h, _Tracker()).update(t, *cur, *targets[h], shake_xy=pos[h], on=s[11 + i])
+            return
         if self.level == "apples":
             if phase == "cue":
                 if self.open_trial is None or self.open_trial.trial != trial:

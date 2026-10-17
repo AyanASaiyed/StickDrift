@@ -8,7 +8,8 @@ export const LX = 5,
   TLX = 9,
   TLY = 10,
   TRX = 11,
-  TRY = 12;
+  TRY = 12,
+  CLX = 15;
 export const HZ = 100;
 
 export type Hand = "left" | "right";
@@ -23,6 +24,17 @@ export function handTarget(s: LiveSample, hand: Hand): [number, number] | null {
   const y = hand === "left" ? s[TLY] : s[TRY];
   return x == null || y == null ? null : [x, y];
 }
+
+/** Where the in-game hand is, for web lobby games that move a hand with the stick; null for the garden. */
+export function handCursor(s: LiveSample, hand: Hand): [number, number] | null {
+  const i = CLX + (hand === "left" ? 0 : 2);
+  const x = s[i] as number | null | undefined,
+    y = s[i + 1] as number | null | undefined;
+  return x == null || y == null ? null : [x, y];
+}
+
+/** The point the game compares with its target: the in-game hand if there is one, else the stick. */
+export const handPoint = (s: LiveSample, hand: Hand) => handCursor(s, hand) ?? handPos(s, hand);
 
 export const pct = (v: number | null | undefined, digits = 0) =>
   v == null ? "—" : `${(v * 100).toFixed(digits)}%`;

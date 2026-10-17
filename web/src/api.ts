@@ -142,6 +142,8 @@ export interface HandLive {
 
 export interface ReachTrial {
   trial: number
+  /** web lobby game the attempt came from; garden trials have none */
+  game?: string
   left?: { reaction_s: number | null; reach_s: number | null; peak_speed: number; reach_size: number | null; reached: boolean }
   right?: { reaction_s: number | null; reach_s: number | null; peak_speed: number; reach_size: number | null; reached: boolean }
 }
@@ -204,12 +206,16 @@ export interface LiveBrief {
   error: string | null
 }
 
-/** [seq, level, t, trial, phase, lx, ly, rx, ry, tlx, tly, trx, try, reached_l, reached_r] */
+/**
+ * [seq, level, t, trial, phase, lx, ly, rx, ry, tlx, tly, trx, try, reached_l, reached_r, clx, cly, crx, cry]
+ * The last four are the in-game hand positions sent by web lobby games (null for the garden).
+ */
 export type LiveSample = [
   number, string, number, number | null, string,
   number, number, number, number,
   number | null, number | null, number | null, number | null,
   number, number,
+  (number | null)?, (number | null)?, (number | null)?, (number | null)?,
 ]
 
 export interface LiveSnapshot extends LiveBrief {

@@ -11,7 +11,9 @@ import {
   HZ,
   PATTERN_LABELS,
   PATTERN_ORDER,
-  handPos,
+  handCursor,
+  handPoint,
+  handPos as stickPos,
   handTarget,
   levelName,
   pct,
@@ -66,9 +68,12 @@ function useCanvas(
 
 // ---- live stick fields ------------------------------------------------------
 
-export function StickFields({ samples }: { samples: LiveSample[] }) {
+export function StickFields({ samples, inGame = false }: { samples: LiveSample[]; inGame?: boolean }) {
   const trail = samples.slice(-Math.round(HZ * 1.5));
   const last = trail[trail.length - 1];
+  // Lobby games that steer a hand: draw that hand, not the stick. Rat Catching has none, so it shows sticks.
+  inGame = inGame && !!last && HANDS.some((hd) => handCursor(last, hd));
+  const handPos = inGame ? handPoint : stickPos;
   const ref = useCanvas(
     (ctx, w, h) => {
       const ink = cssVar("--muted");
@@ -92,7 +97,11 @@ export function StickFields({ samples }: { samples: LiveSample[] }) {
         ctx.fillStyle = ink;
         ctx.font = "600 13px system-ui, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(hand === "left" ? "Left stick" : "Right stick", cx, h - 4);
+        ctx.fillText(
+          inGame ? (hand === "left" ? "Left hand (in game)" : "Right hand (in game)") : hand === "left" ? "Left stick" : "Right stick",
+          cx,
+          h - 4,
+        );
         if (!last) return;
         const target = handTarget(last, hand);
         if (target) {
@@ -142,8 +151,9 @@ export function StickFields({ samples }: { samples: LiveSample[] }) {
         aria-label="Live position of each stick and its current target. Dashed rings are targets."
       />
       <figcaption className="muted">
-        Dot = stick now · faint line = last 1.5 s · dashed ring = where the game
-        wants it
+        {inGame
+          ? "Dot = where the stick has steered the hand · faint line = last 1.5 s · dashed ring = the target"
+          : "Dot = stick now · faint line = last 1.5 s · dashed ring = where the game wants it"}
       </figcaption>
     </figure>
   );
@@ -319,11 +329,54 @@ export function RollingChart({
 
 // ---- apple-by-apple bars ------------------------------------------------------
 
-export function ReachTrialsChart({ trials }: { trials: ReachTrial[] }) {
+const TRIAL_TEXT: Record<string, { one: string; title: string; caption: string; empty: string }> = {
+  garden: {
+    one: "Apple",
+    title: "Time to reach each apple",
+    caption: "One pair per apple; a rising pattern means reaches are getting slower. Lower is quicker.",
+    empty: "Appears as the apples are picked.",
+  },
+  apple: {
+    one: "Apple",
+    title: "Time to pick each apple",
+    caption: "From the apple being free to pick until the glove grabs it. Lower is quicker.",
+    empty: "Appears as apples are picked in Apple Picking.",
+  },
+  rat: {
+    one: "Rat",
+    title: "Time to slam each target rat",
+    caption: "From the target rat appearing until the stick is flicked up to slam. Lower is quicker.",
+    empty: "Appears as target rats run past in Rat Catching.",
+  },
+};
+
+/** Lobby attempts arrive one hand at a time; pair them up by game and number like the garden's apples. */
+function lobbyRows(trials: ReachTrial[], level: string | null | undefined): [ReachTrial[], string] {
+  const games = trials.map((t) => t.game).filter((g): g is string => !!g);
+  const game = level && games.includes(level) ? level : games[games.length - 1];
+  const byNum = new Map<number, ReachTrial>();
+  for (const t of trials) {
+    if (t.game !== game) continue;
+    byNum.set(t.trial, { ...byNum.get(t.trial), ...t });
+  }
+  return [[...byNum.values()], game ?? level ?? "apple"];
+}
+
+export function ReachTrialsChart({
+  trials,
+  lobby = false,
+  level,
+}: {
+  trials: ReachTrial[];
+  lobby?: boolean;
+  level?: string | null;
+}) {
   const [hover, setHover] = useState<number | null>(null);
-  const rows = trials.filter((t) => t.left || t.right);
+  const [all, game] = lobby ? lobbyRows(trials, level) : [trials, "garden"];
+  const text = TRIAL_TEXT[game] ?? TRIAL_TEXT.apple;
+  const rows = all.filter((t) => t.left || t.right);
   if (rows.length === 0)
-    return <p className="muted">Appears as the apples are picked.</p>;
+    return <p className="muted">{text.empty}</p>;
   const vals = rows
     .flatMap((t) => HANDS.map((h) => t[h]?.reach_s ?? null))
     .filter((v): v is number => v != null);
@@ -339,11 +392,8 @@ export function ReachTrialsChart({ trials }: { trials: ReachTrial[] }) {
   return (
     <figure className="live-fig">
       <figcaption>
-        <strong>Time to reach each apple</strong>
-        <span className="muted">
-          One pair per apple; a rising pattern means reaches are getting slower.
-          Lower is quicker.
-        </span>
+        <strong>{text.title}</strong>
+        <span className="muted">{text.caption}</span>
       </figcaption>
       <div className="chart-legend">
         <span className="chart-key">
@@ -372,7 +422,7 @@ export function ReachTrialsChart({ trials }: { trials: ReachTrial[] }) {
           viewBox={`0 0 ${W} ${H}`}
           className="chart-svg"
           role="img"
-          aria-label="Time to reach each apple, left and right hand"
+          aria-label={`${text.title}, left and right hand`}
         >
           {[0, 0.25, 0.5, 0.75, 1].map((f) => (
             <g key={f}>
@@ -398,7 +448,7 @@ export function ReachTrialsChart({ trials }: { trials: ReachTrial[] }) {
             const cx = L + slot * i + slot / 2;
             return (
               <g
-                key={t.trial}
+                key={`${t.game ?? ''}-${t.trial}`}
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
               >
@@ -446,7 +496,9 @@ export function ReachTrialsChart({ trials }: { trials: ReachTrial[] }) {
         </svg>
         {hover != null && (
           <div className="live-tip" role="tooltip">
-            <strong>Apple {rows[hover].trial}</strong>
+            <strong>
+              {text.one} {rows[hover].trial}
+            </strong>
             {HANDS.map((h) => {
               const r = rows[hover][h];
               return r ? (
@@ -454,7 +506,7 @@ export function ReachTrialsChart({ trials }: { trials: ReachTrial[] }) {
                   <i style={{ background: `var(--hand-${h})` }} />{" "}
                   {h === "left" ? "Left" : "Right"}:{" "}
                   {r.reach_s == null ? "not reached" : secs(r.reach_s)} ·
-                  reaction {secs(r.reaction_s)} · reach size {pct(r.reach_size)}
+                  reaction {secs(r.reaction_s)} · {lobby ? "stick push" : "reach size"} {pct(r.reach_size)}
                 </span>
               ) : null;
             })}

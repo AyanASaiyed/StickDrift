@@ -244,3 +244,8 @@ CREATE TABLE IF NOT EXISTS live_samples (
     reached_l SMALLINT, reached_r SMALLINT,
     PRIMARY KEY (live_id, seq)
 );
+-- Web lobby games move an in-game hand with the stick, so they also send where that hand is.
+ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_lx REAL;
+ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_ly REAL;
+ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_rx REAL;
+ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_ry REAL;
