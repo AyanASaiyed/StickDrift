@@ -1,25 +1,27 @@
 """Launch the garden game for a resident, stream it live, and judge it when it ends.
 
 The API and the controller are on the same computer, so the API starts the game
-as a local process. The game posts ~100 Hz samples and level events back here
-with a one-time token. Caregivers poll a live snapshot. When the game process
-exits, its CSV/JSON folder is scored by the TCN pattern model (run in the
-project's Python 3.14 environment) and imported into TigerData for the resident.
+as a local process. The game posts ~100 Hz samples and level events back to that
+API with a one-time token. That API writes the live state and samples to
+TigerData (`live_sessions`, `live_samples`), so a caregiver signed in on any
+computer sharing the database can watch. When the game process exits, its
+CSV/JSON folder is scored by the TCN pattern model (run in the project's Python
+3.14 environment) and imported into TigerData for the resident.
 
-Live sessions are kept in memory: restarting the API mid-game drops the live view,
-but the game still saves its files, which can be imported later.
+Restarting the launching API mid-game drops that session's live stream and its
+end-of-session import; the game still saves its files for a later import.
 """
 import json
 import logging
 import os
 import secrets
+import socket
 import subprocess
 import threading
 import time
-from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -40,11 +42,13 @@ SCORER = ROOT / "backend" / "scripts" / "score_garden.py"
 LOG_DIR = ROOT / "data" / ".live-logs"
 API_URL = os.environ.get("STICKDRIFT_API_URL", "http://127.0.0.1:8000")
 TIMEZONE = os.environ.get("GARDEN_RECORDING_TIMEZONE", "America/Toronto")
+HOST = socket.gethostname()
 
-BUFFER_S = 120
-SAMPLE_HZ = 100
-ACTIVE = {"starting", "waiting", "ready", "playing", "paused", "saving"}
-KEEP_FINISHED_S = 6 * 3600
+ACTIVE = {"starting", "waiting", "ready", "playing", "paused", "saving", "scoring"}
+STATE_EVERY_S = 0.5      # how often the running state/metrics row is rewritten
+HEARTBEAT_S = 5          # the launching API touches the row while the game runs
+STALE_S = 20             # an active row older than this lost its launching API
+RECENT_H = 6             # finished sessions listed under "Just finished"
 
 
 def _now():
@@ -52,6 +56,8 @@ def _now():
 
 
 class LiveSession:
+    """State kept by the API that launched the game. Everyone else reads TigerData."""
+
     def __init__(self, participant_id: UUID, name: str, keyboard: bool):
         self.id = uuid4()
         self.token = secrets.token_urlsafe(32)
@@ -70,27 +76,29 @@ class LiveSession:
         self.synthetic = keyboard
         self.folder: Optional[str] = None
         self.seq = 0
-        self.samples: deque = deque(maxlen=BUFFER_S * SAMPLE_HZ)
         self.metrics = SessionMetrics()
         self.result: Optional[dict] = None
         self.db_session_id: Optional[UUID] = None
         self.error: Optional[str] = None
         self.proc: Optional[subprocess.Popen] = None
+        self.last_state_write = 0.0
 
-    # ---- ingest --------------------------------------------------------------
-
-    def ingest(self, items: List[Any]):
+    def ingest(self, items: List[Any]) -> Tuple[List[tuple], bool]:
+        """Apply events and samples; returns (sample rows to store, whether status changed)."""
+        rows: List[tuple] = []
+        changed = False
         with self.lock:
             for item in items:
                 if isinstance(item, dict):
-                    self._event(item)
+                    changed |= self._event(item)
                 elif isinstance(item, list) and len(item) == 13 and self.level:
                     self.seq += 1
-                    self.samples.append((self.seq, self.level, item))
                     self.metrics.add(item)
                     self.trial, self.phase = item[1], item[2]
+                    rows.append((self.id, self.seq, self.level, *item))
+        return rows, changed
 
-    def _event(self, e: dict):
+    def _event(self, e: dict) -> bool:
         kind = e.get("type")
         if kind == "session_start":
             self.folder = e.get("folder")
@@ -115,49 +123,85 @@ class LiveSession:
         elif kind == "session_end":
             self.folder = e.get("folder") or self.folder
             self.status = "saving"
-
-    # ---- views ---------------------------------------------------------------
-
-    def brief(self) -> dict:
-        end = self.ended_at or _now()
-        tcn = (self.result or {}).get("scores")
-        return {
-            "live_id": self.id, "participant_id": self.participant_id, "name": self.name,
-            "status": self.status, "level": self.level, "levels": self.levels,
-            "levels_done": self.levels_done, "synthetic": self.synthetic,
-            "started_at": self.created_at, "elapsed_s": round((end - self.created_at).total_seconds(), 1),
-            "tcn_scores": tcn, "db_session_id": self.db_session_id, "error": self.error,
-        }
-
-    def snapshot(self, since: int, limit: int) -> dict:
-        with self.lock:
-            if since <= 0 or not self.samples or since < self.samples[0][0]:
-                rows = list(self.samples)[-limit:]
-            else:
-                rows = [r for r in self.samples if r[0] > since][-limit:]
-            return {**self.brief(), "trial": self.trial, "phase": self.phase, "seq": self.seq,
-                    "samples": [[seq, level, *s] for seq, level, s in rows],
-                    "metrics": self.metrics.summary(), "result": self.result}
+        else:
+            return False
+        return True
 
 
+# Only sessions launched by this API process. Used for tokens and "one game per computer".
 SESSIONS: Dict[UUID, LiveSession] = {}
 BY_TOKEN: Dict[str, LiveSession] = {}
 REGISTRY_LOCK = threading.Lock()
 
 
-def _prune():
-    cutoff = time.time() - KEEP_FINISHED_S
-    for sid, s in list(SESSIONS.items()):
-        if s.status not in ACTIVE and s.ended_at and s.ended_at.timestamp() < cutoff:
-            SESSIONS.pop(sid, None)
-            BY_TOKEN.pop(s.token, None)
-
-
-def _active_for(participant_id: Optional[UUID] = None) -> Optional[LiveSession]:
+def _active_here(participant_id: Optional[UUID] = None) -> Optional[LiveSession]:
     for s in SESSIONS.values():
         if s.status in ACTIVE and (participant_id is None or s.participant_id == participant_id):
             return s
     return None
+
+
+# ---- TigerData persistence ----------------------------------------------------
+
+def _persist(s: LiveSession, with_metrics: bool = True):
+    with s.lock:
+        metrics = s.metrics.summary() if with_metrics else None
+        values = (s.id, s.participant_id, s.name, s.status, s.level, Jsonb(s.levels), Jsonb(s.levels_done),
+                  s.trial, s.phase, s.synthetic, s.seq, None if metrics is None else Jsonb(metrics),
+                  None if s.result is None else Jsonb(s.result), s.db_session_id, s.error, HOST,
+                  s.created_at, s.ended_at)
+    try:
+        with pool.connection() as conn:
+            conn.execute(
+                """INSERT INTO live_sessions
+                   (live_id, participant_id, name, status, level, levels, levels_done, trial, phase,
+                    synthetic, seq, metrics, result, db_session_id, error, host, started_at, ended_at, updated_at)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                   ON CONFLICT (live_id) DO UPDATE SET
+                     status = EXCLUDED.status, level = EXCLUDED.level, levels = EXCLUDED.levels,
+                     levels_done = EXCLUDED.levels_done, trial = EXCLUDED.trial, phase = EXCLUDED.phase,
+                     synthetic = EXCLUDED.synthetic, seq = EXCLUDED.seq,
+                     metrics = COALESCE(EXCLUDED.metrics, live_sessions.metrics),
+                     result = EXCLUDED.result, db_session_id = EXCLUDED.db_session_id,
+                     error = EXCLUDED.error, ended_at = EXCLUDED.ended_at, updated_at = now()""",
+                values,
+            )
+        s.last_state_write = time.monotonic()
+    except Exception:
+        log.exception("Could not write live session %s to TigerData", s.id)
+
+
+def _store_samples(rows: List[tuple]):
+    if not rows:
+        return
+    try:
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO live_samples
+                   (live_id, seq, level, t, trial, phase, lx, ly, rx, ry,
+                    tgt_lx, tgt_ly, tgt_rx, tgt_ry, reached_l, reached_r)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   ON CONFLICT DO NOTHING""",
+                rows,
+            )
+    except Exception:
+        log.exception("Could not write live samples to TigerData")
+
+
+def _heartbeat(s: LiveSession):
+    try:
+        with pool.connection() as conn:
+            conn.execute("UPDATE live_sessions SET updated_at = now() WHERE live_id = %s", (s.id,))
+    except Exception:
+        log.exception("Live heartbeat failed")
+
+
+def _prune_db():
+    try:
+        with pool.connection() as conn:
+            conn.execute("DELETE FROM live_sessions WHERE updated_at < now() - interval '1 day'")
+    except Exception:
+        log.exception("Pruning old live sessions failed")
 
 
 # ---- end of session -------------------------------------------------------
@@ -174,16 +218,15 @@ def _store(s: LiveSession, tcn: Optional[dict]) -> Optional[UUID]:
     from scripts.import_garden import import_one  # backend/scripts, imported lazily
 
     with pool.connection() as conn:
-        status, _, _, _, session_id = import_one(conn, Path(s.folder), "site-live", TIMEZONE,
-                                                 participant_id=s.participant_id)
+        _, _, _, _, session_id = import_one(conn, Path(s.folder), "site-live", TIMEZONE,
+                                            participant_id=s.participant_id)
         if session_id is None:
             return None
-        live_summary = s.metrics.summary()
         conn.execute(
             """UPDATE session_summaries
                SET metrics = metrics || %s, code_version = 'garden-live-v1', computed_at = now()
                WHERE session_id = %s""",
-            (Jsonb({"live": live_summary, "tcn": tcn}), session_id),
+            (Jsonb({"live": s.metrics.summary(), "tcn": tcn}), session_id),
         )
         conn.execute("UPDATE sessions SET quality = 'good' WHERE session_id = %s AND quality IS NULL "
                      "AND status = 'completed'", (session_id,))
@@ -205,10 +248,12 @@ def _finalize(s: LiveSession):
         with s.lock:
             s.status, s.ended_at = "stopped", _now()
             s.error = "The game closed before the first chapter, so there is nothing to judge."
+        _persist(s)
         return
 
     with s.lock:
         s.status = "scoring"
+    _persist(s)
     tcn, error = None, None
     try:
         tcn = _score(folder)
@@ -225,11 +270,17 @@ def _finalize(s: LiveSession):
         s.result, s.db_session_id, s.error = tcn, session_id, error
         s.status = "finished" if tcn is not None else "failed"
         s.ended_at = _now()
+    _persist(s)
 
 
 def _watch(s: LiveSession, log_file):
     try:
-        s.proc.wait()
+        while True:
+            try:
+                s.proc.wait(timeout=HEARTBEAT_S)
+                break
+            except subprocess.TimeoutExpired:
+                _heartbeat(s)
     finally:
         log_file.close()
     try:
@@ -239,8 +290,10 @@ def _watch(s: LiveSession, log_file):
         with s.lock:
             s.status, s.ended_at = "failed", _now()
             s.error = s.error or "Something went wrong while finishing this session."
+        _persist(s)
     with REGISTRY_LOCK:
         BY_TOKEN.pop(s.token, None)
+        SESSIONS.pop(s.id, None)
 
 
 # ---- resident ---------------------------------------------------------------
@@ -262,11 +315,10 @@ def launch(body: LaunchIn, me: dict = Depends(current_senior)):
         raise HTTPException(503, "The game isn't installed on this computer yet. Ask a staff member to run "
                                  "`uv sync` in the project folder.")
     with REGISTRY_LOCK:
-        _prune()
-        mine = _active_for(me["account_id"])
+        mine = _active_here(me["account_id"])
         if mine is not None:
             return {"active": True, "status": mine.status, "level": mine.level}
-        if _active_for() is not None:
+        if _active_here() is not None:
             raise HTTPException(409, "Someone else is already playing on this computer. Try again in a few minutes.")
         s = LiveSession(me["account_id"], me["display_name"], body.keyboard)
         SESSIONS[s.id] = s
@@ -289,13 +341,15 @@ def launch(body: LaunchIn, me: dict = Depends(current_senior)):
             SESSIONS.pop(s.id, None)
             BY_TOKEN.pop(s.token, None)
         raise HTTPException(500, f"The game could not start ({e}).")
+    _persist(s)
+    _prune_db()
     threading.Thread(target=_watch, args=(s, log_file), name=f"garden-{s.id}", daemon=True).start()
     return {"active": True, "status": s.status, "level": None}
 
 
 @router.get("/me/garden", response_model=GardenStatus)
 def my_garden(me: dict = Depends(current_senior)):
-    s = _active_for(me["account_id"])
+    s = _active_here(me["account_id"])
     return {"active": s is not None, "status": s.status if s else None, "level": s.level if s else None}
 
 
@@ -310,23 +364,69 @@ def ingest(body: IngestIn, x_live_token: str = Header(...)):
     s = BY_TOKEN.get(x_live_token)
     if s is None:
         raise HTTPException(410, "This live session is no longer open.")
-    s.ingest(body.items)
+    rows, changed = s.ingest(body.items)
+    _store_samples(rows)
+    if changed or time.monotonic() - s.last_state_write >= STATE_EVERY_S:
+        _persist(s)
     return {"ok": True}
 
 
-# ---- caregiver --------------------------------------------------------------
+# ---- caregiver (reads TigerData, so any computer can watch) ----------------------
+
+BRIEF_COLUMNS = """live_id, participant_id, name, status, level, levels, levels_done, synthetic,
+                   started_at, ended_at, updated_at, db_session_id, error, host,
+                   result->'scores' AS tcn_scores,
+                   EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) AS elapsed_s,
+                   updated_at < now() - make_interval(secs => %s) AS stale"""
+
+
+def _brief(row: dict) -> dict:
+    status = row["status"]
+    error = row["error"]
+    if status in ACTIVE and row["stale"]:
+        status = "lost"
+        error = error or ("The computer running this game stopped sending updates. Its recording is saved "
+                          "there and can be imported later.")
+    return {
+        "live_id": row["live_id"], "participant_id": row["participant_id"], "name": row["name"],
+        "status": status, "level": row["level"], "levels": row["levels"], "levels_done": row["levels_done"],
+        "synthetic": row["synthetic"], "started_at": row["started_at"],
+        "elapsed_s": round(float(row["elapsed_s"]), 1), "tcn_scores": row["tcn_scores"],
+        "db_session_id": row["db_session_id"], "error": error,
+    }
+
 
 @router.get("/caregiver/live")
 def live_list(_: dict = Depends(current_caregiver)):
-    with REGISTRY_LOCK:
-        _prune()
-        items = sorted(SESSIONS.values(), key=lambda s: s.created_at, reverse=True)
-    return [s.brief() for s in items]
+    with pool.connection() as conn:
+        rows = conn.execute(
+            f"""SELECT {BRIEF_COLUMNS} FROM live_sessions
+                WHERE updated_at > now() - make_interval(hours => %s)
+                ORDER BY started_at DESC LIMIT 20""",
+            (STALE_S, RECENT_H),
+        ).fetchall()
+    return [_brief(r) for r in rows]
 
 
 @router.get("/caregiver/live/{live_id}")
 def live_snapshot(live_id: UUID, since: int = 0, limit: int = 2000, _: dict = Depends(current_caregiver)):
-    s = SESSIONS.get(live_id)
-    if s is None:
-        raise HTTPException(404, "That live session has ended or the server was restarted.")
-    return s.snapshot(since, max(1, min(limit, 4000)))
+    limit = max(1, min(limit, 4000))
+    with pool.connection() as conn:
+        row = conn.execute(
+            f"SELECT {BRIEF_COLUMNS}, trial, phase, seq, metrics, result FROM live_sessions WHERE live_id = %s",
+            (STALE_S, live_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "That live session was not found.")
+        samples = conn.execute(
+            """SELECT seq, level, t, trial, phase, lx, ly, rx, ry, tgt_lx, tgt_ly, tgt_rx, tgt_ry,
+                      reached_l, reached_r
+               FROM live_samples WHERE live_id = %s AND seq > %s
+               ORDER BY seq DESC LIMIT %s""",
+            (live_id, max(since, 0), limit),
+        ).fetchall()
+    return {
+        **_brief(row), "trial": row["trial"], "phase": row["phase"], "seq": row["seq"],
+        "samples": [list(r.values()) for r in reversed(samples)],
+        "metrics": row["metrics"] or SessionMetrics().summary(), "result": row["result"],
+    }

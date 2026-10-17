@@ -5,7 +5,7 @@ import { DiffBars, PatternBars, ReachTrialsChart, RollingChart, StickFields } fr
 import { handPos, handTarget, levelName, pct, secs } from '../components/liveData'
 
 const KEEP = 100 * 40
-const DONE: LiveStatus[] = ['finished', 'failed', 'stopped']
+const DONE: LiveStatus[] = ['finished', 'failed', 'stopped', 'lost']
 
 const STATUS_TEXT: Record<LiveStatus, string> = {
   starting: 'Opening the game',
@@ -18,6 +18,7 @@ const STATUS_TEXT: Record<LiveStatus, string> = {
   finished: 'Session judged',
   failed: 'Could not judge',
   stopped: 'Closed early',
+  lost: 'Connection lost',
 }
 
 const CHAPTERS = ['apples', 'butterfly_left', 'butterfly_right', 'water']
@@ -175,7 +176,7 @@ export default function LiveSession() {
         </p>
       )}
 
-      {(snap.status === 'scoring' || snap.status === 'saving' || snap.result || snap.status === 'failed' || snap.status === 'stopped') && (
+      {(snap.status === 'scoring' || snap.status === 'saving' || snap.result || snap.status === 'failed' || snap.status === 'stopped' || snap.status === 'lost') && (
         <section className={`panel judge ${snap.result ? 'judge-done' : ''}`} aria-live="polite">
           <h2>End-of-session judgement</h2>
           {snap.result ? (

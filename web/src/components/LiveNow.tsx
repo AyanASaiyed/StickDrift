@@ -16,6 +16,7 @@ const SHORT: Record<LiveStatus, string> = {
   finished: 'Judged',
   failed: 'Could not judge',
   stopped: 'Closed early',
+  lost: 'Connection lost',
 }
 
 function topPattern(b: LiveBrief) {

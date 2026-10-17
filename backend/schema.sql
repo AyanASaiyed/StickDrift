@@ -205,3 +205,42 @@ CREATE TABLE IF NOT EXISTS session_events (
 );
 CREATE INDEX IF NOT EXISTS session_events_session_idx
     ON session_events (session_id, t_ms);
+
+-- Live garden sessions, shared through TigerData so a caregiver on any computer
+-- can watch a resident playing on another. The API that launched the game writes
+-- these; every API reads them. Rows are short-lived and pruned after a day.
+CREATE TABLE IF NOT EXISTS live_sessions (
+    live_id UUID PRIMARY KEY,
+    participant_id UUID NOT NULL REFERENCES participants (participant_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    level TEXT,
+    levels JSONB NOT NULL DEFAULT '[]',
+    levels_done JSONB NOT NULL DEFAULT '[]',
+    trial INTEGER,
+    phase TEXT,
+    synthetic BOOLEAN NOT NULL DEFAULT false,
+    seq BIGINT NOT NULL DEFAULT 0,
+    metrics JSONB,
+    result JSONB,
+    db_session_id UUID,
+    error TEXT,
+    host TEXT,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS live_sessions_updated_idx ON live_sessions (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS live_samples (
+    live_id UUID NOT NULL REFERENCES live_sessions (live_id) ON DELETE CASCADE,
+    seq BIGINT NOT NULL,
+    level TEXT NOT NULL,
+    t REAL NOT NULL,
+    trial INTEGER,
+    phase TEXT,
+    lx REAL, ly REAL, rx REAL, ry REAL,
+    tgt_lx REAL, tgt_ly REAL, tgt_rx REAL, tgt_ry REAL,
+    reached_l SMALLINT, reached_r SMALLINT,
+    PRIMARY KEY (live_id, seq)
+);

@@ -219,6 +219,7 @@ export type LiveStatus =
   | 'finished'
   | 'failed'
   | 'stopped'
+  | 'lost'
 
 export interface LiveBrief {
   live_id: string
