@@ -162,6 +162,7 @@ export interface GardenSession {
   status: string
   is_synthetic: boolean
   levels_completed: number | null
+  levels_total?: number
   tcn: TcnResult | null
   live: LiveMetrics | null
 }

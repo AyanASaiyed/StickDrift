@@ -11,12 +11,14 @@ CSV/JSON folder is scored by the TCN pattern model (run in the project's Python
 Restarting the launching API mid-game drops that session's live stream and its
 end-of-session import; the game still saves its files for a later import.
 """
+import copy
 import json
 import logging
 import os
 import secrets
 import socket
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -51,6 +53,15 @@ STATE_EVERY_S = 0.5      # how often the running state/metrics row is rewritten
 HEARTBEAT_S = 5          # the launching API touches the row while the game runs
 STALE_S = 20             # an active row older than this lost its launching API
 RECENT_H = 6             # finished sessions listed under "Just finished"
+LOBBY_GAMES = ("apple", "fish", "rat")
+KEEP_EVENTS = {"trial", "wrong", "basket", "expired", "result", "trace", "slam", "miss"}
+MAX_FRAMES = 24000       # a visit is a few minutes at 60 Hz; stop rather than grow without bound
+_FRAME_KEYS = (
+    "t", "trial", "phase", "lx", "ly", "rx", "ry",
+    "target_lx", "target_ly", "target_rx", "target_ry",
+    "on_l", "on_r",
+    "cursor_lx", "cursor_ly", "cursor_rx", "cursor_ry",
+)
 
 
 def _now():
@@ -84,6 +95,9 @@ class LiveSession:
         self.error: Optional[str] = None
         self.proc: Optional[subprocess.Popen] = None
         self.last_state_write = 0.0
+        self.reporting = False
+        # Lobby frames live here until the visit ends. They are never written to the database.
+        self.capture = {name: {"frames": [], "events": []} for name in LOBBY_GAMES}
 
     def ingest(self, items: List[Any]) -> Tuple[List[tuple], bool]:
         """Apply events and samples; returns (sample rows to store, whether status changed)."""
@@ -99,9 +113,25 @@ class LiveSession:
                     self.metrics.add(item)
                     self.trial, self.phase = item[1], item[2]
                     rows.append((self.id, self.seq, self.level, *item, *[None] * (17 - len(item))))
+                    self._keep_frame(item)
         return rows, changed
 
+    def _keep_frame(self, item):
+        if self.level not in LOBBY_GAMES or len(item) < 17:
+            return
+        bucket = self.capture[self.level]
+        if len(bucket["frames"]) >= MAX_FRAMES:
+            bucket["truncated"] = True
+            return
+        bucket["frames"].append(dict(zip(_FRAME_KEYS, item[:17])))
+
+    def _keep_event(self, event: dict):
+        if event.get("type") not in KEEP_EVENTS or self.level not in LOBBY_GAMES:
+            return
+        self.capture[self.level]["events"].append(dict(event))
+
     def _event(self, e: dict) -> bool:
+        self._keep_event(e)
         kind = e.get("type")
         if kind == "session_start":
             self.folder = e.get("folder")
@@ -374,8 +404,9 @@ def my_garden(me: dict = Depends(current_senior)):
 # ---- browser lobby ------------------------------------------------------------
 # The 3D lobby (web/lobby.html) runs in the resident's own browser tab. It opens a
 # live session here with their login cookie and streams its stick samples to
-# /live/ingest like the garden game does. Lobby games have no pattern model yet,
-# so the session simply ends when the tab closes or the resident leaves.
+# /live/ingest like the garden game does. The samples also stay in memory. When
+# the tab closes, visit.report scores Apple Picking and Harbour Fishing, counts
+# Rat Catching, stores that document, and drops the frames.
 
 LOBBY_IDLE_S = 60        # a lobby tab that stopped posting this long ago is forgotten
 
@@ -386,12 +417,117 @@ def _forget(s: LiveSession):
         SESSIONS.pop(s.id, None)
 
 
+def _played(capture: dict) -> bool:
+    return any(bucket.get("frames") or bucket.get("events") for bucket in capture.values())
+
+
+def _holds_frames(value) -> bool:
+    if isinstance(value, dict):
+        if "frames" in value or "cursor_lx" in value:
+            return True
+        return any(_holds_frames(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_holds_frames(item) for item in value)
+    return False
+
+
+def _run_report(capture: dict) -> dict:
+    python = str(GAME_PYTHON) if GAME_PYTHON.is_file() else sys.executable
+    out = subprocess.run(
+        [python, "-m", "visit.report"],
+        input=json.dumps(capture),
+        text=True,
+        capture_output=True,
+        cwd=ROOT,
+        timeout=180,
+    )
+    if out.returncode != 0:
+        detail = out.stderr.strip().splitlines()
+        raise RuntimeError(detail[-1] if detail else "visit report failed")
+    report = json.loads(out.stdout)
+    if _holds_frames(report):
+        raise RuntimeError("visit report still held the raw frames")
+    return report
+
+
+def _store_visit(s: LiveSession, report: dict) -> UUID:
+    session_id = uuid4()
+    finished = int(report.get("levels_completed") or 0)
+    metrics = {
+        "levels_completed": finished,
+        "tcn": {
+            "scores": report["model"]["scores"],
+            "by_game": report["model"]["by_game"],
+            "meaning": report["model"]["meaning"],
+            "schema_version": report["schema_version"],
+        },
+        "live": report["live"],
+        "visit": report,
+    }
+    with s.lock:
+        synthetic = s.synthetic
+        participant_id = s.participant_id
+        started = s.created_at
+    with pool.connection() as conn:
+        conn.execute(
+            """INSERT INTO sessions
+               (session_id, participant_id, mode, protocol_version, connection, placement,
+                status, quality, is_synthetic, started_at, completed_at)
+               VALUES (%s, %s, 'free_play', 'lobby-v1', %s, 'other', %s, 'good', %s, %s, now())""",
+            (session_id, participant_id, "simulated" if synthetic else "unknown",
+             "completed" if finished else "abandoned", synthetic, started),
+        )
+        conn.execute(
+            """INSERT INTO session_summaries (session_id, metrics, code_version)
+               VALUES (%s, %s, 'lobby-report-v1')""",
+            (session_id, Jsonb(metrics)),
+        )
+    return session_id
+
+
+def _finish_visit(s: LiveSession, capture: dict):
+    try:
+        report = _run_report(capture)
+        session_id = _store_visit(s, report)
+        scores = (report.get("model") or {}).get("scores")
+        with s.lock:
+            s.result = {"scores": scores} if scores else None
+            s.db_session_id = session_id
+            s.status = "finished"
+            s.ended_at = _now()
+            s.error = None
+    except Exception as error:
+        log.exception("Lobby visit report failed")
+        with s.lock:
+            s.status = "failed"
+            s.ended_at = _now()
+            s.error = str(error)
+    finally:
+        capture.clear()
+        _persist(s)
+
+
 def _end_lobby(s: LiveSession, status: str = "ended"):
     with s.lock:
+        if s.reporting:
+            return
+        s.reporting = True
+        capture = copy.deepcopy(s.capture)
+        for bucket in s.capture.values():
+            bucket["frames"].clear()
+            bucket["events"].clear()
+            bucket.pop("truncated", None)
         s.metrics.close_trial()
-        s.status, s.ended_at, s.level = status, _now(), None
+        s.level = None
+        played = _played(capture)
+        if played:
+            s.status = "scoring"
+        else:
+            s.status, s.ended_at = status, _now()
     _persist(s)
     _forget(s)
+    if played:
+        threading.Thread(target=_finish_visit, args=(s, capture), daemon=True).start()
 
 
 def _prune_lobby():

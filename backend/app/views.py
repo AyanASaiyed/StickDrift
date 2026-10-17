@@ -69,6 +69,7 @@ class GardenSession(BaseModel):
     status: str
     is_synthetic: bool
     levels_completed: Optional[int]
+    levels_total: int = 4
     tcn: Optional[dict]
     live: Optional[dict]
 
@@ -94,6 +95,7 @@ def _fetch_sessions(conn, participant_id: UUID) -> List[dict]:
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
            WHERE s.participant_id = %s AND s.protocol_version NOT LIKE 'garden-%%'
+             AND s.protocol_version <> 'lobby-v1'
            ORDER BY s.started_at DESC""",
         (participant_id,),
     ).fetchall()
@@ -103,10 +105,12 @@ def _fetch_garden(conn, participant_id: UUID) -> List[dict]:
     return conn.execute(
         """SELECT s.session_id, s.started_at, s.status, s.is_synthetic,
                   (ss.metrics->>'levels_completed')::int AS levels_completed,
+                  CASE WHEN s.protocol_version = 'lobby-v1' THEN 3 ELSE 4 END AS levels_total,
                   ss.metrics->'tcn' AS tcn, ss.metrics->'live' AS live
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
-           WHERE s.participant_id = %s AND s.protocol_version LIKE 'garden-%%'
+           WHERE s.participant_id = %s
+             AND (s.protocol_version LIKE 'garden-%%' OR s.protocol_version = 'lobby-v1')
            ORDER BY s.started_at DESC LIMIT 50""",
         (participant_id,),
     ).fetchall()
