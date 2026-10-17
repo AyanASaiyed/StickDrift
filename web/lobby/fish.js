@@ -11,7 +11,7 @@ const WY0 = 2 // water-plane origin (world y)
 const CAM_POS = new THREE.Vector3(0, -5.5, 5.2)
 const LANE_HALF = 0.5, LANE_VIS = 0.42, LANE_STEP = 0.15
 const CURSOR_SPEED = 3.2, LEAD = 8
-const ROUNDS = 3
+const ROUNDS = 2 // levels: each = one left-hand fish + one right-hand fish
 const WATER_X = 4.8, WATER_Y = 2.9 // shapes are designed inside +-WATER_X / +-WATER_Y ...
 // ... then moved into the band of water that is clear of the bucket, the gloves and the top bar on a wide screen:
 // wy -0.9 .. 4.2, centred on 1.65 (the middle of the view). The cursor is kept inside the same band.

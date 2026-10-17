@@ -837,7 +837,7 @@ WY0 = 402.0                                   # world y of the water-plane origi
 FISH_CAM_POS, FISH_CAM_PITCH = (0.0, 394.5, 5.2), math.radians(60)
 LANE_HALF, LANE_VIS, LANE_STEP = 0.5, 0.42, 0.15    # tolerance / drawn half-width / point spacing (m)
 CURSOR_SPEED, LEAD = 3.2, 8                   # rod-tip speed (m/s); points the fish swims ahead of the tip
-FISH_ROUNDS = 3                               # rounds: each = one left-hand fish + one right-hand fish
+FISH_ROUNDS = 2                               # rounds: each = one left-hand fish + one right-hand fish
 WATER_X, WATER_Y = 4.8, 2.9                   # cursor bounds on the water
 BUCKET = (0.0, 397.5, 1.85)
 FISH_COL = {"A": (0.95, 0.42, 0.08), "B": (0.10, 0.55, 0.85)}
