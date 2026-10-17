@@ -47,9 +47,13 @@ CREATE TABLE IF NOT EXISTS session_summaries (
     lr_gap_ms                REAL,
     bimanual_gap_ms          REAL,
     enjoyment                SMALLINT CHECK (enjoyment BETWEEN 1 AND 5),
+    metrics                  JSONB NOT NULL DEFAULT '{}'::jsonb,
     code_version             TEXT NOT NULL,
     computed_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE session_summaries
+    ADD COLUMN IF NOT EXISTS metrics JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Prompt schedule as shown to the resident.
 CREATE TABLE IF NOT EXISTS trials (
@@ -61,8 +65,20 @@ CREATE TABLE IF NOT EXISTS trials (
     direction_r   TEXT CHECK (direction_r IN ('up', 'down', 'left', 'right')),
     cue_onset_ms  DOUBLE PRECISION NOT NULL,
     deadline_ms   DOUBLE PRECISION NOT NULL,
+    activity      TEXT NOT NULL DEFAULT 'target_reach',
+    details       JSONB NOT NULL DEFAULT '{}'::jsonb,
     PRIMARY KEY (session_id, trial_id)
 );
+
+ALTER TABLE trials
+    ADD COLUMN IF NOT EXISTS activity TEXT NOT NULL DEFAULT 'target_reach',
+    ADD COLUMN IF NOT EXISTS details JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+DO $$ BEGIN
+    ALTER TABLE trials ADD CONSTRAINT trials_activity_check
+        CHECK (activity IN ('target_reach', 'target_tracking', 'bilateral_control'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Detected response for each trial.
 CREATE TABLE IF NOT EXISTS responses (
@@ -75,10 +91,14 @@ CREATE TABLE IF NOT EXISTS responses (
     cross_l_ms    DOUBLE PRECISION,
     cross_r_ms    DOUBLE PRECISION,
     latency_ms    DOUBLE PRECISION,
+    metrics       JSONB NOT NULL DEFAULT '{}'::jsonb,
     code_version  TEXT NOT NULL,
     PRIMARY KEY (session_id, trial_id),
     FOREIGN KEY (session_id, trial_id) REFERENCES trials (session_id, trial_id) ON DELETE CASCADE
 );
+
+ALTER TABLE responses
+    ADD COLUMN IF NOT EXISTS metrics JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Raw stick samples (~60 Hz from the Gamepad API). This is the time-series
 -- table, so it is a hypertable partitioned on `time`.
@@ -91,7 +111,44 @@ CREATE TABLE IF NOT EXISTS raw_samples (
     ly          REAL NOT NULL,
     rx          REAL NOT NULL,
     ry          REAL NOT NULL,
-    connected   BOOLEAN NOT NULL
+    connected   BOOLEAN NOT NULL,
+    activity    TEXT,
+    trial_id    SMALLINT,
+    target_x    REAL,
+    target_y    REAL,
+    cursor_x    REAL,
+    cursor_y    REAL
 );
+
+ALTER TABLE raw_samples
+    ADD COLUMN IF NOT EXISTS activity TEXT,
+    ADD COLUMN IF NOT EXISTS trial_id SMALLINT,
+    ADD COLUMN IF NOT EXISTS target_x REAL,
+    ADD COLUMN IF NOT EXISTS target_y REAL,
+    ADD COLUMN IF NOT EXISTS cursor_x REAL,
+    ADD COLUMN IF NOT EXISTS cursor_y REAL;
+
+DO $$ BEGIN
+    ALTER TABLE raw_samples ADD CONSTRAINT raw_samples_activity_check
+        CHECK (activity IS NULL OR activity IN ('target_reach', 'target_tracking', 'bilateral_control'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 SELECT create_hypertable('raw_samples', by_range('time'), if_not_exists => TRUE);
+-- TimescaleDB requires unique indexes on a hypertable to include its time key.
+CREATE UNIQUE INDEX IF NOT EXISTS raw_samples_time_session_seq_uidx
+    ON raw_samples (time, session_id, seq);
 CREATE INDEX IF NOT EXISTS raw_samples_session_idx ON raw_samples (session_id, time);
+
+-- Low-volume event stream for phase changes, pauses, calibration, and other
+-- auditable game events. High-rate axes remain in raw_samples.
+CREATE TABLE IF NOT EXISTS session_events (
+    event_id    UUID PRIMARY KEY,
+    session_id  UUID NOT NULL REFERENCES sessions (session_id) ON DELETE CASCADE,
+    t_ms        DOUBLE PRECISION NOT NULL,
+    event_type  TEXT NOT NULL CHECK (length(event_type) BETWEEN 1 AND 80),
+    payload     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS session_events_session_idx
+    ON session_events (session_id, t_ms);

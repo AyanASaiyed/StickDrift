@@ -68,6 +68,26 @@ Because Tiger Data is a cloud service, data leaves the laptop. Profiles hold onl
 
 The multi-day trends in the demo are **synthetic and labeled as such**. The short baseline in the demo comes from consenting adult teammates and is not clinical data.
 
+### Combined-game data contract
+
+The planned `garden-v1` assessment is one session with three activity values:
+`target_reach`, `target_tracking`, and `bilateral_control`. Keep the same session
+ID across all three activities. Send browser data to FastAPI; the browser must
+never receive the TigerData connection string. The backend stores:
+
+- Batched normalized joystick samples, with monotonic time, activity/trial ID,
+  and target/cursor coordinates when applicable.
+- Each trial's prompt parameters, deterministic outcome, and calculated metrics.
+- Low-volume events such as activity changes, pauses, and trial markers.
+- A final session quality and summary metrics object.
+
+`web/src/sessionRecorder.ts` is the game-facing recorder. It batches samples
+(up to 120 in memory before upload; API accepts up to 500 per request), retries
+failed batches on the next flush, and supports saving trials/events and closing
+or abandoning the same session. A game should call `recordSample` from its
+animation loop and update its activity/trial/target context before each sample.
+Never include a name or medical note in event payloads or metric objects.
+
 ## Hardware
 
 - Sony DualSense (PS5) controller, connected by a USB-C **data** cable. Use wired for assessments: Bluetooth adds latency and jitter.
@@ -101,7 +121,7 @@ uv run python "Controller Data - Zain\maze.py" --player P01 --session 1
 
 Optional game flags include `--seed 42` (repeatable randomized layouts) and
 `--kids` for red decoys in Catch. Each game writes its CSV and JSON session
-files to a `data/` directory under the current working directory. 
+files to a `data/` directory under the current working directory.
 **Garden Rescue** (`garden-v2`) is the combined fixed-course game, about
 60-90 seconds of play in four levels: apple picking (both sticks at once),
 butterfly with the left stick, butterfly with the right stick, and watering
@@ -195,6 +215,19 @@ web/
 | POST | `/participants` | Create a profile `{alias, dominant_hand}` |
 | GET | `/participants/{id}` | One profile |
 | GET | `/participants/{id}/sessions` | Session history with results, newest first |
+| POST | `/participants/{id}/sessions` | Start one game session (`garden-v1` by default) |
+| POST | `/sessions/{id}/samples` | Append up to 500 timestamped four-axis samples |
+| POST | `/sessions/{id}/trials` | Save one prompt/outcome/metrics record |
+| POST | `/sessions/{id}/events` | Append idempotent phase and session events |
+| POST | `/sessions/{id}/complete` | Save summary and mark session complete |
+| POST | `/sessions/{id}/abandon` | Mark an interrupted session abandoned |
+| GET | `/sessions/{id}/data-status` | Verify sample/trial/response/event counts |
+
+Run `backend/schema.sql` against the TigerData service before using these routes.
+`raw_samples.t_ms` is milliseconds from the client session-start clock;
+`raw_samples.time` is reconstructed from the server's session start time. Upload
+sample batches using the same sequence numbers when retrying so the hypertable's
+unique index can ignore duplicate samples.
 
 ## Limitations
 
