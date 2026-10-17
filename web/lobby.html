@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stick Drift 3D Lobby</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: 'Atkinson Hyperlegible', system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      .layer { position: fixed; left: 0; right: 0; pointer-events: none; color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); }
+      #header { top: 0; padding: 8px 16px; background: rgba(0, 0, 0, 0.55); font-size: 15px; }
+      #hud { top: 46px; text-align: center; font-size: 30px; font-weight: 700; }
+      #big { top: 34%; text-align: center; font-size: 56px; font-weight: 700; white-space: pre-line; line-height: 1.15; }
+      #label { position: fixed; pointer-events: none; color: #fff; font-size: 22px; font-weight: 700; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); transform: translate(-50%, 0); }
+      #start { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(10, 14, 12, 0.92); color: #fff; text-align: center; z-index: 5; }
+      #start h1 { margin: 0 0 12px; font-size: 40px; }
+      #start p { margin: 6px 0; font-size: 18px; opacity: 0.85; }
+      #start button { margin-top: 18px; padding: 12px 28px; font-size: 20px; font-family: inherit; border: 0; border-radius: 10px; background: #1f5f8b; color: #fff; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="header" class="layer"></div>
+    <div id="hud" class="layer"></div>
+    <div id="big" class="layer"></div>
+    <div id="label"></div>
+    <div id="start">
+      <div>
+        <h1>Stick Drift 3D Lobby</h1>
+        <p>Connect a PS5 or Xbox controller, press any button, then click Start.</p>
+        <p>Left stick walks. Cross enters a game. O (Circle) goes back to the lobby.</p>
+        <p style="opacity: 0.6">No controller? Keyboard: WASD = left stick, IJKL or arrows = right stick, Space = Cross, O = Circle.</p>
+        <button id="go">Start</button>
+      </div>
+    </div>
+    <script type="module" src="/lobby/main.js"></script>
+  </body>
+</html>
