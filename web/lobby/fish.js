@@ -3,7 +3,7 @@
 // Like trace.py: velocity-controlled cursor, lane tolerance, % on path. Port of the Blender version.
 import * as THREE from 'three'
 import { addSun } from './lights.js'
-import { RETURN_DELAY, TAU, blob, box, catmull, choice, clamp, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, setSegment, sphere, torus, uniform, unitCyl } from './util.js'
+import { RETURN_DELAY, TAU, blob, box, catmull, choice, clamp, shuffle, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, setSegment, sphere, torus, uniform, unitCyl } from './util.js'
 
 const WY0 = 2 // water-plane origin (world y)
 const CAM_POS = new THREE.Vector3(0, -5.5, 5.2)
@@ -16,8 +16,10 @@ const FISH_COL = { A: [0.95, 0.42, 0.08], B: [0.1, 0.55, 0.85] }
 const MAX_PTS = 700
 
 /** A random traceable shape across the water: wave / zigzag / loop / S-curve, randomly flipped. */
-export function makePath(leftToRight) {
-  const kind = choice(['wave', 'zigzag', 'loop', 'scurve'])
+export const KINDS = ['wave', 'zigzag', 'loop', 'scurve', 'arch', 'spiral', 'figure8', 'hairpin']
+
+export function makePath(leftToRight, forcedKind = null) {
+  const kind = forcedKind || choice(KINDS)
   const x0 = -4.2, x1 = 4.2
   const flip = choice([-1, 1])
   let ctrl = []
@@ -43,6 +45,34 @@ export function makePath(leftToRight) {
       ctrl.push([cx + r * Math.cos(a), y0 + r + r * Math.sin(a)])
     }
     ctrl.push([(cx + x1) / 2, y0 + uniform(-0.3, 0.3)], [x1, y0 + uniform(-0.3, 0.3)])
+  } else if (kind === 'arch') { // one big half-ellipse hump
+    const amp = uniform(1.5, 2.3), y0 = uniform(-2.4, 2.4 - amp)
+    for (let k = 0; k <= 14; k++) {
+      const a = Math.PI * (1 - k / 14)
+      ctrl.push([4.2 * Math.cos(a), y0 + amp * Math.sin(a)])
+    }
+  } else if (kind === 'spiral') { // inward spiral that ends in the middle
+    const cx = uniform(-1.2, 1.2), turns = uniform(1.5, 2.0), r0 = uniform(2.2, 2.5)
+    const n = Math.round(turns * 14)
+    for (let k = 0; k <= n; k++) {
+      const a = (k / n) * turns * TAU
+      const rad = r0 - (r0 - 0.55) * (k / n)
+      ctrl.push([cx - rad * Math.cos(a), rad * Math.sin(a)])
+    }
+  } else if (kind === 'figure8') { // lemniscate: crosses itself in the middle
+    const ax = uniform(3.2, 3.9), by = uniform(1.6, 2.2)
+    for (let k = 0; k <= 24; k++) {
+      const t = (k / 24) * TAU
+      ctrl.push([-ax * Math.cos(t), by * Math.sin(t) * Math.cos(t) * 1.6])
+    }
+  } else if (kind === 'hairpin') { // out along the top, a U-turn, and back along the bottom
+    const h = uniform(0.8, 1.3), turn = uniform(2.6, 3.1), yo = uniform(-0.4, 0.4)
+    ctrl.push([x0, yo + h], [(x0 + turn) / 2, yo + h], [turn, yo + h])
+    for (let k = 1; k < 6; k++) {
+      const a = Math.PI / 2 - (Math.PI * k) / 6
+      ctrl.push([turn + h * Math.cos(a), yo + h * Math.sin(a)])
+    }
+    ctrl.push([turn, yo - h], [(x0 + turn) / 2, yo - h], [x0, yo - h])
   } else {
     const s = choice([-1, 1])
     for (let i = 0; i < 5; i++) ctrl.push([x0 + ((x1 - x0) * i) / 4, s * (i % 2 ? -1 : 1) * uniform(0.9, 2.0)])
@@ -214,6 +244,8 @@ export class FishGame {
     this.round = 0
     this.caught = 0
     this.stats = []
+    this.kindQueue = shuffle([...KINDS]) // every trace in a game gets a different shape type
+    this.traceN = 0
     this.clock = 0
     this.timer = 2.8
     this.state = 'intro'
@@ -233,7 +265,7 @@ export class FishGame {
 
   beginTrace(side) {
     this.side = side
-    const { pts, kind } = makePath(side === 'left')
+    const { pts, kind } = makePath(side === 'left', this.kindQueue[this.traceN++ % this.kindQueue.length])
     this.pts = pts
     this.kind = kind
     this.prog = 0
