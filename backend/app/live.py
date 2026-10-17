@@ -219,7 +219,12 @@ def _prune_db():
 
 # ---- end of session -------------------------------------------------------
 
+MODEL = ROOT / "runs" / "tcn" / "model.pt"
+
+
 def _score(folder: str) -> dict:
+    if not MODEL.is_file():
+        raise RuntimeError("the pattern model has not been trained yet; train it to create runs/tcn/model.pt")
     out = subprocess.run([str(GAME_PYTHON), str(SCORER), folder], cwd=ROOT, capture_output=True,
                          text=True, timeout=300)
     if out.returncode != 0:

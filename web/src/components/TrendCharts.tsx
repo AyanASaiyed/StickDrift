@@ -392,9 +392,9 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
             yMax={100}
             format={(v) => `${Math.round(v)}`}
             series={[
-              { label: 'Slowed, smaller movements', color: 'var(--pat-1)', points: scored.map((v) => v.tcn!.scores.parkinson) },
-              { label: 'One-sided difference', color: 'var(--pat-2)', points: scored.map((v) => v.tcn!.scores.stroke) },
-              { label: 'Shake during movement', color: 'var(--pat-3)', points: scored.map((v) => v.tcn!.scores.essential_tremor) },
+              { label: 'Slowed, smaller movements', color: 'var(--pat-1)', points: scored.map((v) => v.tcn!.scores.parkinson ?? null) },
+              { label: 'One-sided difference', color: 'var(--pat-2)', points: scored.map((v) => v.tcn!.scores.stroke ?? null) },
+              { label: 'Shake during movement', color: 'var(--pat-3)', points: scored.map((v) => v.tcn!.scores.essential_tremor ?? null) },
             ]}
           />
         ))}

@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 from tcn.config import HAND_SCORES, SAMPLE_HZ, SCORES, Segment
 from tcn.prepare import prepare
-from tcn.recording import Example, RecordingError
+from tcn.recording import Example, RecordingError, activity_gates
 from tcn.stretch import Stretch, build_stretches
 
 
@@ -104,7 +104,23 @@ def _target(example: Example, stretch: Stretch) -> np.ndarray:
         impairment = min(100.0, parkinson + stroke)
     else:
         impairment = parkinson
-    target = np.asarray([tremor, impairment], dtype=np.float32)
+    diabetes_open, ataxia_open = activity_gates(example.activity)
+    target = np.asarray(
+        [
+            tremor,
+            impairment,
+            _labeled(example.diabetes, diabetes_open),
+            _labeled(example.ataxia, ataxia_open),
+        ],
+        dtype=np.float32,
+    )
     if len(target) != len(HAND_SCORES):
         raise RecordingError("Hand targets do not match the network outputs.")
     return target
+
+
+def _labeled(value: float | None, enabled: bool) -> float:
+    """A score the loss should see. Anything else is NaN, not a filled-in 0."""
+    if value is None or not enabled:
+        return np.float32(np.nan)
+    return np.float32(value)

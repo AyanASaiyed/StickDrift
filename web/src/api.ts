@@ -107,8 +107,9 @@ export interface ResidentRow {
   trend_right_ms: (number | null)[]
 }
 
-export type PatternKey = 'parkinson' | 'stroke' | 'essential_tremor'
-export type PatternScores = Record<PatternKey, number | null>
+export type PatternKey = 'parkinson' | 'stroke' | 'essential_tremor' | 'diabetes' | 'ataxia'
+/** Sessions judged before the model gained `diabetes` and `ataxia` don't have those two. */
+export type PatternScores = Partial<Record<PatternKey, number | null>>
 
 export interface TcnLevel {
   level: string

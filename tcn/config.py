@@ -1,9 +1,12 @@
 """Shared constants for the per-hand pattern model.
 
-Each hand is scored on what remains after its slow path is removed. Parkinson
-is the part of that impairment shared by both hands. Stroke is the gap between
-the hands. Essential tremor is the leftover shake. Scores are resemblance from
-0 to 100, not disease probabilities, and more than one may be high.
+Each hand is scored on what remains after its slow path is removed, and on how
+far the stick sits from that hand's own target. Parkinson is the impairment
+shared by both hands. Stroke is the gap between the hands. Essential tremor is
+the leftover shake. Diabetes is a reach that passes the apple or stops short,
+then corrects. Ataxia is a hand that leaves the butterfly or watering path.
+Scores are resemblance from 0 to 100, not disease probabilities, and more than
+one may be high. They do not sum to 100.
 """
 
 from dataclasses import dataclass
@@ -26,12 +29,19 @@ CHANNELS = (
 )
 
 # One shared network reads these, in this order, for whichever hand is moving.
+# error_along / error_across are the miss in the target's own frame: along is
+# past (positive) or short (negative) of the target, across is off to the side.
+# The apple's direction is not a channel. has_target is 0 when this sample has
+# no target, or when the phase is not cue or track.
 HAND_CHANNELS = (
     "resid_x",
     "resid_y",
     "gyro_x",
     "gyro_y",
     "gyro_z",
+    "error_along",
+    "error_across",
+    "has_target",
     "speed_ratio",
     "amplitude",
     "latency_s",
@@ -40,17 +50,21 @@ HAND_CHANNELS = (
 )
 
 # Network outputs for a single hand. Recording scores are derived from these.
-HAND_SCORES = ("tremor", "impairment")
+HAND_SCORES = ("tremor", "impairment", "diabetes", "ataxia")
 
 # Recording-level scores returned to callers.
-SCORES = ("parkinson", "stroke", "essential_tremor")
+SCORES = ("parkinson", "stroke", "essential_tremor", "diabetes", "ataxia")
+
+# Midpoint of a 0..255 stick byte. Used only when a file has targets but no
+# cursor columns. Played files already store cursor_* in the game's -1..1 space.
+STICK_CENTER = 127.5
 
 HIDDEN = 32
 LEVELS = 6
 KERNEL = 3
 DROPOUT = 0.1
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCORE_MEANING = "0-100 pattern resemblance, not a disease probability"
 
 

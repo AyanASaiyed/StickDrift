@@ -10,7 +10,3 @@ venv/
 # Local project data and context for hreem
 hreem-folder/
 runs/*
-!runs/tcn/
-runs/tcn/*
-!runs/tcn/model.pt
-data/.live-logs/

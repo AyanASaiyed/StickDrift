@@ -45,11 +45,15 @@ export const PATTERN_LABELS: Record<PatternKey, string> = {
   parkinson: "Slowed, smaller movements (both hands)",
   stroke: "One-sided difference between hands",
   essential_tremor: "Shake during movement",
+  diabetes: "Reaches land past or short, then correct",
+  ataxia: "Hand weaves off a moving path",
 };
 export const PATTERN_ORDER: PatternKey[] = [
   "parkinson",
   "stroke",
   "essential_tremor",
+  "diabetes",
+  "ataxia",
 ];
 const LEVEL_NAMES: Record<string, string> = {
   apples: "Apples",

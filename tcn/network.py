@@ -1,9 +1,9 @@
 """Lightweight non-causal temporal convolutional network.
 
 The recording is scored offline, so each layer looks both backward and forward.
-One shared network reads a single hand. Two independent sigmoids produce that
-hand's tremor and impairment scores. Nothing in the head forces those scores
-to add up to 100.
+One shared network reads a single hand. Independent sigmoids produce that
+hand's tremor, impairment, diabetes, and ataxia scores. Nothing in the head
+forces those scores to add up to 100.
 """
 
 import torch

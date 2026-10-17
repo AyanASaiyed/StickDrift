@@ -4,7 +4,7 @@ import { api, type Finding, type GardenSession, type Insights, type ResidentDeta
 import { Assistant } from '../components/Assistant'
 import { ConcernCard, RiskAlert, RiskBadge } from '../components/Insights'
 import { PatternBars } from '../components/LiveCharts'
-import { PATTERN_LABELS, pct, secs } from '../components/liveData'
+import { PATTERN_LABELS, PATTERN_ORDER, pct, secs } from '../components/liveData'
 import { LiveNow } from '../components/LiveNow'
 import { SessionTable } from '../components/SessionTable'
 import { TabPanel, Tabs } from '../components/Tabs'
@@ -256,7 +256,7 @@ function GardenVisits({ visits }: { visits: GardenSession[] }) {
                 <tr key={v.session_id}>
                   <td>{formatDateTime(v.started_at)}</td>
                   <td className="num">{v.levels_completed ?? '—'}/4</td>
-                  {(['parkinson', 'stroke', 'essential_tremor'] as const).map((k) => {
+                  {PATTERN_ORDER.map((k) => {
                     const val = v.tcn?.scores?.[k]
                     return (
                       <td key={k} className={`num ${val != null && val >= 70 ? 'delta-bad' : ''}`}>

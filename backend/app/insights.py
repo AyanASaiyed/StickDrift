@@ -280,6 +280,8 @@ PATTERN_LABELS = {
     "parkinson": "Slowed, smaller movements in both hands",
     "stroke": "One-sided difference between hands",
     "essential_tremor": "Shake during movement",
+    "diabetes": "Reaches land past or short, then correct",
+    "ataxia": "Hand weaves off a moving path",
 }
 
 PATTERN_GUIDE = {
@@ -306,6 +308,24 @@ PATTERN_GUIDE = {
         ["Watch their hands while they reach for a cup and while resting in their lap; note when the shake appears.",
          "Ask about caffeine, stress, cold and recent medication changes.",
          "If the shake is new or getting worse, mention it at the next nursing review."],
+    ),
+    "diabetes": (
+        ["Glasses not worn or vision changes", "Reduced feeling in the fingertips", "A missed meal or low energy",
+         "Unfamiliarity with the game"],
+        ["Ask about numbness, tingling or burning in the fingers or feet, and check the hands and feet for unnoticed "
+         "cuts or sores.",
+         "Check they had their usual meal, and follow any blood-sugar monitoring plan already in their care plan.",
+         "Check the setup: glasses, lighting and screen position.",
+         "Repeat the game in 1-2 days. If reaches keep landing off target, mention it at the next nursing review."],
+    ),
+    "ataxia": (
+        ["Dizziness or feeling unsteady", "A new or changed medication, especially one that causes drowsiness",
+         "Alcohol", "Tiredness"],
+        ["Watch them stand up and walk a few steps; note any unsteadiness and review their falls-risk plan.",
+         "Ask about dizziness, new clumsiness or changes in speech. If any of these are sudden, follow your "
+         "facility's urgent escalation protocol now.",
+         "Review recent medication changes with the pharmacist or prescriber.",
+         "Repeat the game in 1-2 days. If the weaving persists, request a nursing or physician assessment."],
     ),
 }
 
