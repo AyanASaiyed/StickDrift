@@ -50,16 +50,23 @@ export default function CaregiverDashboard() {
       .catch((e: Error) => setError(e.message))
   }, [])
 
-  const atRisk = rows?.filter((r) => r.risk !== 'none') ?? []
+  const atRisk = rows?.filter((r) => r.risk !== 'none').length ?? 0
 
   return (
     <main className="wrap page-pad">
-      <div className="page-head">
-        <div>
-          <p className="step">Care team</p>
-          <h1>Residents</h1>
-        </div>
-      </div>
+      <header className="page-title">
+        <h1>Residents</h1>
+        {rows && (
+          <p className="muted">
+            {rows.length} {rows.length === 1 ? 'resident' : 'residents'} ·{' '}
+            {atRisk > 0 ? (
+              <strong className="text-bad">{atRisk} worth a look</strong>
+            ) : (
+              'nobody flagged right now'
+            )}
+          </p>
+        )}
+      </header>
 
       <LiveNow />
 
@@ -71,21 +78,6 @@ export default function CaregiverDashboard() {
         <p className="muted">Loading…</p>
       ) : (
         <>
-          {atRisk.length > 0 ? (
-            <div className="risk-alert risk-alert-check" role="alert">
-              <strong>
-                {atRisk.length} {atRisk.length === 1 ? 'resident has' : 'residents have'} a potential health concern
-              </strong>
-              <p>
-                {atRisk.map((r) => `${r.display_name} (${r.concerns.map((c) => c.title).join(', ')})`).join(' · ')}
-              </p>
-            </div>
-          ) : (
-            <p className="muted dashboard-summary">
-              {rows.length} {rows.length === 1 ? 'resident' : 'residents'} · none with a potential concern right now.
-            </p>
-          )}
-
           <div className="resident-grid">
             {rows.map((r) => (
               <Link
@@ -108,32 +100,35 @@ export default function CaregiverDashboard() {
                 </div>
                 <Sparkline left={r.trend_left_ms} right={r.trend_right_ms} />
                 {r.risk !== 'none' ? (
-                  <div className="resident-flag">
-                    <span className="flag-dot" aria-hidden /> {r.concerns.map((c) => c.title).join(' · ')}
-                    <ul>
-                      {r.review.reasons.slice(0, 2).map((reason) => (
-                        <li key={reason}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
+                  <p className="resident-flag">
+                    <strong>{r.concerns[0]?.title}</strong>
+                    {r.concerns.length > 1 && <span className="muted"> +{r.concerns.length - 1} more</span>}
+                    {r.review.reasons[0] && <span className="resident-reason">{r.review.reasons[0]}</span>}
+                  </p>
                 ) : (
-                  <div className="resident-ok">In line with usual pattern</div>
+                  <p className="resident-ok">In line with their usual pattern</p>
                 )}
-                <div className="resident-foot muted">
+                <p className="resident-foot muted">
                   {r.last_played_at ? `Last played ${formatDateTime(r.last_played_at)}` : 'Not played yet'}
-                </div>
+                </p>
               </Link>
             ))}
           </div>
 
-          <Assistant
-            suggestions={[
-              'Who needs a check today?',
-              'Summarize everyone’s recent trends.',
-              'Which residents are stable?',
-            ]}
-          />
-          <GardenAnalytics />
+          <details className="tool">
+            <summary>Ask the care assistant</summary>
+            <Assistant
+              suggestions={[
+                'Who needs a check today?',
+                'Summarize everyone’s recent trends.',
+                'Which residents are stable?',
+              ]}
+            />
+          </details>
+          <details className="tool">
+            <summary>Garden recording data</summary>
+            <GardenAnalytics />
+          </details>
         </>
       )}
     </main>

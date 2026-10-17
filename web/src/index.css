@@ -987,3 +987,122 @@ td.num {
 .pattern-levels summary { cursor: pointer; font-weight: 700; color: var(--accent); }
 .pattern-levels table { margin-top: 8px; }
 .garden-status .pulse { background: var(--ok); box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 60%, transparent); }
+
+/* ===== Calmer, roomier caregiver UI ===== */
+.page-title { margin: 8px 0 20px; }
+.page-title h1 { margin: 0 0 4px; font-size: 2rem; }
+.text-bad { color: var(--bad); }
+.panel { box-shadow: 0 1px 2px rgba(20, 30, 40, 0.04); }
+.panel h2 { font-size: 1.2rem; margin: 0 0 8px; }
+.tab-panel > * + *, main > * + .tab-panel { margin-top: 20px; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; margin-bottom: 6px; }
+.panel-head h2 { margin: 0; }
+.panel-lede, .section-note { margin: 0 0 14px; }
+.section-sub { font-size: 0.9rem; font-weight: 400; margin-left: 6px; }
+.key-line { margin: 4px 0 14px; }
+.calm { text-align: left; }
+.calm p { margin: 0; }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { font: inherit; font-weight: 700; color: var(--muted); background: transparent; border: 0; cursor: pointer;
+  padding: 12px 16px; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+.tab:hover { color: var(--ink); }
+.tab-badge { font-size: 0.75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--line) 70%, transparent); color: var(--muted); }
+.tab-badge:empty { display: none; }
+.tabs-tabs { border-bottom: 1px solid var(--line); margin: 20px 0 0; }
+.tabs-tabs .tab { border-bottom: 3px solid transparent; margin-bottom: -1px; border-radius: 8px 8px 0 0; }
+.tabs-tabs .tab.on { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs-pills { gap: 6px; }
+.tabs-pills .tab { padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 0.92rem; }
+.tabs-pills .tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tab-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); display: inline-block; }
+.tabs-pills .tab.on .tab-dot { background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent); }
+
+/* Resident header */
+.resident-head { display: flex; gap: 16px; align-items: center; margin: 6px 0 18px; }
+.resident-head h1 { margin: 0 0 2px; font-size: 1.9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.resident-head p { margin: 0; }
+.avatar-lg { width: 56px; height: 56px; font-size: 1.4rem; flex: none; }
+
+/* Alert strip */
+.risk-alert { flex-direction: row; align-items: center; gap: 14px; padding: 14px 18px; margin: 0 0 4px; border-width: 1px; }
+.risk-alert-check { border-width: 1px; }
+.risk-alert-watch { border-width: 1px; }
+.risk-alert-body { flex: 1; min-width: 0; }
+.risk-alert-body strong { display: block; }
+.risk-alert-body p { margin: 2px 0 0; color: var(--ink); }
+.risk-alert .btn { flex: none; }
+.risk-icon { margin-top: 0; }
+@media (max-width: 640px) { .risk-alert { flex-wrap: wrap; } }
+
+/* At a glance */
+.glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.glance-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.glance-card h3 { margin: 0 0 8px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.glance-card p { margin: 4px 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.glance-card p strong { font-size: 1.15rem; }
+.glance-card p.is-flagged strong { color: var(--bad); }
+.glance-card i, .tile-vals i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+/* Concerns: two columns, details tucked away */
+.concern { padding: 20px 22px; }
+.concern header { margin-bottom: 4px; }
+.concern-summary { margin: 0 0 14px; color: var(--muted); }
+.concern-cols { grid-template-columns: 1fr; gap: 18px; margin: 0; }
+@media (min-width: 820px) { .concern-cols { grid-template-columns: 1fr 1.25fr; } }
+.concern-cols > section { padding: 14px 16px; border-radius: 12px; background: color-mix(in srgb, var(--line) 28%, transparent); }
+.concern-cols > .concern-checks { background: var(--accent-soft); }
+.concern-steady { font-size: 0.88rem; margin: 10px 0 0; }
+.concern details { margin-top: 8px; }
+.concern summary { cursor: pointer; font-weight: 700; color: var(--accent); }
+.concern-more { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.concern-more details { margin: 0; flex: 1 1 260px; }
+.concern-more ul { margin: 8px 0 0; padding-left: 1.2em; font-size: 0.92rem; color: var(--muted); }
+
+/* One chart at a time */
+.chart-single { display: flex; flex-direction: column; gap: 16px; }
+.chart-single .chart { border: 0; padding: 0; }
+.chart-single .chart-alert { border: 0; }
+.chart-single .chart figcaption { margin-bottom: 4px; }
+.chart-findings { margin-top: 14px; }
+
+/* Dashboard */
+.live-idle { display: flex; align-items: center; gap: 8px; color: var(--muted); margin: 0 0 18px; font-size: 0.95rem; }
+.live-idle-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.live-now { display: flex; flex-direction: column; gap: 10px; margin: 0 0 20px; }
+.live-card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--radius); text-decoration: none;
+  color: var(--ink); border: 1px solid var(--bad); background: color-mix(in srgb, var(--bad) 6%, var(--surface)); }
+.live-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 1.05rem; }
+.live-card-text .muted { font-size: 0.92rem; }
+.live-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; color: var(--muted); }
+.live-recent a { color: inherit; text-decoration: none; }
+.live-recent a:hover strong { text-decoration: underline; }
+.resident-grid { gap: 16px; margin-bottom: 24px; }
+.resident-card { padding: 18px 20px; gap: 10px; }
+.resident-flag { margin: 0; display: flex; flex-direction: column; gap: 2px; color: var(--ink); font-weight: 400; }
+.resident-flag strong { color: var(--bad); }
+.resident-reason { font-size: 0.9rem; color: var(--muted); }
+.resident-ok { margin: 0; color: var(--ok); font-weight: 700; font-size: 0.95rem; }
+.resident-foot { margin: 0; font-size: 0.85rem; }
+.tool { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin-bottom: 12px; }
+.tool > summary { cursor: pointer; font-weight: 700; padding: 16px 20px; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.tool > summary::-webkit-details-marker { display: none; }
+.tool > summary::after { content: '+'; font-size: 1.4rem; color: var(--muted); line-height: 1; }
+.tool[open] > summary::after { content: '–'; }
+.tool > .panel { border: 0; box-shadow: none; background: transparent; padding: 0 20px 20px; margin: 0; }
+.tool .assistant-head h2 { display: none; }
+.tool .analytics-head .step { display: none; }
+
+/* Live session */
+.live-grid { grid-template-columns: 1fr; }
+@media (min-width: 980px) { .live-grid { grid-template-columns: 4fr 7fr; align-items: start; } }
+.tile-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.tile { padding: 14px 16px; }
+main.page-pad > .panel, main.page-pad > .glance { margin-bottom: 20px; }
+main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin-top: 20px; }
+@media (max-width: 640px) {
+  .risk-alert-body { flex-basis: calc(100% - 50px); }
+  .risk-alert .btn { width: 100%; }
+}

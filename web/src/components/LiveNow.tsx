@@ -63,55 +63,44 @@ export function LiveNow({ participantId, compact }: { participantId?: string; co
     )
   }
 
+  if (!active.length && !recent.length) {
+    return (
+      <p className="live-idle">
+        <span className="live-idle-dot" aria-hidden /> No one is in the garden right now.
+      </p>
+    )
+  }
+
   return (
-    <section className="panel live-now" aria-label="Live garden sessions">
-      <div className="live-now-head">
-        <h2>Live now</h2>
-        <span className="muted">{active.length ? `${active.length} playing` : 'No one is playing right now'}</span>
-      </div>
-      {active.length > 0 && (
-        <ul className="live-cards">
-          {active.map((b) => (
-            <li key={b.live_id}>
-              <Link className="live-card" to={`/caregiver/live/${b.live_id}`}>
-                <span className="pulse" aria-hidden />
-                <span>
-                  <strong>{b.name}</strong>
-                  <span className="muted">
-                    {SHORT[b.status]}
-                    {b.level ? ` · ${levelName(b.level)}` : ''} · {b.levels_done.length}/4 chapters
-                  </span>
-                </span>
-                <span className="live-card-cta">Watch live →</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+    <section className="live-now" aria-label="Live garden sessions">
+      {active.map((b) => (
+        <Link key={b.live_id} className="live-card" to={`/caregiver/live/${b.live_id}`}>
+          <span className="pulse" aria-hidden />
+          <span className="live-card-text">
+            <strong>{b.name} is in the garden</strong>
+            <span className="muted">
+              {SHORT[b.status]}
+              {b.level ? ` · ${levelName(b.level)}` : ''} · {b.levels_done.length} of 4 chapters
+            </span>
+          </span>
+          <span className="live-card-cta">Watch live →</span>
+        </Link>
+      ))}
       {recent.length > 0 && (
-        <>
-          <h3 className="group-title">Just finished</h3>
-          <ul className="live-cards">
-            {recent.map((b) => {
-              const top = topPattern(b)
-              return (
-                <li key={b.live_id}>
-                  <Link className="live-card live-card-done" to={`/caregiver/live/${b.live_id}`}>
-                    <span>
-                      <strong>{b.name}</strong>
-                      <span className="muted">
-                        {SHORT[b.status]}
-                        {top ? ` · highest pattern: ${top.label.toLowerCase()} ${Math.round(top.value)}/100` : ''}
-                        {b.error && !top ? ` · ${b.error}` : ''}
-                      </span>
-                    </span>
-                    <span className="live-card-cta">Open →</span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        </>
+        <ul className="live-recent" aria-label="Just finished">
+          {recent.slice(0, 2).map((b) => {
+            const top = topPattern(b)
+            return (
+              <li key={b.live_id}>
+                <Link to={`/caregiver/live/${b.live_id}`}>
+                  <strong>{b.name}</strong> · {SHORT[b.status].toLowerCase()}
+                  {top && top.value >= 50 ? ` · ${top.label.toLowerCase()} ${Math.round(top.value)}/100` : ''}
+                  <span className="live-card-cta"> Open →</span>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
       )}
     </section>
   )

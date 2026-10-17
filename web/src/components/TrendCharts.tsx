@@ -1,6 +1,7 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type { Concern, Finding, Insights, MeasureKey, SessionSummary } from '../api'
 import { formatDate } from '../format'
+import { Tabs } from './Tabs'
 
 interface Series {
   label: string
@@ -27,13 +28,14 @@ interface LineChartProps {
   concerns?: Concern[]
   /** Measurements shown in this chart, with their latest-vs-usual change. */
   findings?: Finding[]
+  hidden?: boolean
 }
 
 const W = 720
 const H = 280
 const PAD = { top: 26, right: 20, bottom: 44, left: 60 }
 
-function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recentFrom, concerns, findings }: LineChartProps) {
+function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recentFrom, concerns, findings, hidden }: LineChartProps) {
   const titleId = useId()
   const descId = useId()
   const values = series.flatMap((s) => [
@@ -56,6 +58,7 @@ function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recent
   const labelEvery = Math.max(1, Math.ceil(n / 6))
   const anyFlag = series.some((s) => s.flagged?.some(Boolean))
   const shadeX = recentFrom != null && recentFrom > 0 && recentFrom < n ? x(recentFrom) - step / 2 : null
+  if (hidden) return null
 
   return (
     <figure className={`chart ${anyFlag ? 'chart-alert' : ''}`}>
@@ -190,8 +193,17 @@ function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recent
   )
 }
 
+type ChartKey = 'response' | 'accuracy' | 'gap' | 'enjoyment'
+const CHART_TABS: { key: ChartKey; label: string }[] = [
+  { key: 'response', label: 'Response time' },
+  { key: 'accuracy', label: 'Accuracy' },
+  { key: 'gap', label: 'Left vs right' },
+  { key: 'enjoyment', label: 'Enjoyment' },
+]
+
 /** Caregiver trend charts with the resident's usual level, changed points and linked concerns. */
 export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]; insights: Insights }) {
+  const [view, setView] = useState<ChartKey>('response')
   const usable = sessions
     .filter((s) => s.status === 'completed' && s.quality !== 'invalid')
     .slice()
@@ -225,12 +237,28 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
     concerns: insights.concerns.filter((c) => c.measurements.some((m) => keys.includes(m))),
     findings: keys.map((k) => findings.get(k)).filter((f): f is Finding => f != null),
   })
+  const flagged = new Set<ChartKey>()
+  for (const f of insights.findings) {
+    if (!f.flagged) continue
+    flagged.add(f.key === 'lr_gap' ? 'gap' : f.key === 'enjoyment' ? 'enjoyment' : f.kind === 'latency' ? 'response' : 'accuracy')
+  }
   const common = { xLabels, recentFrom: firstRecent >= 0 ? firstRecent : undefined }
 
   return (
-    <div className="chart-grid-2">
+    <div className="chart-single">
+      <Tabs
+        variant="pills"
+        label="Chart"
+        value={view}
+        onChange={setView}
+        items={CHART_TABS.map((t) => ({
+          ...t,
+          badge: flagged.has(t.key) ? <span className="tab-dot" role="img" aria-label="has a change" /> : null,
+        }))}
+      />
       <LineChart
         {...common}
+        hidden={view !== 'response'}
         {...linked(['left_latency', 'right_latency'])}
         title="Response time"
         caption="How quickly each hand reacted when an arrow reached the top. Lower is quicker."
@@ -254,6 +282,7 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
       />
       <LineChart
         {...common}
+        hidden={view !== 'accuracy'}
         {...linked(['left_accuracy', 'right_accuracy', 'both_accuracy'])}
         title="Accuracy"
         caption="Share of arrows matched correctly each session. Higher is better."
@@ -285,6 +314,7 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
       />
       <LineChart
         {...common}
+        hidden={view !== 'gap'}
         {...linked(['lr_gap'])}
         title="Left–right difference"
         caption="Left-hand minus right-hand response time. A new gap means one hand changed and the other didn't."
@@ -305,6 +335,7 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
       />
       <LineChart
         {...common}
+        hidden={view !== 'enjoyment'}
         {...linked(['enjoyment'])}
         title="Enjoyment"
         caption="How much the resident said they enjoyed the session, from 1 to 5."

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { api, type HandLive, type LiveSample, type LiveSnapshot, type LiveStatus } from '../api'
 import { DiffBars, PatternBars, ReachTrialsChart, RollingChart, StickFields } from '../components/LiveCharts'
 import { handPos, handTarget, levelName, pct, secs } from '../components/liveData'
+import { TabPanel, Tabs } from '../components/Tabs'
 
 const KEEP = 100 * 40
 const DONE: LiveStatus[] = ['finished', 'failed', 'stopped', 'lost']
@@ -78,6 +79,8 @@ export default function LiveSession() {
   const [samples, setSamples] = useState<LiveSample[]>([])
   const [error, setError] = useState<string | null>(null)
   const since = useRef(0)
+  const [chart, setChart] = useState<'distance' | 'tilt'>('distance')
+  const [mTab, setMTab] = useState<'speed' | 'steady' | 'diff'>('speed')
 
   useEffect(() => {
     let stop = false
@@ -199,10 +202,22 @@ export default function LiveSession() {
       )}
 
       <section className="panel">
-        <h2>Right now</h2>
+        <div className="panel-head">
+          <h2>{live ? 'Right now' : 'Last moments'}</h2>
+          <Tabs
+            variant="pills"
+            label="Live chart"
+            value={chart}
+            onChange={setChart}
+            items={[
+              { key: 'distance', label: 'Distance from target' },
+              { key: 'tilt', label: 'Stick tilt' },
+            ]}
+          />
+        </div>
         <div className="live-grid">
           <StickFields samples={samples} />
-          <div className="live-stack">
+          {chart === 'distance' ? (
             <RollingChart
               title="Distance from target"
               caption="How far each stick is from where the game wants it. Lower is closer."
@@ -217,6 +232,7 @@ export default function LiveSession() {
                 return Math.hypot(x - tg[0], y - tg[1])
               }}
             />
+          ) : (
             <RollingChart
               title="Stick tilt"
               caption="How far each stick is pushed from the middle."
@@ -226,7 +242,7 @@ export default function LiveSession() {
               format={(v) => `${Math.round(v * 100)}%`}
               value={(s, h) => Math.min(1, Math.hypot(...handPos(s, h)))}
             />
-          </div>
+          )}
         </div>
         {samples.length === 0 && (
           <p className="muted">Movement appears here once a chapter starts. Story screens and breaks are not recorded.</p>
@@ -234,29 +250,46 @@ export default function LiveSession() {
       </section>
 
       <section className="panel">
-        <h2>Live measurements</h2>
-        <p className="muted">
-          Updated as the resident plays. <span className="key-inline"><i style={{ background: 'var(--hand-left)' }} /> left</span>{' '}
-          <span className="key-inline"><i style={{ background: 'var(--hand-right)' }} /> right</span>
+        <div className="panel-head">
+          <h2>Measurements</h2>
+          <Tabs
+            variant="pills"
+            label="Measurement group"
+            value={mTab}
+            onChange={setMTab}
+            items={[
+              { key: 'speed', label: 'Speed and size' },
+              { key: 'steady', label: 'Steadiness' },
+              { key: 'diff', label: 'Left vs right' },
+            ]}
+          />
+        </div>
+        <p className="muted key-line">
+          <span className="key-inline"><i style={{ background: 'var(--hand-left)' }} /> Left</span>{' '}
+          <span className="key-inline"><i style={{ background: 'var(--hand-right)' }} /> Right</span> · updates as they play
         </p>
-        <h3 className="group-title">Speed and size of movements · apples</h3>
-        <div className="tile-grid">
-          {t.speed.map((x) => (
-            <Tile key={x.label} label={x.label} left={x.vals[0]} right={x.vals[1]} hint={x.hint} />
-          ))}
-        </div>
-        <ReachTrialsChart trials={reachTrials} />
-        <h3 className="group-title">Steadiness and tracking · butterfly and watering</h3>
-        <div className="tile-grid">
-          {t.steady.map((x) => (
-            <Tile key={x.label} label={x.label} left={x.vals[0]} right={x.vals[1]} hint={x.hint} />
-          ))}
-        </div>
-        <h3 className="group-title">Left–right difference</h3>
-        <DiffBars diff={snap.metrics.left_right_difference_pct} />
+        <TabPanel>
+          {mTab === 'speed' && (
+            <>
+              <div className="tile-grid">
+                {t.speed.map((x) => (
+                  <Tile key={x.label} label={x.label} left={x.vals[0]} right={x.vals[1]} hint={x.hint} />
+                ))}
+              </div>
+              <ReachTrialsChart trials={reachTrials} />
+            </>
+          )}
+          {mTab === 'steady' && (
+            <div className="tile-grid">
+              {t.steady.map((x) => (
+                <Tile key={x.label} label={x.label} left={x.vals[0]} right={x.vals[1]} hint={x.hint} />
+              ))}
+            </div>
+          )}
+          {mTab === 'diff' && <DiffBars diff={snap.metrics.left_right_difference_pct} />}
+        </TabPanel>
         <p className="hint">
-          These describe movement during this session only. Comparing with the resident’s earlier visits is what shows a
-          real change.
+          These describe movement during this session only. Comparing with earlier visits is what shows a real change.
         </p>
       </section>
     </main>
