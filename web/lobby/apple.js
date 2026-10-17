@@ -3,6 +3,7 @@
 import * as THREE from 'three'
 import { addSun } from './lights.js'
 import { MAX_STARS, record } from './scores.js'
+import { sfx } from './audio.js'
 import { RETURN_DELAY, blob, box, clamp, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, sphere, torus, uniform, choice } from './util.js'
 
 const APPLE_TIME = 15, COUNTDOWN = 3
@@ -85,6 +86,7 @@ export class AppleGame {
     this.score = { red: 0, blue: 0 }
     this.wrong = 0
     this.rec = null
+    this.lastCd = null
     this.pos = { red: [...HAND_START.red], blue: [...HAND_START.blue] }
     this.carry = { red: null, blue: null }
     this.apples = []
@@ -137,6 +139,7 @@ export class AppleGame {
     ob.visible = true
     this.apples.push({ ob, color, state: 'hang', born: this.t, x, y: 0, z, vz: 0, wob: -9, s: 0, tx: 0, ty: 0, rest: 0 })
     lc.push(color)
+    sfx.spawn()
   }
 
   release(a) {
@@ -160,6 +163,7 @@ export class AppleGame {
     this.t += dt
     if (this.phase === 'countdown' && this.t >= 0) {
       this.phase = 'play'
+      sfx.go()
       this.big = 'GO!'
     }
     if (this.phase === 'play' && this.t >= APPLE_TIME) {
@@ -167,11 +171,20 @@ export class AppleGame {
       for (const c of names) this.carry[c] = null
       for (const a of this.apples) if (a.state === 'hang' || a.state === 'carried') a.state = 'gone'
     }
-    if (this.phase === 'countdown') this.big = String(Math.ceil(-this.t))
+    if (this.phase === 'countdown') {
+      this.big = String(Math.ceil(-this.t))
+      if (this.big !== this.lastCd) {
+        this.lastCd = this.big
+        sfx.tick()
+      }
+    }
     else if (this.phase === 'play' && this.t > 0.8) this.big = ''
     else if (this.phase === 'done') {
       // save once the last apple has landed in the basket, so the score is final
-      if (!this.rec && !this.apples.some((a) => a.state === 'fall')) this.rec = record('apple', { score: this.points(), stars: this.stars() })
+      if (!this.rec && !this.apples.some((a) => a.state === 'fall')) {
+        this.rec = record('apple', { score: this.points(), stars: this.stars() })
+        sfx.result(this.stars(), this.rec.isNewBest)
+      }
       this.big = ''
     }
 
@@ -188,11 +201,13 @@ export class AppleGame {
           if (a.color === c) {
             a.state = 'carried'
             this.carry[c] = a
+            sfx.pick()
             break
           }
           if (this.t - a.wob > 0.7) { // wrong glove: the apple just shakes
             a.wob = this.t
             this.wrong++
+            sfx.wrong()
           }
         }
       }
@@ -221,6 +236,7 @@ export class AppleGame {
           a.z = a.rest
           a.state = 'in'
           this.score[a.color]++
+          sfx.drop()
         }
       } else if (st === 'gone') {
         a.s -= Math.min(a.s, 8 * dt)

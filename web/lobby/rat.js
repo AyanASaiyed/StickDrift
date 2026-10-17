@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { addSun } from './lights.js'
 import { MAX_STARS, record } from './scores.js'
+import { sfx } from './audio.js'
 import { RETURN_DELAY, box, choice, clamp, cyl, makeHand, mat, mergeStatic, ownMat, perspectiveCam, setLens, shuffle, sphere, uniform } from './util.js'
 
 const TYPES = [
@@ -152,6 +153,7 @@ export class RatGame {
     const others = TYPES.map((x) => x.key).filter((k) => k !== t)
     this.runs = shuffle([t, t, choice(others), choice(others)])
     this.runI = 0
+    sfx.card()
     this.caughtThis = false
     for (const [k, c] of Object.entries(this.cards)) c.visible = k === t
     this.cardName = this.name(t)
@@ -171,6 +173,7 @@ export class RatGame {
     ob.scale.setScalar(1.8)
     ob.rotation.set(0, 0, Math.PI)
     this.state = 'run'
+    sfx.squeak()
   }
 
   endRun() {
@@ -195,6 +198,7 @@ export class RatGame {
     for (const c of Object.values(this.cards)) c.visible = false
     this.cardName = ''
     this.rec = record('rat', { score: this.points(), stars: this.stars() })
+    sfx.result(this.stars(), this.rec.isNewBest)
     this.bigText = ''
   }
 
@@ -228,6 +232,7 @@ export class RatGame {
   }
 
   impact() {
+    sfx.slam()
     const hit = this.state === 'run' && Math.abs(this.ratX) < HIT_HALF ? this.rat : null
     if (hit && hit === this.targets[this.round]) {
       this.ok = true
@@ -239,12 +244,17 @@ export class RatGame {
       this.state = 'squash'
       this.timer = 0.9
       this.setHandColor('ok')
+      sfx.ratOk()
     } else {
       this.shake = true
       if (hit) {
         this.stats.wrong++
+        sfx.ratWrong()
         this.hop = 0.35 // the wrong rat hops out of the way
-      } else this.stats.empty++
+      } else {
+        this.stats.empty++
+        sfx.whiff()
+      }
     }
   }
 

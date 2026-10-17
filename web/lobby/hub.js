@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import { addSun } from './lights.js'
 import { bestFor } from './scores.js'
+import { sfx } from './audio.js'
 import { TAU, blob, box, clamp, cyl, mat, mergeStatic, rng, sphere, textSprite, torus } from './util.js'
 
 const HALF_X = 9.6, HALF_Y = 6.1
@@ -267,13 +268,16 @@ export class Hub {
       this.heading += diff * Math.min(1, 14 * dt)
       root.rotation.z = this.heading
       this.walk += dt * 11 * Math.max(mag, 0.4)
+      sfx.step()
     } else this.walk *= 0.8
     const swing = moving ? Math.sin(this.walk) * 0.7 : 0
     this.grandma.arms.forEach((a, i) => (a.rotation.y = i ? swing : -swing))
     this.grandma.legs.forEach((l, i) => (l.rotation.y = i ? -swing : swing))
     this.grandma.body.position.z = moving ? Math.abs(Math.sin(this.walk)) * 0.06 : 0
 
+    const before = this.near
     this.near = PORTALS.find((q) => Math.hypot(p.x - q.x, p.y - q.y) < PORTAL_R) || null
+    if (this.near && this.near !== before) sfx.padEnter()
     for (const pt of this.portals) {
       const near = this.near === pt.p
       pt.crystal.rotation.z = this.clock * (near ? 2.2 : 0.9)
