@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  getGardenTimeline,
-  listGardenRecordings,
+  api,
   type GardenRecording,
   type GardenSecond,
 } from '../api'
@@ -28,7 +27,7 @@ export function GardenAnalytics() {
 
   const refresh = useCallback(() => {
     setError(null)
-    listGardenRecordings()
+    api.gardenRecordings()
       .then((rows) => {
         setRecordings(rows)
         setSelectedId((current) => current && rows.some((row) => row.session_id === current)
@@ -46,7 +45,7 @@ export function GardenAnalytics() {
     }
     let cancelled = false
     setTimeline(null)
-    getGardenTimeline(selectedId)
+    api.gardenTimeline(selectedId)
       .then((rows) => { if (!cancelled) setTimeline(rows) })
       .catch((cause: Error) => { if (!cancelled) setError(cause.message) })
     return () => { cancelled = true }

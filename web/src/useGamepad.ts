@@ -26,7 +26,7 @@ const DISCONNECTED: GamepadState = {
 // Sony vendor 054c, DualSense product 0ce6 (DualSense Edge is 0df2).
 const isDualSense = (id: string) => /dualsense|054c.*(0ce6|0df2)/i.test(id)
 
-const axis = (v: number | undefined) => (Number.isFinite(v) ? v! : 0)
+const round = (v: number | undefined) => Math.round((v ?? 0) * 100) / 100
 
 /**
  * Polls the first connected gamepad once per animation frame.
@@ -46,11 +46,10 @@ export function useGamepad(): GamepadState {
           id: pad.id,
           isDualSense: isDualSense(pad.id),
           standardMapping: pad.mapping === 'standard',
-          // Preserve the browser's full axis precision for the assessment log.
-          lx: axis(pad.axes[0]),
-          ly: axis(pad.axes[1]),
-          rx: axis(pad.axes[2]),
-          ry: axis(pad.axes[3]),
+          lx: round(pad.axes[0]),
+          ly: round(pad.axes[1]),
+          rx: round(pad.axes[2]),
+          ry: round(pad.axes[3]),
         }
         const same = (Object.keys(next) as (keyof GamepadState)[]).every((k) => next[k] === prev[k])
         return same ? prev : next

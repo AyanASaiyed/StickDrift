@@ -5,11 +5,12 @@ from typing import Any, List, Literal, Optional
 from uuid import UUID, uuid4
 
 import psycopg
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from psycopg.types.json import Jsonb
 
+from . import assistant, auth, games, views
 from .db import pool
 
 
@@ -26,7 +27,12 @@ app.add_middleware(
     allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,  # the login cookie needs this on cross-origin calls
 )
+app.include_router(auth.router)
+app.include_router(views.router)
+app.include_router(games.router)
+app.include_router(assistant.router)
 
 
 class ParticipantIn(BaseModel):
@@ -409,7 +415,7 @@ def session_data_status(session_id: UUID):
 
 
 @app.get('/garden/recordings', response_model=List[GardenRecording])
-def garden_recordings(limit: int = 100):
+def garden_recordings(limit: int = 100, _: dict = Depends(auth.current_caregiver)):
     with pool.connection() as conn:
         return conn.execute(
             """SELECT s.session_id, i.source_group, i.sample_count, s.started_at,
@@ -424,7 +430,7 @@ def garden_recordings(limit: int = 100):
 
 
 @app.get('/sessions/{session_id}/garden-timeline', response_model=List[GardenSecond])
-def garden_timeline(session_id: UUID):
+def garden_timeline(session_id: UUID, _: dict = Depends(auth.current_caregiver)):
     with pool.connection() as conn:
         exists = conn.execute(
             'SELECT 1 FROM garden_imports WHERE session_id = %s', (session_id,)
