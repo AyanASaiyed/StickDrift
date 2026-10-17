@@ -122,21 +122,43 @@ uv run python "Controller Data - Zain\maze.py" --player P01 --session 1
 Optional game flags include `--seed 42` (repeatable randomized layouts) and
 `--kids` for red decoys in Catch. Each game writes its CSV and JSON session
 files to a `data/` directory under the current working directory.
-**Garden Rescue** (`garden-v2`) is the combined fixed-course game, about
-60-90 seconds of play in four levels: apple picking (both sticks at once),
-butterfly with the left stick, butterfly with the right stick, and watering
-(both sticks at once). Right-stick targets mirror the left. The course is
-identical every run; `--label` only tags the output folder.
+**Mabel's Moonflower Garden** (`garden-v3`) is the combined garden game. Help
+Mabel host a picnic: guide Pip and Poppy to apples for a tart, invite butterflies
+through the meadow, and wake the moonflowers. The story ends at an evening
+picnic. Shaded 3D character, bird, cottage and tree meshes are rendered into
+cached artwork using a fixed orthographic camera. The presentation is 2.5D;
+stick movement remains on the original two-dimensional task plane.
+
+The four chapters retain apple picking with both sticks, a left-stick flight,
+a right-stick flight, and watering with both sticks. Right-stick targets mirror
+the left. Apple time allowance is now 12 seconds per pair; do not mix v2 and v3
+sessions into one baseline. `--label` tags output without changing the course.
 
 ```powershell
-uv run python "Controller Data - Zain\Games\garden.py" --player Zain --session 1 --label normal
-uv run python "Controller Data - Zain\Games\garden.py" --player Zain --session 2 --label shaky --level butterfly_left
+uv run python "Controller Data - Zain\Games\garden.py" --player P01 --session 1 --fullscreen
+uv run python "Controller Data - Zain\Games\garden.py" --demo --mute
 ```
+
+For the local backend Python environment used during development:
+
+```powershell
+.\backend\.venv\Scripts\python.exe "Controller Data - Zain\Games\garden.py" --demo
+```
+
+The game requires `pygame-ce` and `hidapi` (already listed in the root project).
+No separate 3D engine or asset download is required. All art is built locally.
+
+**Sticks only:** release then hold either stick UP to advance a story note.
+Move both sticks to discover your birds. Hold both sticks OUTWARD for a break;
+at the bench, hold either UP to resume or DOWN to finish early. Releasing the
+stick brings a bird home with its apple. Menus show the hold progress and wait
+for you. `--reduced-motion` stills decorative motion; `--mute` disables sound.
+`--demo` uses WASD and arrow keys and labels the session as synthetic.
 
 Each run writes a folder:
 
 ```
-data/garden_Zain_normal_s1_<stamp>/
+data/garden_P01_unlabeled_s1_<stamp>/
   session.json                       calibration, levels completed, column notes
   level_1_apples/controller_data.csv + level.json
   level_2_butterfly_left/...
@@ -149,8 +171,19 @@ screens and breaks are not recorded). Every HID report is a row: the
 `Example PS5 Data.csv` columns, then `label, level, trial, hand, phase,
 t_trial`, the target and unsmoothed normalized cursor for each stick,
 `reached_l, reached_r` and `t_wall`. `level.json` holds that level's exact
-targets and per-trial results. Cross continues, Options takes a break, Esc
-quits and still saves; `--mute` turns off sounds.
+targets and per-trial results. Space/Enter, P and Esc remain optional facilitator
+shortcuts. The game still exports CSV/JSON locally; TigerData upload is separate.
+
+Headless checks and visual previews:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m unittest discover -s tests -p test_garden_story.py
+.\backend\.venv\Scripts\python.exe "Controller Data - Zain\Games\garden.py" --preview "hreem-folder\garden-preview" --mute
+```
+
+The redesign decisions and outstanding playtest questions are in
+`design/ux/moonflower-garden.md`. The requested `3d-games` skill is installed at
+`.claude/skills/3d-games/SKILL.md`; its source is pinned in `skills-lock.json`.
 
 To test controller input separately, run:
 
@@ -196,7 +229,10 @@ Context.MD                   Project context, guardrails, current build state, d
 Controller Data - Zain/
   read_data.py               DualSense reader over HID (~500 Hz): live viewer + CSV recording
   Example PS5 Data.csv       Sample recording
-  Games/garden.py            Garden Rescue: fixed four-level game, full-rate CSV per level folder
+  Games/garden.py            Garden tasks and full-rate CSV recording, garden-v3 launcher
+  Games/garden_story.py      Mabel's story, stick-only menus, illustration and accessibility options
+  Games/garden_3d.py         Mesh geometry, lighting and cached orthographic 3D rendering
+  Games/garden_diorama.py    3D artwork integration with the existing interaction/recording model
 backend/
   schema.sql                 Tiger Data tables (participants, sessions, results, trials, raw samples)
   app/main.py                API: profiles and session history

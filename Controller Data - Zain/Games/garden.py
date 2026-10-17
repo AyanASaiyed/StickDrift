@@ -1,10 +1,11 @@
 """
-garden.py - Garden Rescue (garden-v2): a short garden story played with both thumbsticks.
+garden.py - Mabel's Moonflower Garden (garden-v3), played with both thumbsticks.
 
 Run:  python garden.py --player P01 --session 1 --label normal [--level apples] [--mute] [--fullscreen]
-Keys: Cross (or Space) = continue, Options (or P) = take a break, Esc = quit. Files are always saved.
+Sticks: hold either UP to continue; hold both OUTWARD to rest; DOWN at the bench to finish.
+Optional facilitator keys: Space/Enter = continue, P = break, Esc = quit. Files are saved.
 
-Four short levels, about 60-90 s of play:
+Four garden chapters, with generous time for collecting apples:
   1 apples           both sticks at once, mirrored apples on two trees
   2 butterfly_left   follow a butterfly with the left stick
   3 butterfly_right  the same flight, mirrored, with the right stick
@@ -37,7 +38,7 @@ import pygame
 
 from read_data import CSV_HEADER, Reader, parse, to_row
 
-PROTOCOL = "garden-v2"
+PROTOCOL = "garden-v3"
 LEVELS = ("apples", "butterfly_left", "butterfly_right", "water")
 
 W, H = 1280, 720
@@ -58,7 +59,7 @@ START_MAX = 3.0
 NEAR, FAR = 0.40, 0.60      # NEAR - APPLE_R must stay above REST_R, or a pick and return happen at once
 APPLES = [(270, FAR), (180, NEAR), (135, FAR), (315, NEAR), (90, NEAR), (225, FAR)]
 APPLE_R = 0.18              # reach radius
-APPLE_TIMEOUT = 5.0         # s per apple pair
+APPLE_TIMEOUT = 12.0        # generous pacing; versioned separately from garden-v2
 APPLE_ITI = 0.8             # minimum s between pairs
 
 # Butterfly, left-stick space: r = R0 + RA*sin(LOBES*theta), theta = 2*pi*t/LAP. One lap.
@@ -84,18 +85,20 @@ EXTRA_HEADER = ["label", "level", "trial", "hand", "phase", "t_trial",
                 "reached_l", "reached_r", "t_wall"]
 
 CARDS = {
-    "apples": ["The apples are ripe!", "Use both sticks to reach an apple on each tree,",
-               "then bring them back to the baskets."],
-    "butterfly_left": ["A butterfly came to visit", "Follow it with your net", "using the LEFT stick."],
-    "butterfly_right": ["Here it comes again", "This time, follow it", "with the RIGHT stick."],
-    "water": ["Time to water the flowers", "Use both sticks to keep each watering can",
-              "under its little rain cloud."],
+    "apples": ["An apple tart to share", "Pip and Poppy know where the sweetest apples grow.",
+               "Guide each bird to an apple. Let go to bring it home."],
+    "butterfly_left": ["An invitation on the breeze", "A butterfly will show Pip the way through the meadow.",
+                       "Use the LEFT stick to fly alongside your guest."],
+    "butterfly_right": ["One more friend to invite", "Poppy has spotted another visitor by the cottage.",
+                        "Use the RIGHT stick to follow its gentle flight."],
+    "water": ["A little rain, a little magic", "The moonflowers need a drink before our picnic.",
+              "Move BOTH birds beneath the clouds to tend the garden."],
 }
 CHEERS = {
-    "apples": "The baskets are full of apples!",
-    "butterfly_left": "The butterfly loved that!",
-    "butterfly_right": "What a lovely flight!",
-    "water": "The flowers are blooming!",
+    "apples": "There is always room at Mabel's table.",
+    "butterfly_left": "A new friend knows the way.",
+    "butterfly_right": "The garden is lovely with company.",
+    "water": "Time to put the kettle on.",
 }
 
 
@@ -328,7 +331,7 @@ class Game:
         self.levels = LEVELS if args.level == "all" else (args.level,)
 
         self.rec = Recorder(args.label)
-        self.reader = GardenReader(self.rec.sample)
+        self.reader = self.make_reader()
         self.reader.start()
 
         pygame.mixer.pre_init(44100, -16, 1, 512)
@@ -375,6 +378,9 @@ class Game:
         }
 
     # ------------------------------------------------------------ loop helpers
+    def make_reader(self):
+        return GardenReader(self.rec.sample)
+
     def now(self):
         return self.rec.active()
 
@@ -854,7 +860,8 @@ class Game:
             self.meet_helpers()
             for lv in self.levels:
                 self.run_level(lv)
-            self.card(["Your garden is in full bloom", "Thank you for your help today."], prompt="Press X to finish")
+            self.card(["A lovely evening together", "The kettle is on. Your friends are here.",
+                       "Thank you for spending a little time in the garden."], prompt="Finish")
             completed = True
         except (QuitGame, KeyboardInterrupt):
             print("Stopped early.")
@@ -870,7 +877,7 @@ class Game:
 
 
 def main():
-    p = argparse.ArgumentParser(description="Garden Rescue (garden-v2)")
+    p = argparse.ArgumentParser(description="Mabel's Moonflower Garden (garden-v3)")
     p.add_argument("--player", default="anon", help="player ID (default anon)")
     p.add_argument("--session", type=int, default=1, help="session number (default 1)")
     p.add_argument("--label", default="unlabeled",
@@ -878,7 +885,16 @@ def main():
     p.add_argument("--level", choices=("all",) + LEVELS, default="all", help="play one level only")
     p.add_argument("--mute", action="store_true", help="no sounds")
     p.add_argument("--fullscreen", action="store_true")
-    Game(p.parse_args()).run()
+    p.add_argument("--demo", action="store_true", help="synthetic keyboard input: WASD and arrow keys")
+    p.add_argument("--reduced-motion", action="store_true", help="still scenery and fewer visual effects")
+    p.add_argument("--preview", metavar="DIRECTORY", help="save art previews without playing or recording")
+    from garden_diorama import DioramaGame
+    args = p.parse_args()
+    game = DioramaGame(args)
+    if args.preview:
+        game.preview(args.preview)
+    else:
+        game.run()
 
 
 if __name__ == "__main__":
