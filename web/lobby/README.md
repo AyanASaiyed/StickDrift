@@ -1,0 +1,26 @@
+# 3D lobby (browser version)
+
+A three.js port of the Blender lobby in `../blender_hub`: grandma walks a top-down arena to three pads, each
+opening a first-person game. No Blender needed - just a browser and (ideally) a PS5/Xbox controller.
+
+```bash
+cd web
+npm install
+npm run dev        # then open http://localhost:5173/lobby.html
+```
+
+`npm run build` also emits `dist/lobby.html` next to the main app.
+
+| File | What it is |
+|---|---|
+| `main.js` | renderer, game switching, overlay text |
+| `input.js` | Gamepad API (+ keyboard fallback) -> the same stick/button model the Blender version used |
+| `hub.js` | the lobby, grandma, orbit camera |
+| `apple.js` / `fish.js` / `rat.js` | Games 1-3 (Apple Picking, Harbour Fishing, Rat Catching) |
+| `util.js`, `lights.js` | shared low-poly helpers, static-mesh merging, sun |
+
+Controls: left stick walk, right stick orbit/tilt the camera, L1/R1 zoom, Triangle follow/overview, Cross enter a game,
+**O (Circle) leaves a game** (games also return on their own 3 s after the results). Rat Catching: flick either stick up.
+Chrome and Edge read PS5 pads best; press any button once so the browser exposes the controller.
+
+Keyboard fallback (no pad): WASD = left stick, IJKL or arrows = right stick, Space = Cross, O = Circle, T = Triangle, Q/E = L1/R1.
