@@ -1,3 +1,9 @@
 data/
 pycache/
 __pycache__/
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
