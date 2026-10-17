@@ -11,6 +11,10 @@ So TigerData is read only to fill a gap or to fetch session state (at most
 every STATE_DEBOUNCE_S, and every REFRESH_S so a vanished game shows as lost),
 no matter how many caregivers are watching.
 
+If the resident's API sends no notifications (it runs older code, or NOTIFY
+is unavailable), a session that is still playing is read here every POLL_S
+instead, once for all viewers, so the view stays live either way.
+
 Messages sent to the browser, all JSON:
   {"type": "snapshot", ...state, "samples": [...]}   once, on connect
   {"type": "samples", "samples": [...]}              new samples, in order
@@ -40,6 +44,8 @@ SNAPSHOT_LIMIT = 2000   # samples sent on connect (~20 s at 100 Hz)
 GAP_LIMIT = 4000        # most samples fetched to fill one gap
 STATE_DEBOUNCE_S = 0.25
 REFRESH_S = 5
+POLL_S = 0.15           # catch-up read interval when notifications are not arriving
+QUIET_S = 1.0           # a playing session with no notification for this long is read directly
 QUEUE_MAX = 400         # messages a slow viewer may fall behind before it is told to resync
 ALLOWED_ORIGINS = {o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()}
 
@@ -59,6 +65,9 @@ class Watch:
         self.fetch_lock = asyncio.Lock()
         self.state_due = False
         self.refresher: Optional[asyncio.Task] = None
+        self.playing = False                 # the session is still running (from its latest state)
+        self.last_samples = time.monotonic()  # when samples last arrived by notification
+        self.last_state = time.monotonic()    # when a state notification last arrived
 
 
 class Hub:
@@ -110,10 +119,13 @@ class Hub:
         if w is None:
             return
         if "s" in msg:
+            w.last_samples = time.monotonic()
             self._take(w, msg["s"])
         elif "q" in msg:
+            w.last_samples = time.monotonic()
             asyncio.create_task(self._fill(w))
         elif "st" in msg:
+            w.last_state = time.monotonic()
             self._state_soon(w)
 
     def _take(self, w: Watch, rows: List[list]):
@@ -131,6 +143,8 @@ class Hub:
             self._send(w, {"type": "samples", "samples": fresh})
 
     async def _fill(self, w: Watch):
+        if w.fetch_lock.locked():
+            return  # a read is already under way; it will pick these up
         async with w.fetch_lock:
             if w.seq is None:
                 return
@@ -154,12 +168,24 @@ class Hub:
             log.exception("Reading live state failed")
             return
         if st is not None:
+            w.playing = st["status"] in live.ACTIVE
             self._send(w, {"type": "state", **st})
 
     async def _refresh(self, w: Watch):
+        """Keep state fresh, and read samples directly while notifications are not arriving."""
+        last_push = time.monotonic()
         while True:
-            await asyncio.sleep(REFRESH_S)
-            await self._push_state(w)
+            await asyncio.sleep(POLL_S)
+            now = time.monotonic()
+            try:
+                if w.playing and now - w.last_samples > QUIET_S:
+                    await self._fill(w)
+                quiet_state = w.playing and now - w.last_state > QUIET_S
+                if now - last_push >= (1.0 if quiet_state else REFRESH_S):
+                    last_push = now
+                    await self._push_state(w)
+            except Exception:
+                log.exception("Live catch-up read failed")
 
     def _resync_all(self):
         for w in self.watches.values():
@@ -187,8 +213,9 @@ class Hub:
         w.clients.add(q)
         return w
 
-    def started(self, w: Watch, seq: int):
+    def started(self, w: Watch, seq: int, status: str):
         """A viewer has its snapshot up to `seq`; begin streaming after it."""
+        w.playing = status in live.ACTIVE
         if w.seq is None:
             w.seq = seq
             early, w.early = w.early, []
@@ -235,7 +262,7 @@ async def live_socket(ws: WebSocket, live_id: UUID):
             return
         samples = await asyncio.to_thread(live.samples_since, live_id, 0, SNAPSHOT_LIMIT)
         await ws.send_text(_dump({"type": "snapshot", **st, "samples": samples}))
-        hub.started(w, samples[-1][0] if samples else st["seq"])
+        hub.started(w, samples[-1][0] if samples else st["seq"], st["status"])
 
         async def pump():
             while True:
