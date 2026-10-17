@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import { addSun } from './lights.js'
 import { record } from './scores.js'
+import { sfx } from './audio.js'
 import { RETURN_DELAY, TAU, blob, box, catmull, choice, clamp, shuffle, cyl, makeHand, mat, mergeStatic, perspectiveCam, rng, setLens, setSegment, sphere, torus, uniform, unitCyl } from './util.js'
 
 const WY0 = 2 // water-plane origin (world y)
@@ -11,7 +12,11 @@ const CAM_POS = new THREE.Vector3(0, -5.5, 5.2)
 const LANE_HALF = 0.5, LANE_VIS = 0.42, LANE_STEP = 0.15
 const CURSOR_SPEED = 3.2, LEAD = 8
 const ROUNDS = 3
-const WATER_X = 4.8, WATER_Y = 2.9
+const WATER_X = 4.8, WATER_Y = 2.9 // shapes are designed inside +-WATER_X / +-WATER_Y ...
+// ... then moved into the band of water that is clear of the bucket, the gloves and the top bar on a wide screen:
+// wy -0.9 .. 4.2, centred on 1.65 (the middle of the view). The cursor is kept inside the same band.
+const LANE_CY = 1.65, LANE_SY = 0.88
+const CUR_Y0 = LANE_CY - LANE_SY * WATER_Y, CUR_Y1 = LANE_CY + LANE_SY * WATER_Y
 const BUCKET = [0, -2.5, 1.85]
 const FISH_COL = { A: [0.95, 0.42, 0.08], B: [0.1, 0.55, 0.85] }
 const MAX_PTS = 700
@@ -96,7 +101,7 @@ export function makePath(leftToRight, forcedKind = null) {
       acc = 0
     }
   }
-  return { pts: pts.slice(0, MAX_PTS - 1), kind }
+  return { pts: pts.slice(0, MAX_PTS - 1).map(([x, y]) => [x, LANE_CY + LANE_SY * y]), kind }
 }
 
 function buildFish(rgb) {
@@ -275,6 +280,7 @@ export class FishGame {
     this.off = false
     this.tTrace = 0
     this.state = 'trace'
+    sfx.cast()
     this.banner = 1.6
     this.ribbon(this.lane, pts, null, 0.04)
     this.ribbon(this.done, pts, 0, 0.06)
@@ -312,7 +318,7 @@ export class FishGame {
       if (this.banner < 0) this.bigText = ''
       const cur = this.cur
       cur[0] = clamp(cur[0] + stick[0] * CURSOR_SPEED * dt, -WATER_X, WATER_X)
-      cur[1] = clamp(cur[1] + stick[1] * CURSOR_SPEED * dt, -WATER_Y, WATER_Y)
+      cur[1] = clamp(cur[1] + stick[1] * CURSOR_SPEED * dt, CUR_Y0, CUR_Y1)
       const n = this.pts.length
       let best = this.prog
       for (let k = this.prog + 1; k < Math.min(this.prog + 14, n); k++) { // advance along the shape in order
@@ -320,12 +326,16 @@ export class FishGame {
       }
       if (best > this.prog) {
         this.prog = best
+        sfx.progress(this.prog / this.pts.length)
         this.ribbon(this.done, this.pts, this.prog, 0.06)
       }
       let near = Infinity
       for (let k = Math.max(0, this.prog - 5); k < Math.min(n, this.prog + 14); k++) near = Math.min(near, Math.hypot(this.pts[k][0] - cur[0], this.pts[k][1] - cur[1]))
       const off = near > LANE_HALF
-      if (off && !this.off) this.offCount++
+      if (off && !this.off) {
+        this.offCount++
+        sfx.offLane()
+      }
       this.off = off
       this.frames++
       if (!off) this.onFrames++
@@ -337,11 +347,13 @@ export class FishGame {
           this.state = 'switch'
           this.timer = 1.4
           this.bigText = 'Hooked one!\nNow the RIGHT hand'
+          sfx.hooked()
         } else {
           this.state = 'capture'
           this.timer = 1.8
           this.capFrom = { left: this.fishPos.left.clone(), right: this.fishPos.right.clone() }
           this.bigText = 'Caught!'
+          sfx.splash()
         }
       }
     } else if (this.state === 'switch') {
@@ -360,6 +372,7 @@ export class FishGame {
         if (qs >= 1 && this.fish[s].visible) {
           this.fish[s].visible = false
           this.caught++
+          sfx.drop()
         }
       })
       if (this.timer <= 0) {
@@ -411,6 +424,7 @@ export class FishGame {
     this.state = 'done'
     this.timer = 0
     this.rec = record('fish', { score: this.points(), stars: this.stars() })
+    sfx.result(this.stars(), this.rec.isNewBest)
     this.bigText = ''
     this.lure.material = this.matOn
   }

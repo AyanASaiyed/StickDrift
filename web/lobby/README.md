@@ -36,3 +36,11 @@ Each game ends with a score and 0-3 stars; the best score (and best stars) per g
 | Apple Picking | 100 per apple in the basket, -25 per wrong-colour touch | 1 per 2 red + 2 blue (2R+2B = 1, 4R+4B = 2, 6R+6B = 3) |
 | Harbour Fishing | per trace: 6 x % on the lane + 25 per second under 12 s (max 900) | average % on the lane: 60 = 1, 80 = 2, 92 = 3 |
 | Rat Catching | 300 per target caught, -100 wrong rat, -50 empty slam | 1 per 2 net catches (2 mistakes cancel 1 catch) |
+
+## Sound
+
+Music and effects are synthesised in the browser with the Web Audio API (`audio.js`) - there are no audio files.
+Each game has its own generated music loop (lobby, apple, fishing with lapping water, rat chase), plus effects for walking,
+entering pads, countdowns, picking/dropping apples, tracing, the splash, rat squeaks, the slam, and result fanfares
+(more stars = longer fanfare, plus a sparkle for a new high score). The speaker button (bottom right) or the **M** key mutes;
+the choice is remembered. Sound starts after you click Start (browsers block audio before a click).

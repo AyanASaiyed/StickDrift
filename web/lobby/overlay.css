@@ -106,3 +106,8 @@ body { font-family: var(--body); }
 #start .kb { font-size: 14px; color: var(--muted); margin: 0 0 20px; }
 #start button { padding: 12px 40px; font: 600 22px var(--display); border: 0; border-radius: 999px; background: linear-gradient(180deg, #ffd24a, #ffb300); color: #3a2400; cursor: pointer; box-shadow: 0 6px 0 #b87800, 0 12px 24px rgba(0, 0, 0, 0.35); }
 #start button:active { transform: translateY(3px); box-shadow: 0 3px 0 #b87800; }
+
+/* ---- sound button ---- */
+#mute { right: 18px; bottom: 14px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border-radius: 50%; color: var(--text); cursor: pointer; pointer-events: auto; }
+#mute:hover { border-color: rgba(255, 255, 255, 0.4); }
+#mute.off { color: var(--muted); }

@@ -5,6 +5,7 @@ import { Input } from './input.js'
 import { Hub, PORTALS } from './hub.js'
 import { bestFor } from './scores.js'
 import { render as renderUi } from './overlay.js'
+import { audio, sfx } from './audio.js'
 import { AppleGame } from './apple.js'
 import { FishGame } from './fish.js'
 import { RatGame } from './rat.js'
@@ -44,6 +45,8 @@ function refreshScores() {
 }
 
 function startGame(portal) {
+  sfx.enterGame()
+  audio.setTrack(portal.game)
   active = games[portal.game]
   active.start()
   live.enter(portal.game)
@@ -51,6 +54,8 @@ function startGame(portal) {
 }
 function leaveGame() {
   active = null
+  sfx.back()
+  audio.setTrack('lobby')
   live.enter('lobby')
   measure.enter(null)
   hub.reset()
@@ -129,6 +134,8 @@ async function init() {
 
 $('go').addEventListener('click', () => {
   $('start').style.display = 'none'
+  audio.init() // browsers only allow sound after a click
+  audio.setTrack('lobby')
   running = true
   clock.getDelta()
   live.start(input.read().source !== 'gamepad', ['lobby', 'apple', 'fish', 'rat'])
