@@ -1,6 +1,7 @@
-import { Link, Navigate, Route, Routes } from 'react-router'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router'
 import { AuthProvider, RequireRole, useAuth } from './auth'
 import { TopBar } from './components/TopBar'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import AuthPage from './pages/AuthPage'
 import CaregiverDashboard from './pages/CaregiverDashboard'
 import Home from './pages/Home'
@@ -87,20 +88,24 @@ function Root() {
 }
 
 export default function App() {
+  const { pathname } = useLocation()
   return (
     <AuthProvider>
       <TopBar />
-      <Routes>
-        <Route path="/" element={<Root />} />
-        <Route path="/login" element={<AuthPage who="resident" mode="login" key="r-login" />} />
-        <Route path="/signup" element={<AuthPage who="resident" mode="signup" key="r-signup" />} />
-        <Route path="/caregiver/login" element={<AuthPage who="caregiver" mode="login" key="c-login" />} />
-        <Route path="/caregiver/signup" element={<AuthPage who="caregiver" mode="signup" key="c-signup" />} />
-        <Route path="/caregiver" element={<RequireRole role="caregiver"><CaregiverDashboard /></RequireRole>} />
-        <Route path="/caregiver/residents/:id" element={<RequireRole role="caregiver"><ResidentDetail /></RequireRole>} />
-        <Route path="/caregiver/live/:id" element={<RequireRole role="caregiver"><LiveSession /></RequireRole>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      {/* keyed by path so moving to another page clears a caught error */}
+      <ErrorBoundary key={pathname}>
+        <Routes>
+          <Route path="/" element={<Root />} />
+          <Route path="/login" element={<AuthPage who="resident" mode="login" key="r-login" />} />
+          <Route path="/signup" element={<AuthPage who="resident" mode="signup" key="r-signup" />} />
+          <Route path="/caregiver/login" element={<AuthPage who="caregiver" mode="login" key="c-login" />} />
+          <Route path="/caregiver/signup" element={<AuthPage who="caregiver" mode="signup" key="c-signup" />} />
+          <Route path="/caregiver" element={<RequireRole role="caregiver"><CaregiverDashboard /></RequireRole>} />
+          <Route path="/caregiver/residents/:id" element={<RequireRole role="caregiver"><ResidentDetail /></RequireRole>} />
+          <Route path="/caregiver/live/:id" element={<RequireRole role="caregiver"><LiveSession /></RequireRole>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ErrorBoundary>
     </AuthProvider>
   )
 }

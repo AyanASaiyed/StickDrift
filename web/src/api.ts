@@ -377,7 +377,14 @@ export const api = {
   gardenTimeline: (sessionId: string) =>
     request<GardenSecond[]>(`/sessions/${sessionId}/garden-timeline`),
   caregiverResidents: () => request<ResidentRow[]>('/caregiver/residents'),
-  caregiverResident: (id: string) => request<ResidentDetail>(`/caregiver/residents/${id}`),
+  // an API older than the page leaves out lists added since (game_sessions, garden_sessions), so default them
+  caregiverResident: (id: string) =>
+    request<ResidentDetail>(`/caregiver/residents/${id}`).then((d) => ({
+      ...d,
+      sessions: d.sessions ?? [],
+      garden_sessions: d.garden_sessions ?? [],
+      game_sessions: d.game_sessions ?? [],
+    })),
   residentReport: (id: string) => download(`/caregiver/residents/${id}/report.pdf`),
   caregiverLive: () => request<LiveBrief[]>('/caregiver/live'),
   caregiverLiveSnapshot: (id: string, since: number) =>
