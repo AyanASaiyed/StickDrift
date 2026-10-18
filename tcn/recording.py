@@ -20,7 +20,8 @@ from tcn.config import CHANNELS, COLUMN_ALIASES, CUE_PHASES, SCORES
 
 _TARGET_COLUMNS = ("target_lx", "target_ly", "target_rx", "target_ry")
 _CURSOR_COLUMNS = ("cursor_lx", "cursor_ly", "cursor_rx", "cursor_ry")
-_ACTIVITIES = ("apples", "butterfly", "water")
+_IMU = ("gyro_x", "gyro_y", "gyro_z", "acc_x", "acc_y", "acc_z")
+_ACTIVITIES = ("apples", "butterfly", "water", "fish", "rat")
 
 
 class RecordingError(ValueError):
@@ -43,6 +44,7 @@ class Recording:
         task_spans: np.ndarray | None = None,
         targets: np.ndarray | None = None,
         cursors: np.ndarray | None = None,
+        bounds: np.ndarray | None = None,
         activity: str | None = None,
     ):
         time_s = np.asarray(time_s, dtype=np.float64).reshape(-1)
@@ -71,6 +73,7 @@ class Recording:
             raise RecordingError(f"{_label(name)} contains a blank task time.")
         self.targets = _frame(targets, len(time_s), name, "targets")
         self.cursors = _frame(cursors, len(time_s), name, "cursors")
+        self.bounds = _bounds(bounds, len(time_s), name)
         self.has_targets = self.targets is not None and bool(np.isfinite(self.targets).any())
         self.time_s = time_s
         self.values = values
@@ -102,13 +105,17 @@ class Recording:
         header: set[str] = set()
         for sample in samples:
             header.update(str(key) for key in sample.keys())
-        chosen = _choose(header, ("t", *CHANNELS), name)
-        has_targets = all(column in header for column in _TARGET_COLUMNS)
-        has_cursors = all(column in header for column in _CURSOR_COLUMNS)
+        chosen = _choose(header, ("t", "lx", "ly", "rx", "ry"), name)
+        for channel in _IMU:
+            chosen[channel] = next((item for item in COLUMN_ALIASES[channel] if item in header), None)
+        target_names = _aliases(header, _TARGET_COLUMNS)
+        cursor_names = _aliases(header, _CURSOR_COLUMNS)
+        reached_names = _aliases(header, ("reached_l", "reached_r"))
         times: list[float] = []
         values: list[list[float]] = []
         targets: list[list[float]] = []
         cursors: list[list[float]] = []
+        bounds: list[list[float]] = []
         for sample in samples:
             parsed = _parse_sample(sample, chosen)
             if parsed is None:
@@ -116,10 +123,14 @@ class Recording:
             stamp, row = parsed
             times.append(stamp)
             values.append(row)
-            if has_targets:
-                targets.append([_blank_float(sample.get(column)) for column in _TARGET_COLUMNS])
-            if has_cursors:
-                cursors.append([_blank_float(sample.get(column)) for column in _CURSOR_COLUMNS])
+            if target_names is not None:
+                targets.append([_blank_float(sample.get(column)) for column in target_names])
+            if cursor_names is not None:
+                cursors.append([_blank_float(sample.get(column)) for column in cursor_names])
+            if reached_names is not None and str(sample.get("phase") or "") == "track":
+                bounds.append([_flag(sample.get(column)) for column in reached_names])
+            elif reached_names is not None:
+                bounds.append([0.0, 0.0])
         if not values:
             raise RecordingError(f"{_label(name)} has no complete samples.")
         cues, spans = _task_times(samples, chosen["t"])
@@ -132,6 +143,7 @@ class Recording:
             task_spans=spans,
             targets=None if not targets else targets,
             cursors=None if not cursors else cursors,
+            bounds=None if not bounds else bounds,
             activity=activity,
         )
 
@@ -209,11 +221,20 @@ def _choose(header: set[str], fields: tuple[str, ...], name: str) -> dict[str, s
     return chosen
 
 
-def _parse_sample(sample: Mapping[str, object], chosen: dict[str, str]) -> tuple[float, list[float]] | None:
+def _parse_sample(sample: Mapping[str, object], chosen: dict[str, str | None]) -> tuple[float, list[float]] | None:
     cells: list[float] = []
     for logical in ("t", *CHANNELS):
-        text = sample.get(chosen[logical])
+        key = chosen.get(logical)
+        if not key:
+            if logical in _IMU:
+                cells.append(0.0)
+                continue
+            return None
+        text = sample.get(key)
         if text is None or text == "":
+            if logical in _IMU:
+                cells.append(0.0)
+                continue
             return None
         try:
             cells.append(float(text))
@@ -282,28 +303,35 @@ def activity_from_name(name: str) -> str | None:
 def activity_gates(activity: str | None) -> tuple[bool, bool]:
     """Whether diabetes and ataxia are meaningful on this task.
 
-    Diabetes is an apple miss. Ataxia is leaving a butterfly or water path.
-    The other score is not a 0; it is left out.
+    Diabetes is an apple miss. Ataxia is leaving the fishing lane, or the older
+    butterfly and water paths. The other score is left out of the loss.
     """
-    if activity is None:
+    if activity is None or activity == "rat":
         return False, False
     if activity == "apples":
         return True, False
-    if activity == "butterfly":
+    if activity in ("butterfly", "water", "fish"):
         return False, True
-    if activity == "water":
-        return False, True
-    raise RecordingError(f"activity must be apples, butterfly, or water, not {activity}.")
+    raise RecordingError(f"activity must be apples, fish, butterfly, water, or rat, not {activity}.")
 
 
 def _activity_token(token: str) -> str | None:
-    if "butterfly" in token:
+    if _word(token, "butterfly"):
         return "butterfly"
-    if "apples" in token:
+    if _word(token, "fish"):
+        return "fish"
+    if _word(token, "rat"):
+        return "rat"
+    if _word(token, "apple") or _word(token, "apples"):
         return "apples"
-    if token == "water" or token.startswith("water_") or token.endswith("_water"):
+    if _word(token, "water"):
         return "water"
     return None
+
+
+def _word(token: str, word: str) -> bool:
+    """Match a game name without treating the 'rat' inside 'ataxia' as the rat game."""
+    return token == word or token.startswith(word + "_") or token.endswith("_" + word) or f"_{word}_" in token
 
 
 def _activity_from_level(samples: Sequence[Mapping[str, object]]) -> str | None:
@@ -321,7 +349,7 @@ def _checked_activity(activity: str | None, name: str) -> str | None:
     if activity is None:
         return None
     if activity not in _ACTIVITIES:
-        raise RecordingError(f"{_label(name)} activity must be apples, butterfly, or water.")
+        raise RecordingError(f"{_label(name)} activity must be apples, fish, butterfly, water, or rat.")
     return activity
 
 
@@ -332,6 +360,32 @@ def _optional_score(name: str, value: float | None) -> float | None:
     if not 0.0 <= number <= 100.0:
         raise RecordingError(f"{name} must be from 0 to 100.")
     return number
+
+
+def _aliases(header: set[str], logicals: tuple[str, ...]) -> list[str] | None:
+    names = []
+    for logical in logicals:
+        alias = next((item for item in COLUMN_ALIASES[logical] if item in header), None)
+        if alias is None:
+            return None
+        names.append(alias)
+    return names
+
+
+def _flag(value: object) -> float:
+    number = _blank_float(value)
+    if not math.isfinite(number):
+        return 0.0
+    return 1.0 if number else 0.0
+
+
+def _bounds(frame: np.ndarray | None, width: int, name: str) -> np.ndarray | None:
+    if frame is None:
+        return None
+    array = np.asarray(frame, dtype=np.float64)
+    if array.shape != (width, 2):
+        raise RecordingError(f"{_label(name)} bounds must have shape ({width}, 2).")
+    return array
 
 
 def _frame(frame: np.ndarray | None, width: int, name: str, label: str) -> np.ndarray | None:

@@ -24,6 +24,7 @@ class Prepared:
     name: str
     aim: np.ndarray | None = None
     cursor: np.ndarray | None = None
+    bounds: np.ndarray | None = None
 
 
 def prepare(recording: Recording, sample_hz: int = SAMPLE_HZ) -> Prepared:
@@ -35,6 +36,7 @@ def prepare(recording: Recording, sample_hz: int = SAMPLE_HZ) -> Prepared:
     samples = samples[order]
     targets = None if recording.targets is None else recording.targets[order]
     cursors = None if recording.cursors is None else recording.cursors[order]
+    bounds = None if recording.bounds is None else recording.bounds[order]
     keep = np.ones(len(timestamps), dtype=bool)
     keep[:-1] = np.diff(timestamps) > 0
     timestamps = timestamps[keep]
@@ -43,6 +45,8 @@ def prepare(recording: Recording, sample_hz: int = SAMPLE_HZ) -> Prepared:
         targets = targets[keep]
     if cursors is not None:
         cursors = cursors[keep]
+    if bounds is not None:
+        bounds = bounds[keep]
     if len(timestamps) < 2:
         raise RecordingError(f"{recording.name or 'recording'} has no increasing timestamps.")
 
@@ -60,16 +64,22 @@ def prepare(recording: Recording, sample_hz: int = SAMPLE_HZ) -> Prepared:
     centered = resampled - np.median(resampled, axis=0, keepdims=True)
     aim = None
     cursor = None
+    bound_rows = None
     if targets is not None:
         aim = np.ascontiguousarray(_resample_with_gaps(timestamps, targets, grid).T)
+        stick_cursor = _cursor_from_sticks(resampled[:, :4])
         if cursors is None:
-            cursor_rows = scale_stick(resampled[:, :4])
+            cursor_rows = stick_cursor
         else:
             cursor_rows = _resample_with_gaps(timestamps, cursors, grid)
             missing = ~np.isfinite(cursor_rows)
             if missing.any():
-                cursor_rows = np.where(missing, scale_stick(resampled[:, :4]), cursor_rows)
+                cursor_rows = np.where(missing, stick_cursor, cursor_rows)
         cursor = np.ascontiguousarray(cursor_rows.T)
+    if bounds is not None:
+        bound_rows = np.column_stack(
+            [np.interp(grid, timestamps, bounds[:, index]) for index in range(bounds.shape[1])]
+        )
     return Prepared(
         values=np.ascontiguousarray(centered.T, dtype=np.float64),
         time_s=grid,
@@ -78,7 +88,16 @@ def prepare(recording: Recording, sample_hz: int = SAMPLE_HZ) -> Prepared:
         name=recording.name,
         aim=aim,
         cursor=cursor,
+        bounds=None if bound_rows is None else np.ascontiguousarray(bound_rows.T),
     )
+
+
+def _cursor_from_sticks(sticks: np.ndarray) -> np.ndarray:
+    """Lobby sticks are already -1..1. Older files still store raw bytes."""
+    typical = float(np.nanpercentile(np.abs(sticks), 95)) if sticks.size else 0.0
+    if typical > 3.0:
+        return scale_stick(sticks)
+    return np.array(sticks, dtype=np.float64, copy=True)
 
 
 def scale_stick(raw: np.ndarray, center: float = STICK_CENTER) -> np.ndarray:

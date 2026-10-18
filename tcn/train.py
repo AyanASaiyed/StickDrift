@@ -79,22 +79,24 @@ def fit(
 
     best_mae = None
     best_state = None
+    destination = Path(out)
     for epoch in range(1, epochs + 1):
         train_mae = _epoch(model, train_loader, optimizer, torch_device)
         if val_loader is None:
-            print(f"epoch {epoch:03d}  train_mae={train_mae:.2f}")
+            print(f"epoch {epoch:03d}  train_mae={train_mae:.2f}", flush=True)
             best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+            _write_best(model, best_state, destination, mean, std, sample_hz, segment)
             continue
         val_mae = _epoch(model, val_loader, None, torch_device)
-        print(f"epoch {epoch:03d}  train_mae={train_mae:.2f}  val_mae={val_mae:.2f}")
+        print(f"epoch {epoch:03d}  train_mae={train_mae:.2f}  val_mae={val_mae:.2f}", flush=True)
         if best_mae is None or val_mae < best_mae:
             best_mae = val_mae
             best_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+            _write_best(model, best_state, destination, mean, std, sample_hz, segment)
 
     if best_state is None:
         raise RecordingError("Training produced no checkpoint.")
     model.load_state_dict(best_state)
-    destination = Path(out)
     save_checkpoint(
         destination,
         model,
@@ -109,6 +111,24 @@ def fit(
     held = f"  best_val_mae={best_mae:.2f}" if best_mae is not None else ""
     print(f"Saved {destination}{held}")
     return destination
+
+
+def _write_best(model, state, destination, mean, std, sample_hz, segment) -> None:
+    """Keep the best weights on disk so a stopped run still leaves a checkpoint."""
+    current = {key: value.detach().clone() for key, value in model.state_dict().items()}
+    model.load_state_dict(state)
+    save_checkpoint(
+        destination,
+        model,
+        mean,
+        std,
+        sample_hz=sample_hz,
+        segment=segment,
+        channels=HAND_CHANNELS,
+        hand_scores=HAND_SCORES,
+        scores=SCORES,
+    )
+    model.load_state_dict(current)
 
 
 def _epoch(

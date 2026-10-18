@@ -1,16 +1,17 @@
-"""Read the garden recordings whose folder is the pattern label.
+"""Read recordings whose folder is the pattern label.
 
-Played recordings use these folders:
+Played recordings under data/new_game_data:
 
-- Baseline Data: parkinson, stroke, and essential tremor 0
-- Parkinsons Data: parkinson 100
-- Tremor Data: essential tremor 100
-- Stroke Data/Left Weak: stroke 100 on the left hand
-- Stroke Data/Right Weak: stroke 100 on the right hand
+- Baseline Data: every score 0
+- Parkinsons Data: parkinson 100, everything else 0
+- Tremor Data: essential tremor 100, everything else 0
+- Stroke Data/Left Weak or Right Weak: stroke 100 on that hand, everything else 0
+- Diabetes Data: diabetes 100, everything else 0
+- Cerebellar ataxia: ataxia 100, everything else 0
 
-Diabetes and ataxia are absent on played files. Absent is not 0: those terms
-are masked out of the loss. Synthetic recordings use the folder names in
-`tcn.synthetic.CONDITIONS`. A mix folder carries more than one score above zero.
+Diabetes is trained only on apple files. Ataxia is trained only on fishing
+files. A 0 on the other game is masked, not treated as a real negative.
+Synthetic mixes use the folder names in `tcn.synthetic.CONDITIONS`.
 """
 
 import csv
@@ -23,6 +24,8 @@ from tcn.synthetic import CONDITIONS
 _BASELINE = "Baseline Data"
 _PARKINSON = "Parkinsons Data"
 _TREMOR = "Tremor Data"
+_DIABETES = "Diabetes Data"
+_ATAXIA = "Cerebellar ataxia"
 _LEFT = "Left Weak"
 _RIGHT = "Right Weak"
 
@@ -78,16 +81,54 @@ def _targets(path: Path) -> _FolderLabel:
                 tremor_hand=condition.tremor_hand,
             )
     if _LEFT in parts:
-        return _FolderLabel(0.0, 100.0, 0.0, weak_hand="left")
+        return _played(0.0, 100.0, 0.0, weak_hand="left")
     if _RIGHT in parts:
-        return _FolderLabel(0.0, 100.0, 0.0, weak_hand="right")
+        return _played(0.0, 100.0, 0.0, weak_hand="right")
     if _PARKINSON in parts:
-        return _FolderLabel(100.0, 0.0, 0.0)
+        return _played(100.0, 0.0, 0.0)
     if _TREMOR in parts:
-        return _FolderLabel(0.0, 0.0, 100.0)
+        return _played(0.0, 0.0, 100.0)
+    if _DIABETES in parts:
+        return _played(0.0, 0.0, 0.0, diabetes=100.0)
+    if _ATAXIA in parts:
+        return _played(0.0, 0.0, 0.0, ataxia=100.0)
     if _BASELINE in parts:
-        return _FolderLabel(0.0, 0.0, 0.0)
+        return _played(0.0, 0.0, 0.0)
     raise RecordingError(
         f"{path} is not under Baseline Data, Parkinsons Data, Tremor Data, "
-        "Stroke Data/Left Weak or Right Weak, or a Synthetic condition folder."
+        "Stroke Data/Left Weak or Right Weak, Diabetes Data, Cerebellar ataxia, "
+        "or a Synthetic condition folder."
     )
+
+
+def _played(
+    parkinson: float,
+    stroke: float,
+    tremor: float,
+    diabetes: float = 0.0,
+    ataxia: float = 0.0,
+    weak_hand: str | None = None,
+) -> _FolderLabel:
+    """One recorded condition at full strength, and none of the others."""
+    return _FolderLabel(
+        parkinson,
+        stroke,
+        tremor,
+        diabetes=diabetes,
+        ataxia=ataxia,
+        weak_hand=weak_hand,
+    )
+
+
+def load_training_examples(root: str | Path = "data") -> list[Example]:
+    """Apple and fishing recordings, played and synthetic. Rat files are left out."""
+    base = Path(root)
+    folders = [base / "new_game_data", base / "Synthetic"]
+    examples: list[Example] = []
+    for folder in folders:
+        if not folder.is_dir() or not any(folder.rglob("controller_data.csv")):
+            continue
+        examples.extend(example for example in load_examples(folder) if example.activity != "rat")
+    if not examples:
+        raise RecordingError(f"{base} has no new-game or synthetic recordings.")
+    return examples

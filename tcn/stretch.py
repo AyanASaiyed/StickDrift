@@ -12,7 +12,7 @@ means it left the line of the target. A 6 Hz wobble stays in the residual.
 A slow departure from a moving path stays in the miss.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -83,17 +83,18 @@ def _hand_stretches(
     task_spans: np.ndarray | None,
     in_task: np.ndarray,
 ) -> list[tuple[float, Stretch]]:
-    position = prepared.values[list(sticks)]
+    position = _hand_motion(prepared, aim_pair, sticks)
+    motion = replace(segment, **_motion_limits(position, segment))
     slow = moving_average(position, smooth_w)
-    residual = position - slow
-    runs = _runs(position, prepared.sample_hz, segment)
+    residual = prepared.values[list(sticks)] - moving_average(prepared.values[list(sticks)], smooth_w)
+    runs = _runs(position, prepared.sample_hz, motion)
     stretches: list[tuple[float, Stretch]] = []
     matched = _matched_runs(runs, prepared.time_s, cues, task_spans, segment.max_latency_s)
     for start, end, latency_s, has_cue, span in matched:
         override = None if span is None else _span_amplitude(position, prepared.time_s, span[0], span[1])
         piece = _stretch(
             prepared,
-            segment,
+            motion,
             hand,
             position,
             slow,
@@ -205,6 +206,7 @@ def _stretch(
             along,
             across,
             has_target,
+            _bounds_slice(prepared, aim_pair[0] // 2, start, end),
         ]
     )
     fixed = _fixed(series, segment.stretch_steps)
@@ -221,6 +223,30 @@ def _stretch(
         speed_ratio=float(speed_ratio),
         amplitude=amplitude,
     )
+
+
+def _hand_motion(prepared: Prepared, aim_pair: tuple[int, int], sticks: tuple[int, int]) -> np.ndarray:
+    """The in-game hand when the file logged it. Otherwise the stick itself."""
+    if prepared.cursor is not None:
+        cursor = prepared.cursor[list(aim_pair)]
+        finite = np.isfinite(cursor)
+        if float(finite.mean()) > 0.15:
+            return np.where(finite, cursor, 0.0)
+    return prepared.values[list(sticks)]
+
+
+def _motion_limits(position: np.ndarray, segment: Segment) -> dict[str, float]:
+    """Lobby sticks and cursors live in -1..1. Older recordings are raw bytes."""
+    typical = float(np.percentile(np.abs(position), 95)) if position.size else 0.0
+    if typical > 3.0:
+        return {}
+    return {"move_counts": 0.04, "min_amplitude": 0.08}
+
+
+def _bounds_slice(prepared: Prepared, hand_index: int, start: int, end: int) -> np.ndarray:
+    if prepared.bounds is None:
+        return np.zeros(end - start, dtype=np.float64)
+    return prepared.bounds[hand_index, start:end]
 
 
 def _miss(

@@ -32,7 +32,8 @@ CHANNELS = (
 # error_along / error_across are the miss in the target's own frame: along is
 # past (positive) or short (negative) of the target, across is off to the side.
 # The apple's direction is not a channel. has_target is 0 when this sample has
-# no target, or when the phase is not cue or track.
+# no target, or when the phase is not cue or track. in_bounds is the fishing
+# lane indicator (1 inside, 0 outside) and stays 0 on apple reaches.
 HAND_CHANNELS = (
     "resid_x",
     "resid_y",
@@ -42,6 +43,7 @@ HAND_CHANNELS = (
     "error_along",
     "error_across",
     "has_target",
+    "in_bounds",
     "speed_ratio",
     "amplitude",
     "latency_s",
@@ -64,7 +66,7 @@ LEVELS = 6
 KERNEL = 3
 DROPOUT = 0.1
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCORE_MEANING = "0-100 pattern resemblance, not a disease probability"
 
 
@@ -98,6 +100,16 @@ COLUMN_ALIASES = {
     "acc_x": ("acc_x",),
     "acc_y": ("acc_y",),
     "acc_z": ("acc_z",),
+    "target_lx": ("target_lx", "tgt_lx"),
+    "target_ly": ("target_ly", "tgt_ly"),
+    "target_rx": ("target_rx", "tgt_rx"),
+    "target_ry": ("target_ry", "tgt_ry"),
+    "cursor_lx": ("cursor_lx", "cur_lx"),
+    "cursor_ly": ("cursor_ly", "cur_ly"),
+    "cursor_rx": ("cursor_rx", "cur_rx"),
+    "cursor_ry": ("cursor_ry", "cur_ry"),
+    "reached_l": ("reached_l",),
+    "reached_r": ("reached_r",),
 }
 
 CUE_PHASES = frozenset({"cue", "track"})
