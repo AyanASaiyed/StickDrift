@@ -1,0 +1,34 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "04699e6c-c2e7-4faf-8f4d-19a596d56414",
+ "level": "fish",
+ "number": 2,
+ "completed": false,
+ "rows": 800,
+ "duration_s": 13.359,
+ "score": 784.0,
+ "stars": 3,
+ "source": "gamepad",
+ "motion": "none",
+ "params": {
+  "hand": "one at a time",
+  "activity": "target_tracking",
+  "rounds": 2,
+  "score": "6 x percent on the lane, plus 25 per second under 12 s"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trace",
+    "t": 38.531400000002236,
+    "round": 1,
+    "hand": "left",
+    "shape": "loop",
+    "time_s": 4.62,
+    "on_lane_pct": 100,
+    "off_count": 0,
+    "score": 784
+   }
+  ]
+ }
+}

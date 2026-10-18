@@ -1,0 +1,186 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "0aa62592-1af8-4931-82a4-ad228995a1e3",
+ "level": "apple",
+ "number": 1,
+ "completed": true,
+ "rows": 1152,
+ "duration_s": 19.264,
+ "score": 700.0,
+ "stars": 1,
+ "source": "gamepad",
+ "motion": "webhid",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "t": 58.192,
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 0.367,
+    "reach_s": 1.735,
+    "peak_speed": 16.52,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 59.45969999999925
+   },
+   {
+    "type": "trial",
+    "t": 60.09319999999926,
+    "trial": 1,
+    "hand": "left",
+    "reaction_s": 0.517,
+    "reach_s": 1.334,
+    "peak_speed": 27.71,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 60.5105,
+    "trial": 2,
+    "hand": "right",
+    "reaction_s": 0.284,
+    "reach_s": 1.501,
+    "peak_speed": 21.27,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 61.645
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 61.7945
+   },
+   {
+    "type": "trial",
+    "t": 62.24459999999777,
+    "trial": 3,
+    "hand": "right",
+    "reaction_s": 0.484,
+    "reach_s": 0.85,
+    "peak_speed": 20.65,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 62.845599999997766,
+    "trial": 2,
+    "hand": "left",
+    "reaction_s": 0.467,
+    "reach_s": 1.468,
+    "peak_speed": 23.51,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 64.16309999999777
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 64.27959999999777
+   },
+   {
+    "type": "trial",
+    "t": 65.06369999999926,
+    "trial": 3,
+    "hand": "left",
+    "reaction_s": 0.217,
+    "reach_s": 1.067,
+    "peak_speed": 21.12,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 66.5485
+   },
+   {
+    "type": "trial",
+    "t": 66.9815,
+    "trial": 4,
+    "hand": "right",
+    "reaction_s": 0.367,
+    "reach_s": 3.069,
+    "peak_speed": 28.52,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 69.36659999999776
+   },
+   {
+    "type": "trial",
+    "t": 70.7175,
+    "trial": 4,
+    "hand": "left",
+    "reaction_s": 2.218,
+    "reach_s": 4.353,
+    "peak_speed": 18.11,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 71.07659999999777,
+    "trial": 5,
+    "hand": "right",
+    "reaction_s": 0.718,
+    "reach_s": null,
+    "peak_speed": 22.47,
+    "reach_size": 1,
+    "reached": false
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 71.07659999999777
+   },
+   {
+    "type": "expired",
+    "hand": "right",
+    "t": 71.07659999999777
+   },
+   {
+    "type": "expired",
+    "hand": "right",
+    "t": 71.07659999999777
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 71.07659999999777
+   },
+   {
+    "type": "result",
+    "t": 71.07659999999777,
+    "score": 700,
+    "stars": 1,
+    "red": 3,
+    "blue": 4,
+    "wrong": 0
+   }
+  ]
+ }
+}
