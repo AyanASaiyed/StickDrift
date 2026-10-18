@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import type { Concern, Finding, GameSession, GardenSession, HandLive, Insights, MeasureKey, SessionSummary } from '../api'
 import { formatDate, visitLabels } from '../format'
+import { PATTERN_LABELS, PATTERN_ORDER } from './liveData'
 import { Tabs } from './Tabs'
 
 interface Series {
@@ -399,11 +400,11 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
             yMin={0}
             yMax={100}
             format={(v) => `${Math.round(v)}`}
-            series={[
-              { label: 'Slowed, smaller movements', color: 'var(--pat-1)', points: scored.map((v) => v.tcn!.scores.parkinson ?? null) },
-              { label: 'One-sided difference', color: 'var(--pat-2)', points: scored.map((v) => v.tcn!.scores.stroke ?? null) },
-              { label: 'Shake during movement', color: 'var(--pat-3)', points: scored.map((v) => v.tcn!.scores.essential_tremor ?? null) },
-            ]}
+            series={PATTERN_ORDER.map((k, i) => ({
+              label: PATTERN_LABELS[k],
+              color: `var(--pat-${i + 1})`,
+              points: scored.map((v) => v.tcn!.scores[k] ?? null),
+            }))}
           />
         ))}
       {view === 'reach' &&

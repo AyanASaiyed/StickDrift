@@ -161,7 +161,7 @@ Per-attempt and per-hand measurements (`live_metrics.py`), and for the older ses
 A temporal convolutional network (`tcn/`) scores each hand's movement stretches in garden recordings and fuses them into five 0–100 pattern-resemblance scores. It is trained on **teammate-simulated** recordings (folders such as "Parkinsons Data", "Left Weak") and **synthetic** recordings (`tcn/synthetic.py`); there is no clinical data. This goes beyond the original "no disease classifier" plan, so the guardrails are strict:
 
 - Scores are described everywhere as *resemblance to a movement pattern*, never a probability of disease.
-- Caregivers and the assistant only see the neutral labels: slowed, smaller movements in both hands; one-sided difference between hands; shake during movement; reaches that land past or short, then correct; hand weaves off a moving path.
+- Caregivers see the model's own pattern names (Parkinson's, Stroke, Essential tremor, Diabetes, Ataxia) as 0-100 resemblance, each with a plain description (`PATTERN_HINTS`). The assistant and report may use these five names only as resemblance; any other condition name is refused.
 - No checkpoint is committed (`runs/tcn/model.pt` is ignored), so garden visits are saved without a judgement until someone trains one.
 - The model does not apply to lobby games: they are velocity-controlled and move differently. A lobby model needs its own training data, which `raw_samples` (in-game only, tagged by game) now collects.
 

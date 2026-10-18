@@ -41,10 +41,19 @@ export const pct = (v: number | null | undefined, digits = 0) =>
 export const secs = (v: number | null | undefined) =>
   v == null ? "—" : `${v.toFixed(2)} s`;
 
+// The pattern model's own outputs. Each score is resemblance to that pattern, not a diagnosis.
 export const PATTERN_LABELS: Record<PatternKey, string> = {
-  parkinson: "Slowed, smaller movements (both hands)",
-  stroke: "One-sided difference between hands",
-  essential_tremor: "Shake during movement",
+  parkinson: "Parkinson's",
+  stroke: "Stroke",
+  essential_tremor: "Essential tremor",
+  diabetes: "Diabetes",
+  ataxia: "Ataxia",
+};
+/** What each pattern looks like in the games, in plain words. */
+export const PATTERN_HINTS: Record<PatternKey, string> = {
+  parkinson: "Slowed, smaller movements in both hands",
+  stroke: "One hand clearly weaker or slower than the other",
+  essential_tremor: "Rhythmic shake while the hand moves",
   diabetes: "Reaches land past or short, then correct",
   ataxia: "Hand weaves off a moving path",
 };
