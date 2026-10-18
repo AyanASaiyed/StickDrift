@@ -40,7 +40,9 @@ router = APIRouter(tags=["live"])
 
 ROOT = Path(__file__).resolve().parents[2]
 GAME_SCRIPT = ROOT / "Controller Data - Zain" / "Games" / "garden.py"
-GAME_PYTHON = Path(os.environ.get("STICKDRIFT_GAME_PYTHON", ROOT / ".venv" / "bin" / "python"))
+# uv puts the interpreter in Scripts\python.exe on Windows and bin/python elsewhere.
+_VENV_PYTHON = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+GAME_PYTHON = Path(os.environ.get("STICKDRIFT_GAME_PYTHON", _VENV_PYTHON))
 SCORER = ROOT / "backend" / "scripts" / "score_garden.py"
 LOG_DIR = ROOT / "data" / ".live-logs"
 API_URL = os.environ.get("STICKDRIFT_API_URL", "http://127.0.0.1:8000")

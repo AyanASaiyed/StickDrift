@@ -120,6 +120,19 @@ def _played(
     )
 
 
+def _labelled_examples(folder: Path) -> list[Example]:
+    """Like load_examples, but skip visits saved outside a label folder (a trial lobby run)."""
+    examples = []
+    for path in sorted(folder.rglob("controller_data.csv")):
+        try:
+            examples.append(_example(folder, path))
+        except RecordingError as error:
+            if "is not under" not in str(error):
+                raise
+            print(f"Skipping unlabelled recording {path.relative_to(folder)}")
+    return examples
+
+
 def load_training_examples(root: str | Path = "data") -> list[Example]:
     """Apple and fishing recordings, played and synthetic. Rat files are left out."""
     base = Path(root)
@@ -128,7 +141,9 @@ def load_training_examples(root: str | Path = "data") -> list[Example]:
     for folder in folders:
         if not folder.is_dir() or not any(folder.rglob("controller_data.csv")):
             continue
-        examples.extend(example for example in load_examples(folder) if example.activity != "rat")
+        examples.extend(
+            example for example in _labelled_examples(folder) if example.activity != "rat"
+        )
     if not examples:
         raise RecordingError(f"{base} has no new-game or synthetic recordings.")
     return examples
