@@ -33,6 +33,7 @@ function stick(x, y) {
 export class Input {
   constructor() {
     this.keys = new Set()
+    this.padIndex = -1
     this.prev = { enter: false, cam: false, back: false }
     window.addEventListener('keydown', (e) => {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].includes(e.code)) e.preventDefault()
@@ -44,8 +45,11 @@ export class Input {
 
   /** -> { move:[dx,dy,mag], look:[x,y], enter, cam, back (one-shot presses), zoom (-1/0/1), source } */
   read() {
-    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()) : []
-    const gp = pads.find((p) => p && p.connected)
+    const pads = (navigator.getGamepads ? Array.from(navigator.getGamepads()) : []).filter((p) => p && p.connected)
+    // A PS5 pad can show up twice (USB and Bluetooth, or a Steam virtual pad). Follow whichever one is being used.
+    const used = pads.find((p) => Math.hypot(p.axes[0] || 0, p.axes[1] || 0) > 0.3 || Math.hypot(p.axes[2] || 0, p.axes[3] || 0) > 0.3 || p.buttons.some((x) => x && x.pressed))
+    if (used) this.padIndex = used.index
+    const gp = pads.find((p) => p.index === this.padIndex) || pads[0]
     let lx = 0, ly = 0, rx = 0, ry = 0, enter = false, cam = false, back = false, l1 = false, r1 = false
     let source = 'none'
     if (gp) {
@@ -67,10 +71,11 @@ export class Input {
     const kx2 = ax('KeyJ', 'KeyL') + ax('ArrowLeft', 'ArrowRight'), ky2 = ax('KeyK', 'KeyI') + ax('ArrowDown', 'ArrowUp')
     if (kx || ky || kx2 || ky2 || k.has('Space') || k.has('KeyO') || k.has('Backspace') || k.has('KeyT') || k.has('KeyQ') || k.has('KeyE')) {
       if (source === 'none') source = 'keyboard'
-      lx = lx || kx
-      ly = ly || ky
-      rx = rx || kx2
-      ry = ry || ky2
+      // a pressed key wins over a resting stick: drift of a few percent is still "not zero"
+      lx = kx || lx
+      ly = ky || ly
+      rx = kx2 || rx
+      ry = ky2 || ry
       enter = enter || k.has('Space') || k.has('Enter')
       back = back || k.has('KeyO') || k.has('Backspace')
       cam = cam || k.has('KeyT')
