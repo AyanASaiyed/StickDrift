@@ -162,7 +162,37 @@ function frame() {
   renderer.render(view.scene, view.camera)
 }
 
+/** Only a resident's visit is saved. Anyone else gets told before they play, instead of finding out later. */
+async function checkSignedIn() {
+  let me = null
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'same-origin' })
+    if (res.ok) me = await res.json()
+  } catch {
+    return // no API: nothing would be saved anyway, and the game still plays
+  }
+  if (me && me.role === 'senior') return
+  const box = $('signin')
+  if (me && me.role === 'caregiver') {
+    $('signin-title').textContent = 'You’re logged in as care team'
+    $('signin-text').textContent = 'Care-team accounts can’t save a visit. Log in as the resident who is playing, so the visit shows on their dashboard.'
+    // the log-in page sends a signed-in care-team account back to its dashboard, so sign out first
+    box.querySelector('a').addEventListener('click', async (e) => {
+      e.preventDefault()
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' })
+      } finally {
+        window.location.href = '/login'
+      }
+    })
+  }
+  box.hidden = false
+  $('signin-skip').addEventListener('click', () => { box.hidden = true })
+  $('signin').querySelector('a').focus()
+}
+
 async function init() {
+  checkSignedIn()
   // wait for the display font so the in-world text (pad labels) is drawn with it
   try {
     await Promise.race([document.fonts.load('700 48px Fredoka'), new Promise((r) => setTimeout(r, 2500))])

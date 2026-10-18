@@ -19,6 +19,16 @@
     <canvas id="c"></canvas>
     <div id="ui"></div>
     <div id="label"></div>
+    <div id="signin" hidden>
+      <div>
+        <h2 id="signin-title">Log in as a resident to save this visit</h2>
+        <p id="signin-text">Games are only saved, and shown to the care team, when a resident is logged in.</p>
+        <p class="signin-actions">
+          <a class="signin-go" href="/login">Resident log in</a>
+          <button type="button" id="signin-skip">Play without saving</button>
+        </p>
+      </div>
+    </div>
     <div id="exiting"><div><h2>Session ended</h2><p>Heading back to the dashboard…</p></div></div>
     <script type="module" src="/lobby/main.js"></script>
   </body>
