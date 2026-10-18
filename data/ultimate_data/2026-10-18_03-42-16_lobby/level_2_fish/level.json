@@ -1,0 +1,74 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "24e20169-c4a4-4fdb-9929-f3245584f4e6",
+ "level": "fish",
+ "number": 2,
+ "completed": true,
+ "rows": 3560,
+ "duration_s": 39.026,
+ "score": 2931.0,
+ "stars": 3,
+ "source": "gamepad",
+ "motion": "webhid",
+ "params": {
+  "hand": "one at a time",
+  "activity": "target_tracking",
+  "rounds": 2,
+  "score": "6 x percent on the lane, plus 25 per second under 12 s"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trace",
+    "t": 41.96169999980926,
+    "round": 1,
+    "hand": "left",
+    "shape": "hairpin",
+    "time_s": 5.98,
+    "on_lane_pct": 100,
+    "off_count": 0,
+    "score": 751
+   },
+   {
+    "type": "trace",
+    "t": 50.549,
+    "round": 1,
+    "hand": "right",
+    "shape": "wave",
+    "time_s": 7.19,
+    "on_lane_pct": 100,
+    "off_count": 0,
+    "score": 720
+   },
+   {
+    "type": "trace",
+    "t": 57.236199999809266,
+    "round": 2,
+    "hand": "left",
+    "shape": "loop",
+    "time_s": 4.88,
+    "on_lane_pct": 100,
+    "off_count": 0,
+    "score": 778
+   },
+   {
+    "type": "trace",
+    "t": 67.38019999980926,
+    "round": 2,
+    "hand": "right",
+    "shape": "spiral",
+    "time_s": 8.73,
+    "on_lane_pct": 100,
+    "off_count": 0,
+    "score": 682
+   },
+   {
+    "type": "result",
+    "t": 69.19319999980927,
+    "score": 2931,
+    "stars": 3,
+    "caught": 4
+   }
+  ]
+ }
+}

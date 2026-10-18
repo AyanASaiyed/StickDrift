@@ -839,30 +839,27 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "hidapi" },
-    { name = "numpy" },
-    { name = "pygame-ce" },
-    { name = "torch" },
-]
-
-[package.dev-dependencies]
-study = [
     { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "pygame-ce" },
     { name = "scipy" },
+    { name = "torch" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "hidapi", specifier = ">=0.15.0" },
+    { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "numpy", specifier = ">=2.5.4" },
+    { name = "pillow", specifier = ">=13.0.0" },
     { name = "pygame-ce", specifier = ">=2.5.8" },
+    { name = "scipy", specifier = ">=1.18.1" },
     { name = "torch", specifier = ">=2.14.1" },
 ]
 
 [package.metadata.requires-dev]
-study = [
-    { name = "matplotlib", specifier = ">=3.11.2" },
-    { name = "scipy", specifier = ">=1.18.1" },
-]
+study = []
 
 [[package]]
 name = "sympy"

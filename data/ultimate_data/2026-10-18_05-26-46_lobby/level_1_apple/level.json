@@ -1,0 +1,22 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "8a4f5fa0-4cc9-488a-8f49-924f884583f2",
+ "level": "apple",
+ "number": 1,
+ "completed": false,
+ "rows": 152,
+ "duration_s": 1.966,
+ "score": 0.0,
+ "stars": 0,
+ "source": "gamepad",
+ "motion": "webhid",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": []
+ }
+}

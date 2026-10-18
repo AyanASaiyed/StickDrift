@@ -1,5 +1,7 @@
+import { Fragment, useState } from 'react'
 import type { GameResult, GameSession, HandLive, LobbyGame, RatReport } from '../api'
 import { formatDateTime } from '../format'
+import { HandReplay } from './HandReplay'
 import { PatternBars, RatPoints, hasPatternScores } from './LiveCharts'
 import { pct, secs } from './liveData'
 
@@ -252,6 +254,14 @@ function GameCard({
 }
 
 export function GameVisits({ visits, name }: { visits: GameSession[]; name: string }) {
+  const [handsOpen, setHandsOpen] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleHands = (id: string) =>
+    setHandsOpen((open) => {
+      const next = new Set(open)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+
   if (visits.length === 0) {
     return (
       <section className="panel calm">
@@ -286,6 +296,7 @@ export function GameVisits({ visits, name }: { visits: GameSession[]; name: stri
             />
           ))}
         </div>
+        {latest.has_hand_replay && <HandReplay sessionId={latest.session_id} info={latest.hand_replay} name={name} />}
         {hasPatternScores(latest.tcn?.scores) && latest.tcn?.scores && (
           <div className="game-patterns">
             <h3>Pattern model</h3>
@@ -333,40 +344,67 @@ export function GameVisits({ visits, name }: { visits: GameSession[]; name: stri
                   </th>
                 ))}
                 <th scope="col">Input</th>
+                <th scope="col">Hands</th>
               </tr>
             </thead>
             <tbody>
               {visits.map((v) => {
                 const n = ORDER.filter((g) => v.games[g]).length
+                const open = handsOpen.has(v.session_id)
                 return (
-                  <tr key={v.session_id}>
-                    <td>
-                      {formatDateTime(v.started_at)}
-                      {v.status === 'in_progress' && <span className="badge badge-live">Playing</span>}
-                    </td>
-                    <td className={n < ORDER.length ? 'partial' : ''}>
-                      {n} of {ORDER.length}
-                    </td>
-                    {ORDER.map((g) => {
-                      const s = stateOf(v, g)
-                      return (
-                        <td key={g} className={s === 'none' ? 'muted' : ''}>
-                          {s === 'none' ? 'Not played' : headline(v, g)}
-                          {s === 'early' && <small className="delta-note">left early</small>}
-                          {g === 'rat' && v.visit?.games?.rat?.score != null && (
-                            <small className="delta-note">{v.visit.games.rat.score} pts</small>
-                          )}
+                  <Fragment key={v.session_id}>
+                    <tr>
+                      <td>
+                        {formatDateTime(v.started_at)}
+                        {v.status === 'in_progress' && <span className="badge badge-live">Playing</span>}
+                      </td>
+                      <td className={n < ORDER.length ? 'partial' : ''}>
+                        {n} of {ORDER.length}
+                      </td>
+                      {ORDER.map((g) => {
+                        const s = stateOf(v, g)
+                        return (
+                          <td key={g} className={s === 'none' ? 'muted' : ''}>
+                            {s === 'none' ? 'Not played' : headline(v, g)}
+                            {s === 'early' && <small className="delta-note">left early</small>}
+                            {g === 'rat' && v.visit?.games?.rat?.score != null && (
+                              <small className="delta-note">{v.visit.games.rat.score} pts</small>
+                            )}
+                          </td>
+                        )
+                      })}
+                      <td>
+                        {v.is_synthetic ? (
+                          <span className="badge badge-synthetic">Keyboard</span>
+                        ) : (
+                          <span className="muted">Controller</span>
+                        )}
+                      </td>
+                      <td>
+                        {v.has_hand_replay ? (
+                          <button
+                            type="button"
+                            className="hand-toggle"
+                            aria-expanded={open}
+                            aria-controls={`hands-${v.session_id}`}
+                            onClick={() => toggleHands(v.session_id)}
+                          >
+                            {open ? 'Hide' : 'Show'}
+                            <span className="sr-only"> reconstructed hands for {formatDateTime(v.started_at)}</span>
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                    {open && (
+                      <tr id={`hands-${v.session_id}`} className="hand-row">
+                        <td colSpan={ORDER.length + 4}>
+                          <HandReplay sessionId={v.session_id} info={v.hand_replay} name={name} />
                         </td>
-                      )
-                    })}
-                    <td>
-                      {v.is_synthetic ? (
-                        <span className="badge badge-synthetic">Keyboard</span>
-                      ) : (
-                        <span className="muted">Controller</span>
-                      )}
-                    </td>
-                  </tr>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
             </tbody>

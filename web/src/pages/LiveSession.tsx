@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { type HandLive, type LiveStatus } from '../api'
+import { HandReplay } from '../components/HandReplay'
 import { DiffBars, PatternBars, RatPoints, ReachTrialsChart, RollingChart, StickFields, hasPatternScores } from '../components/LiveCharts'
 import { handPoint, handPos, handTarget, levelName, pct, secs } from '../components/liveData'
 import { TabPanel, Tabs } from '../components/Tabs'
@@ -119,6 +120,10 @@ export default function LiveSession() {
   const lobby = snap.levels.includes('lobby')
   const t = tiles(snap.metrics.hands, lobby)
   const reachTrials = snap.metrics.reach_trials
+  const judged =
+    snap.status === 'scoring' || snap.status === 'saving' || Boolean(snap.result) ||
+    snap.status === 'failed' || snap.status === 'stopped' || snap.status === 'lost'
+  const replayReady = Boolean(snap.db_session_id && snap.hand_replay_ready)
 
   return (
     <main className="wrap page-pad">
@@ -170,7 +175,7 @@ export default function LiveSession() {
         </p>
       )}
 
-      {(snap.status === 'scoring' || snap.status === 'saving' || snap.result || snap.status === 'failed' || snap.status === 'stopped' || snap.status === 'lost') && (
+      {(judged || replayReady || snap.hand_replay_pending) && (
         <section className={`panel judge ${snap.result ? 'judge-done' : ''}`} aria-live="polite">
           <h2>End-of-session judgement</h2>
           {snap.result ? (
@@ -191,7 +196,12 @@ export default function LiveSession() {
               <span className="pulse" aria-hidden /> The TCN movement pattern model is reviewing the whole session…
             </p>
           ) : null}
-          {snap.error && <p className="error">{snap.error}</p>}
+          {replayReady ? (
+            <HandReplay sessionId={snap.db_session_id} info={snap.hand_replay} name={snap.name} />
+          ) : (
+            snap.hand_replay_pending && <HandReplay pending />
+          )}
+          {judged && snap.error && <p className="error">{snap.error}</p>}
         </section>
       )}
 

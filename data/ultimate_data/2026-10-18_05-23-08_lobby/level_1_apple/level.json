@@ -1,0 +1,110 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "0e787ef9-d168-479a-beda-d70fb3a51842",
+ "level": "apple",
+ "number": 1,
+ "completed": true,
+ "rows": 1597,
+ "duration_s": 21.009,
+ "score": 100.0,
+ "stars": 0,
+ "source": "gamepad",
+ "motion": "none",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "t": 12.788699999809266,
+    "trial": 1,
+    "hand": "left",
+    "reaction_s": 0.242,
+    "reach_s": 1.381,
+    "peak_speed": 19.09,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 14.865099999904633,
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 0.284,
+    "reach_s": 2.618,
+    "peak_speed": 20.37,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 16.795099999904632
+   },
+   {
+    "type": "trial",
+    "t": 17.725099999904632,
+    "trial": 2,
+    "hand": "left",
+    "reaction_s": 0.244,
+    "reach_s": 1.201,
+    "peak_speed": 17.21,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 20.114299999713896
+   },
+   {
+    "type": "expired",
+    "hand": "right",
+    "t": 21.377
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 22.335699999809265
+   },
+   {
+    "type": "expired",
+    "hand": "right",
+    "t": 24.55040000009537
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 26.008099999904633
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 26.008099999904633
+   },
+   {
+    "type": "expired",
+    "hand": "right",
+    "t": 26.008099999904633
+   },
+   {
+    "type": "expired",
+    "hand": "right",
+    "t": 26.008099999904633
+   },
+   {
+    "type": "result",
+    "t": 26.008099999904633,
+    "score": 100,
+    "stars": 0,
+    "red": 1,
+    "blue": 0,
+    "wrong": 0
+   }
+  ]
+ }
+}

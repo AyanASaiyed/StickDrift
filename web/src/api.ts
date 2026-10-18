@@ -204,6 +204,18 @@ export interface GameSession {
   tcn?: (TcnResult & { by_game?: Partial<Record<LobbyGame, { scores: PatternScores }>> }) | null
   /** The full visit report (visit/report.py), including Rat Catching timing. */
   visit?: { games?: { rat?: RatReport | null } } | null
+  /** A reconstructed-hands GIF was stored for this visit (handReplayUrl). Older visits have none. */
+  has_hand_replay?: boolean
+  hand_replay?: HandReplayInfo | null
+}
+
+/** Which stretch of the visit the reconstructed-hands GIF shows. */
+export interface HandReplayInfo {
+  game: LobbyGame
+  window_start_s: number | null
+  duration_s: number | null
+  /** False when the controller sent no gyroscope values, so the GIF has no shake. */
+  has_motion: boolean | null
 }
 
 export interface RatReport {
@@ -272,6 +284,11 @@ export interface LiveSnapshot extends LiveBrief {
   metrics: LiveMetrics
   /** Garden visits fill scores and levels. Lobby visits also carry the rat-game score. */
   result: (Partial<TcnResult> & { scores?: PatternScores | null; rat?: RatReport | null }) | null
+  /** The visit's reconstructed-hands GIF is stored (lobby visits only). */
+  hand_replay_ready?: boolean
+  hand_replay?: HandReplayInfo | null
+  /** The GIF is still being drawn after the visit ended. */
+  hand_replay_pending?: boolean
 }
 
 export interface GardenStatus {
@@ -357,6 +374,9 @@ async function download(path: string): Promise<{ blob: Blob; filename: string; s
   const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
   return { blob: await res.blob(), filename: match?.[1] ?? 'stick-drift-summary.pdf', source: res.headers.get('X-Report-Source') ?? '' }
 }
+
+/** Same origin as the page, so a plain <img src> carries the caregiver's login cookie. */
+export const handReplayUrl = (sessionId: string) => `${API}/caregiver/sessions/${sessionId}/hand-replay.gif`
 
 export const api = {
   me: () => request<Me>('/auth/me'),

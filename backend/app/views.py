@@ -7,10 +7,10 @@ baseline) plus the TCN pattern judgement of their latest garden session.
 from typing import Any, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
-from . import live
+from . import hand_replays, live
 from .auth import current_caregiver
 from .db import pool
 from .insights import add_model_concerns, analyze, review_from
@@ -86,6 +86,8 @@ class GameSession(BaseModel):
     games_finished: List[str]
     tcn: Optional[dict] = None    # pattern-model scores for Apple Picking + Harbour Fishing (visit.report)
     visit: Optional[dict] = None  # the full visit report: rat timing, traces, per-game results
+    has_hand_replay: bool = False
+    hand_replay: Optional[dict] = None  # game, window_start_s, duration_s, has_motion; the GIF is its own endpoint
 
 
 class ResidentDetail(BaseModel):
@@ -131,18 +133,22 @@ def _fetch_garden(conn, participant_id: UUID) -> List[dict]:
 
 
 def _fetch_games(conn, participant_id: UUID) -> List[dict]:
-    return conn.execute(
-        """SELECT s.session_id, s.started_at, s.completed_at, s.status, s.is_synthetic,
-                  COALESCE(ss.metrics->'games', '{}'::jsonb) AS games,
+    replay = hand_replays.meta_sql("s.session_id") if hand_replays.exists(conn) else "NULL::jsonb"
+    rows = conn.execute(
+        f"""SELECT s.session_id, s.started_at, s.completed_at, s.status, s.is_synthetic,
+                  COALESCE(ss.metrics->'games', '{{}}'::jsonb) AS games,
                   ARRAY(SELECT jsonb_array_elements_text(COALESCE(ss.metrics->'games_finished', '[]'::jsonb)))
                     AS games_finished,
-                  ss.metrics->'tcn' AS tcn, ss.metrics->'visit' AS visit
+                  ss.metrics->'tcn' AS tcn, ss.metrics->'visit' AS visit, {replay} AS hand_replay
            FROM sessions s
            LEFT JOIN session_summaries ss ON ss.session_id = s.session_id
            WHERE s.participant_id = %s AND s.protocol_version LIKE 'lobby-%%'
            ORDER BY s.started_at DESC LIMIT 50""",
         (participant_id,),
     ).fetchall()
+    for row in rows:
+        row["has_hand_replay"] = row["hand_replay"] is not None
+    return rows
 
 
 def _sweep():
@@ -222,3 +228,12 @@ def resident_detail(participant_id: UUID, _: dict = Depends(current_caregiver)):
     if profile is None:
         raise HTTPException(404, "Resident not found.")
     return profile
+
+
+@router.get("/caregiver/sessions/{session_id}/hand-replay.gif")
+def hand_replay_gif(session_id: UUID, _: dict = Depends(current_caregiver)):
+    """The visit's reconstructed-hands GIF (lobby visits from when replays began)."""
+    gif = hand_replays.fetch_gif(session_id)
+    if gif is None:
+        raise HTTPException(404, "This visit has no hand replay.")
+    return Response(gif, media_type="image/gif", headers={"Cache-Control": "private, max-age=86400"})

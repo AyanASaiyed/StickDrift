@@ -250,3 +250,17 @@ ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_lx REAL;
 ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_ly REAL;
 ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_rx REAL;
 ALTER TABLE live_samples ADD COLUMN IF NOT EXISTS cur_ry REAL;
+
+-- One reconstructed-hands GIF per lobby visit (hand_replay/), drawn when the visit ends.
+-- The API also creates this table before its first insert (app/hand_replays.py).
+CREATE TABLE IF NOT EXISTS session_hand_replays (
+    session_id uuid PRIMARY KEY REFERENCES sessions (session_id) ON DELETE CASCADE,
+    gif bytea NOT NULL,
+    game text,
+    window_start_s real,
+    duration_s real,
+    frames int,
+    has_motion boolean,
+    renderer_version text,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
