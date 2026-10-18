@@ -755,8 +755,8 @@ def _int(value):
 
 
 def _model_row(frame, activity):
-    # A browser pad does not report gyro or accelerometer. Missing motion
-    # channels stay at 0 so the stick, target, and in-game hand still score.
+    # Gyro and accelerometer ride along when the DualSense HID report was captured.
+    # Missing motion channels stay at 0 so the stick, target, and in-game hand still score.
     row = {"level": activity, "phase": frame.get("phase") or ""}
     for key in ("t", "lx", "ly", "rx", "ry", "gyro_x", "gyro_y", "gyro_z", "acc_x", "acc_y", "acc_z"):
         row[key] = 0.0 if frame.get(key) is None else float(frame.get(key))

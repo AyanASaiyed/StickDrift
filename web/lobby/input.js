@@ -2,6 +2,8 @@
 //   left stick = axes 0/1, right stick = axes 2/3, Cross = button 0, Circle = 1, Triangle = 3, L1 = 4, R1 = 5.
 // Keyboard is only a fallback for machines without a pad: WASD = left stick, IJKL = right stick,
 // Space = Cross, O/Backspace = Circle, T = Triangle, Q/E = L1/R1.
+import { motion } from './motion.js'
+
 const DEADZONE = 0.2
 
 // Standard Gamepad mapping (W3C). Fixed width so every recording row has the same columns.
@@ -49,7 +51,8 @@ export class Input {
     // A PS5 pad can show up twice (USB and Bluetooth, or a Steam virtual pad). Follow whichever one is being used.
     const used = pads.find((p) => Math.hypot(p.axes[0] || 0, p.axes[1] || 0) > 0.3 || Math.hypot(p.axes[2] || 0, p.axes[3] || 0) > 0.3 || p.buttons.some((x) => x && x.pressed))
     if (used) this.padIndex = used.index
-    const gp = pads.find((p) => p.index === this.padIndex) || pads[0]
+    // A DualSense opened over WebHID (motion.js) is read from its own reports; the Gamepad API copy can freeze.
+    const gp = motion.pad() || pads.find((p) => p.index === this.padIndex) || pads[0]
     let lx = 0, ly = 0, rx = 0, ry = 0, enter = false, cam = false, back = false, l1 = false, r1 = false
     let source = 'none'
     if (gp) {

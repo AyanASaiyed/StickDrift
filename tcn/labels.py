@@ -9,6 +9,10 @@ Played recordings under data/new_game_data:
 - Diabetes Data: diabetes 100, everything else 0
 - Cerebellar ataxia: ataxia 100, everything else 0
 
+Played recordings under data/ultimate_data use the names Baseline, Parkinsons,
+Tremor, Stroke/Left Hand Weak or Right Hand Weak, and Cerebral Ataxia, and
+carry gyro and accelerometer columns from the DualSense.
+
 Diabetes is trained only on apple files. Ataxia is trained only on fishing
 files. A 0 on the other game is masked, not treated as a real negative.
 Synthetic mixes use the folder names in `tcn.synthetic.CONDITIONS`.
@@ -21,13 +25,14 @@ from pathlib import Path
 from tcn.recording import Example, Recording, RecordingError
 from tcn.synthetic import CONDITIONS
 
-_BASELINE = "Baseline Data"
-_PARKINSON = "Parkinsons Data"
-_TREMOR = "Tremor Data"
-_DIABETES = "Diabetes Data"
-_ATAXIA = "Cerebellar ataxia"
-_LEFT = "Left Weak"
-_RIGHT = "Right Weak"
+# new_game_data names, then the ultimate_data names (recorded with gyro and accelerometer)
+_BASELINE = frozenset({"Baseline Data", "Baseline"})
+_PARKINSON = frozenset({"Parkinsons Data", "Parkinsons"})
+_TREMOR = frozenset({"Tremor Data", "Tremor"})
+_DIABETES = frozenset({"Diabetes Data"})
+_ATAXIA = frozenset({"Cerebellar ataxia", "Cerebral Ataxia"})
+_LEFT = frozenset({"Left Weak", "Left Hand Weak"})
+_RIGHT = frozenset({"Right Weak", "Right Hand Weak"})
 
 
 def load_examples(root: str | Path) -> list[Example]:
@@ -80,19 +85,19 @@ def _targets(path: Path) -> _FolderLabel:
                 weak_hand=condition.weak_hand,
                 tremor_hand=condition.tremor_hand,
             )
-    if _LEFT in parts:
+    if parts & _LEFT:
         return _played(0.0, 100.0, 0.0, weak_hand="left")
-    if _RIGHT in parts:
+    if parts & _RIGHT:
         return _played(0.0, 100.0, 0.0, weak_hand="right")
-    if _PARKINSON in parts:
+    if parts & _PARKINSON:
         return _played(100.0, 0.0, 0.0)
-    if _TREMOR in parts:
+    if parts & _TREMOR:
         return _played(0.0, 0.0, 100.0)
-    if _DIABETES in parts:
+    if parts & _DIABETES:
         return _played(0.0, 0.0, 0.0, diabetes=100.0)
-    if _ATAXIA in parts:
+    if parts & _ATAXIA:
         return _played(0.0, 0.0, 0.0, ataxia=100.0)
-    if _BASELINE in parts:
+    if parts & _BASELINE:
         return _played(0.0, 0.0, 0.0)
     raise RecordingError(
         f"{path} is not under Baseline Data, Parkinsons Data, Tremor Data, "
@@ -134,9 +139,9 @@ def _labelled_examples(folder: Path) -> list[Example]:
 
 
 def load_training_examples(root: str | Path = "data") -> list[Example]:
-    """Apple and fishing recordings, played and synthetic. Rat files are left out."""
+    """Apple and fishing recordings, played (new_game_data, ultimate_data) and synthetic. Rat files are left out."""
     base = Path(root)
-    folders = [base / "new_game_data", base / "Synthetic"]
+    folders = [base / "new_game_data", base / "ultimate_data", base / "Synthetic"]
     examples: list[Example] = []
     for folder in folders:
         if not folder.is_dir() or not any(folder.rglob("controller_data.csv")):

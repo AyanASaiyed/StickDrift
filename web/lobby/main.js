@@ -12,6 +12,7 @@ import { RatGame } from './rat.js'
 import { LiveStream } from './live.js'
 import { Measure } from './measure.js'
 import { Recorder } from './record.js'
+import { motion } from './motion.js'
 
 const canvas = document.getElementById('c')
 const $ = (id) => document.getElementById(id)
@@ -133,8 +134,8 @@ function frame() {
     live.event(e.type, e)
     record.trial(e)
   })
-  live.sample(sample)
-  if (activeName) record.sample(sample, pad)
+  live.sample(sample, motion.latest())
+  if (activeName) record.sample(sample, pad, motion.latest())
   let ui
   if (active) {
     if (active.update(dt, pad)) leaveGame()
@@ -207,7 +208,7 @@ async function init() {
   for (const v of [hub, ...Object.values(games)]) renderer.compile(v.scene, v.camera)
   refreshScores()
   // handy for debugging / automated checks
-  window.__lobby = { hub, games, input, live, record, audio, get active() { return active }, startGame, leaveGame, renderer, renderUi }
+  window.__lobby = { hub, games, input, live, record, motion, audio, get active() { return active }, startGame, leaveGame, renderer, renderUi }
   // no start screen: begin straight away. Audio starts suspended and is unlocked by the first click / key / button press.
   audio.autoStart()
   audio.setTrack('lobby')

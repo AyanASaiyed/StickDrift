@@ -1,0 +1,240 @@
+{
+ "protocol": "lobby-v1",
+ "live_id": "4d343ea3-d4b6-43c3-a2e8-eb338b324a42",
+ "level": "apple",
+ "number": 1,
+ "completed": true,
+ "rows": 1974,
+ "duration_s": 21.01,
+ "score": 1100.0,
+ "stars": 2,
+ "source": "gamepad",
+ "motion": "webhid",
+ "params": {
+  "hand": "both",
+  "activity": "target_reach",
+  "time_s": 15,
+  "score": "100 per apple in the basket, minus 25 per wrong-colour touch"
+ },
+ "results": {
+  "trials": [
+   {
+    "type": "trial",
+    "t": 11.260800000190734,
+    "trial": 1,
+    "hand": "left",
+    "reaction_s": 0.527,
+    "reach_s": 1.881,
+    "peak_speed": 14.79,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 11.357800000190736,
+    "trial": 1,
+    "hand": "right",
+    "reaction_s": 0.743,
+    "reach_s": 1.014,
+    "peak_speed": 13.02,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 12.5175
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 12.566099999904633
+   },
+   {
+    "type": "trial",
+    "t": 13.087099999904632,
+    "trial": 2,
+    "hand": "left",
+    "reaction_s": 0.368,
+    "reach_s": 0.979,
+    "peak_speed": 12.45,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 13.969200000286103,
+    "trial": 2,
+    "hand": "right",
+    "reaction_s": 0.582,
+    "reach_s": 1.305,
+    "peak_speed": 15.29,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 14.246900000095367
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 15.1975
+   },
+   {
+    "type": "trial",
+    "t": 16.415599999904632,
+    "trial": 3,
+    "hand": "right",
+    "reaction_s": 0.367,
+    "reach_s": 1.648,
+    "peak_speed": 19.68,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 17.086300000190736,
+    "trial": 3,
+    "hand": "left",
+    "reaction_s": 0.062,
+    "reach_s": 2.201,
+    "peak_speed": 22,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 17.49540000009537
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 18.481700000286104
+   },
+   {
+    "type": "trial",
+    "t": 18.94,
+    "trial": 4,
+    "hand": "right",
+    "reaction_s": 0.104,
+    "reach_s": 1.59,
+    "peak_speed": 17.29,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 19.6827000002861,
+    "trial": 4,
+    "hand": "left",
+    "reaction_s": 0.472,
+    "reach_s": 1.611,
+    "peak_speed": 15.56,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 20.24509999990463
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 20.863400000095368
+   },
+   {
+    "type": "trial",
+    "t": 21.36290000009537,
+    "trial": 5,
+    "hand": "left",
+    "reaction_s": 0.125,
+    "reach_s": 0.757,
+    "peak_speed": 5.92,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 21.467400000095367,
+    "trial": 5,
+    "hand": "right",
+    "reaction_s": 0.639,
+    "reach_s": 1.625,
+    "peak_speed": 18.45,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 22.675200000286104
+   },
+   {
+    "type": "basket",
+    "hand": "right",
+    "t": 22.73759999990463
+   },
+   {
+    "type": "trial",
+    "t": 23.05,
+    "trial": 6,
+    "hand": "left",
+    "reaction_s": 0.389,
+    "reach_s": 0.764,
+    "peak_speed": 19.94,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "trial",
+    "t": 23.654099999904634,
+    "trial": 6,
+    "hand": "right",
+    "reaction_s": 0.597,
+    "reach_s": 1.083,
+    "peak_speed": 17.73,
+    "reach_size": 1,
+    "reached": true
+   },
+   {
+    "type": "basket",
+    "hand": "left",
+    "t": 23.84140000009537
+   },
+   {
+    "type": "trial",
+    "t": 23.989700000286103,
+    "trial": 7,
+    "hand": "left",
+    "reaction_s": null,
+    "reach_s": null,
+    "peak_speed": 12.04,
+    "reach_size": 1,
+    "reached": false
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 23.989700000286103
+   },
+   {
+    "type": "expired",
+    "hand": "left",
+    "t": 23.989700000286103
+   },
+   {
+    "type": "result",
+    "t": 23.989700000286103,
+    "score": 1100,
+    "stars": 2,
+    "red": 6,
+    "blue": 5,
+    "wrong": 0
+   }
+  ]
+ }
+}

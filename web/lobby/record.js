@@ -1,7 +1,9 @@
 // Buffers one lobby game at a time and asks the API to write
 // data/new_game_data/{stamp}_lobby/level_N_{name}/.
-// Rows keep the live_samples columns, then the full browser pad state.
+// Rows keep the live_samples columns, then the full browser pad state, then the DualSense
+// motion cells from motion.js (blank when not measured) and t_wall.
 import { AXIS_COUNT, BUTTON_NAMES } from './input.js'
+import { MOTION_CELLS } from './motion.js'
 
 const API = '/api'
 const r4 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 1e4) / 1e4 : 0)
@@ -16,8 +18,14 @@ export function controllerCells(controller) {
   return cells
 }
 
+/** motion is motion.latest(): 14 raw cells, or null, which writes blanks rather than zeros. */
+export function motionCells(motion) {
+  if (!motion) return Array(MOTION_CELLS).fill(null)
+  return motion.slice(0, MOTION_CELLS)
+}
+
 /** sample is the 17-value array from measure.js. t is replaced with seconds since this level started. */
-export function sampleRow(liveId, seq, level, t, sample, source, controller) {
+export function sampleRow(liveId, seq, level, t, sample, source, controller, motion = null) {
   const blank = (v) => (v == null ? null : v)
   return [
     liveId, seq, level, t,
@@ -28,6 +36,8 @@ export function sampleRow(liveId, seq, level, t, sample, source, controller) {
     blank(sample[13]), blank(sample[14]), blank(sample[15]), blank(sample[16]),
     source,
     ...controllerCells(controller),
+    ...motionCells(motion),
+    t,
   ]
 }
 
@@ -42,6 +52,7 @@ export class Recorder {
     this.rows = []
     this.trials = []
     this.source = 'none'
+    this.motion = false
     this.sending = Promise.resolve()
   }
 
@@ -57,6 +68,7 @@ export class Recorder {
     this.rows = []
     this.trials = []
     this.source = 'none'
+    this.motion = false
   }
 
   trial(event) {
@@ -65,12 +77,13 @@ export class Recorder {
   }
 
   /** sample is measure.frame's array; its clock is the whole visit, so the row uses this level's clock. */
-  sample(sample, pad) {
+  sample(sample, pad, motion = null) {
     if (!this.level) return
     this.seq += 1
     if (pad.source && pad.source !== 'none') this.source = pad.source
+    if (motion) this.motion = true
     const t = Math.round(this.now() * 1000) / 1000
-    this.rows.push(sampleRow(this.liveId, this.seq, this.level, t, sample, pad.source || 'none', pad.controller))
+    this.rows.push(sampleRow(this.liveId, this.seq, this.level, t, sample, pad.source || 'none', pad.controller, motion))
   }
 
   async ensureSession() {
@@ -106,6 +119,7 @@ export class Recorder {
       score: meta.score ?? null,
       stars: meta.stars ?? null,
       source: this.source,
+      motion: this.motion ? 'webhid' : 'none',
       trials: this.trials.splice(0),
       rows: this.rows.splice(0),
     }

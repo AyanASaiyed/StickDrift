@@ -11,7 +11,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "data" / "new_game_data"
+DATA = ROOT / "data" / "ultimate_data"
 
 LEVELS = {"apple": 1, "fish": 2, "rat": 3}
 FOLDER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_lobby(_\d+)?$")
@@ -31,12 +31,26 @@ BUTTON_NAMES = (
     "share", "options", "l3", "r3", "dpad_up", "dpad_down", "dpad_left", "dpad_right", "ps", "touchpad",
 )
 AXIS_COUNT = 8
-HEADER = (
+# Matches web/lobby/motion.js. Same names and raw units as the garden recorder (read_data.py).
+MOTION_COLUMNS = (
+    "gyro_x", "gyro_y", "gyro_z", "acc_x", "acc_y", "acc_z",
+    "t1_active", "t1_x", "t1_y", "t2_active", "t2_x", "t2_y",
+    "battery", "Mute", "t_wall",
+)
+PAD_HEADER = (
     LIVE_COLUMNS
     + ("source",)
     + tuple(f"axis_{i}" for i in range(AXIS_COUNT))
     + tuple(part for name in BUTTON_NAMES for part in (f"{name}_pressed", f"{name}_value"))
 )
+HEADER = PAD_HEADER + MOTION_COLUMNS
+T_INDEX = HEADER.index("t")
+
+NO_MOTION_NOTE = ("motion, touch points, and battery were not available from the browser Gamepad API, "
+                  "so those cells are blank and must not be read as zero.")
+MOTION_NOTE = ("gyro_*, acc_*, touch points (t1_*, t2_*), battery (percent), and Mute were read from the "
+               "DualSense over WebHID at the lobby frame rate, in the same raw units as the garden recorder. "
+               "Blank cells were not measured and must not be read as zero.")
 
 PARAMS = {
     "apple": {
@@ -118,7 +132,7 @@ def start_session(source: str, root: Path = DATA) -> dict:
         "levels": [],
         "columns": list(HEADER),
         "coordinates": "lx/ly/rx/ry, tgt_* and cur_* match live_samples: -1..1, y grows downward. axis_* is the browser Gamepad axis, y grows downward.",
-        "note": "Sampled at the lobby frame rate from the browser Gamepad API. Gyro, accelerometer, touch points, and battery are not available.",
+        "note": NO_MOTION_NOTE,
     }
     (path / "session.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     return {"live_id": live_id, "folder": folder}
@@ -131,6 +145,9 @@ def _check_rows(rows, live_id: str, level: str):
         raise RecordingError("Level has no samples")
     width = len(HEADER)
     for index, row in enumerate(rows, start=1):
+        if isinstance(row, list) and len(row) == len(PAD_HEADER):
+            # A tab still running the page from before motion.js: motion cells are blank, t_wall is t.
+            row.extend([None] * (len(MOTION_COLUMNS) - 1) + [row[T_INDEX]])
         if not isinstance(row, list) or len(row) != width:
             raise RecordingError("Sample row has the wrong columns")
         if row[0] != live_id or row[1] != index or row[2] != level:
@@ -144,11 +161,13 @@ def _check_rows(rows, live_id: str, level: str):
 
 
 def write_level(live_id: str, folder: str, level: str, completed: bool, duration_s: float,
-                score, stars, source: str, trials, rows, root: Path = DATA) -> dict:
+                score, stars, source: str, trials, rows, root: Path = DATA, motion: str = "none") -> dict:
     if level not in LEVELS:
         raise RecordingError("Unknown level")
     if source not in ("gamepad", "keyboard", "none"):
         raise RecordingError("Unknown input source")
+    if motion not in ("webhid", "none"):
+        raise RecordingError("Unknown motion source")
     if not isinstance(duration_s, (int, float)) or not 0 <= float(duration_s) <= 3600:
         raise RecordingError("Bad level duration")
     if trials is None:
@@ -176,6 +195,7 @@ def write_level(live_id: str, folder: str, level: str, completed: bool, duration
         "score": score,
         "stars": stars,
         "source": source,
+        "motion": motion,
         "params": PARAMS[level],
         "results": {"trials": trials},
     }
@@ -190,12 +210,16 @@ def write_level(live_id: str, folder: str, level: str, completed: bool, duration
         "duration_s": level_meta["duration_s"],
         "score": score,
         "stars": stars,
+        "motion": motion,
     }
     session["levels"] = [item for item in session.get("levels", []) if item.get("level") != level]
     session["levels"].append(entry)
     session["levels"].sort(key=lambda item: LEVELS[item["level"]])
     if source != "none":
         session["source"] = source
+    session["columns"] = list(HEADER)
+    any_motion = any(item.get("motion") == "webhid" for item in session["levels"])
+    session["note"] = MOTION_NOTE if any_motion else NO_MOTION_NOTE
     session_path.write_text(json.dumps(session, indent=1), encoding="utf-8")
     return {"folder": str(level_dir), "rows": len(rows)}
 
