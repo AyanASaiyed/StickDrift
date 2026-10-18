@@ -98,6 +98,7 @@ export default function ResidentDetail() {
           {data.display_name[0].toUpperCase()}
         </span>
         <div>
+          <p className="eyebrow">Resident</p>
           <h1>
             {data.display_name} <RiskBadge risk={insights.risk} />
           </h1>

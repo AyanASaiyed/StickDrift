@@ -55,6 +55,7 @@ export default function CaregiverDashboard() {
   return (
     <main className="wrap page-pad">
       <header className="page-title">
+        <p className="eyebrow">Care team</p>
         <h1>Residents</h1>
         {rows && (
           <p className="muted">

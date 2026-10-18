@@ -85,10 +85,9 @@ export function TopBar() {
       <div className="wrap topbar-inner">
         <Link to={home} className="wordmark">
           <svg viewBox="0 0 32 32" aria-hidden className="mark">
-            <circle cx="10" cy="16" r="7" />
-            <circle cx="22" cy="16" r="7" />
-            <circle cx="12" cy="13" r="2.5" className="mark-dot" />
-            <circle cx="24" cy="18" r="2.5" className="mark-dot" />
+            <path d="M8 13c0 7 3.5 11 8 11s8-4 8-11" className="mark-bridge" />
+            <circle cx="8" cy="9.5" r="4" className="mark-head" />
+            <circle cx="24" cy="9.5" r="4" className="mark-head" />
           </svg>
           Stick Drift
         </Link>
