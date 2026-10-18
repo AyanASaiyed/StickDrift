@@ -992,3 +992,33 @@ main.page-pad > .live-now + .panel, main.page-pad > .risk-alert + .tabs { margin
 .game-note { margin: 8px 0 0; font-size: 0.92rem; }
 .game-patterns { margin-top: 18px; }
 .game-patterns h3 { margin: 0 0 2px; font-size: 1.05rem; }
+
+/* game visits: what was played, in plain words */
+.visit-status { border-radius: 14px; padding: 14px 16px; margin: 12px 0 16px; border: 1px solid var(--line); background: var(--surface); }
+.visit-status-ok { border-color: var(--ok); }
+.visit-status-part { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.visit-status p { margin: 10px 0 0; font-size: 1rem; line-height: 1.5; }
+.visit-chips { display: flex; flex-wrap: wrap; gap: 10px; list-style: none; margin: 0; padding: 0; }
+.visit-chip { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.visit-chip small { display: block; font-size: 0.8rem; color: var(--muted); }
+.visit-chip-mark { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-weight: 700; background: var(--line); color: var(--ink); }
+.visit-chip-done .visit-chip-mark { background: var(--ok); color: #fff; }
+.visit-chip-early .visit-chip-mark { background: var(--accent); color: var(--accent-ink); }
+.visit-chip-none { border-style: dashed; color: var(--muted); }
+.game-card-none { border-style: dashed; background: transparent; }
+.game-card-none h3 { color: var(--muted); }
+.game-headline { margin: 4px 0 2px; font-size: 1.25rem; font-weight: 700; line-height: 1.3; }
+.game-blurb { margin: 0 0 10px; font-size: 0.9rem; }
+.row-hint { display: block; font-weight: 400; font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.delta-note { display: block; font-weight: 400; font-size: 0.78rem; color: var(--muted); margin-top: 2px; white-space: normal; }
+.game-more { margin-top: 10px; }
+.game-more summary { cursor: pointer; font-size: 0.92rem; color: var(--accent); font-weight: 600; }
+.game-more .game-table { margin-top: 8px; }
+td.partial { color: var(--accent); font-weight: 600; }
+.badge-live { color: var(--ok); border-color: currentColor; margin-left: 8px; }
+
+.game-glossary { margin: 14px 0 6px; }
+.game-glossary dl { margin: 8px 0 0; display: grid; gap: 8px; }
+.game-glossary dt { font-weight: 600; font-size: 0.92rem; }
+.game-glossary dd { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.game-table tbody th { width: 46%; }

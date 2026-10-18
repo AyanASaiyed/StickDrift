@@ -97,9 +97,12 @@ export function LiveNow({ participantId, compact }: { participantId?: string; co
             return (
               <li key={b.live_id}>
                 <Link to={`/caregiver/live/${b.live_id}`}>
-                  <strong>{b.name}</strong> · {SHORT[b.status].toLowerCase()}
+                  <strong>{b.name}</strong> ·{' '}
+                  {b.levels.includes('lobby')
+                    ? `played ${b.levels_done.length} of ${chapterCount(b.levels)} games`
+                    : SHORT[b.status].toLowerCase()}
                   {b.rat?.score != null ? ` · Rat Catching ${b.rat.score} pts` : ''}
-                  {top ? ` · ${top.label.toLowerCase()} ${Math.round(top.value)}/100` : ''}
+                  {top && top.value >= 50 ? ` · ${top.label.toLowerCase()} ${Math.round(top.value)}/100` : ''}
                   <span className="live-card-cta"> Open →</span>
                 </Link>
               </li>

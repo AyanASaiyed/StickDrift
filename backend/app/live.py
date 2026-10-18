@@ -97,6 +97,7 @@ class LiveSession:
         self.proc: Optional[subprocess.Popen] = None
         self.last_state_write = 0.0
         self.reporting = False
+        self.needs_save = False  # a lobby game just ended: copy the visit so far into the resident's history
         # Lobby frames live here until the visit ends. They are never written to the database.
         self.capture = {name: {"frames": [], "events": []} for name in LOBBY_GAMES}
 
@@ -149,9 +150,16 @@ class LiveSession:
             self.status = "paused"
         elif kind == "resumed":
             self.status = "playing"
+        elif kind == "result" and "lobby" in self.levels and self.level in LOBBY_GAMES:
+            # A lobby game only sends its result when it was played through; leaving early sends none.
+            if self.level not in self.levels_done:
+                self.levels_done.append(self.level)
+            self.needs_save = True
         elif kind == "level_end":
             self.metrics.close_trial()
-            if e.get("level") and e.get("completed"):
+            if "lobby" in self.levels:
+                self.needs_save = self.needs_save or self.level in LOBBY_GAMES  # also when left early
+            elif e.get("level") and e.get("completed"):
                 self.levels_done.append(str(e["level"]))
             self.status, self.level, self.trial, self.phase = "ready", None, None, None
         elif kind == "input":  # the lobby saw a controller after starting as "keyboard"
@@ -581,8 +589,20 @@ def _end_lobby(s: LiveSession, status: str = "ended"):
 LOBBY_PROTOCOL = "lobby-v1"
 
 
-def save_lobby(live_id: UUID) -> Optional[UUID]:
-    """Save a finished lobby visit once; returns its session_id (None if no game was played)."""
+def _save_so_far(live_id: UUID):
+    try:
+        save_lobby(live_id, final=False)
+    except Exception:
+        log.exception("Saving lobby visit %s so far failed; it will be saved when the visit ends", live_id)
+
+
+def save_lobby(live_id: UUID, final: bool = True) -> Optional[UUID]:
+    """Save a lobby visit to the resident's history and return its session_id (None if no game was played).
+
+    Safe to call again: the same visit is updated and only new in-game samples are copied. While the visit
+    is still open (`final=False`) it is `in_progress`, so a caregiver sees each game's results as soon as
+    that game ends, even if the resident then leaves without playing the others.
+    """
     with pool.connection() as conn, conn.transaction():
         row = conn.execute(
             """SELECT participant_id, synthetic, status, levels, levels_done, metrics, db_session_id,
@@ -590,8 +610,8 @@ def save_lobby(live_id: UUID) -> Optional[UUID]:
                FROM live_sessions WHERE live_id = %s FOR UPDATE""",
             (live_id,),
         ).fetchone()
-        if row is None or "lobby" not in (row["levels"] or []) or row["db_session_id"]:
-            return row["db_session_id"] if row else None
+        if row is None or "lobby" not in (row["levels"] or []):
+            return None
         played = conn.execute(
             """SELECT level, count(*) AS n, max(t) - min(t) AS span
                FROM live_samples WHERE live_id = %s AND level <> 'lobby' AND phase IS NOT NULL
@@ -599,7 +619,7 @@ def save_lobby(live_id: UUID) -> Optional[UUID]:
             (live_id,),
         ).fetchall()
         if not played:
-            return None
+            return row["db_session_id"]
         metrics = row["metrics"] or SessionMetrics().summary()
         done = list(dict.fromkeys(g for g in row["levels_done"] if g in LOBBY_GAMES))
         # The page only knows about a controller once a button is pressed, so "keyboard" at the start can be
@@ -608,18 +628,36 @@ def save_lobby(live_id: UUID) -> Optional[UUID]:
         games = {p["level"]: {**game_summary(metrics, p["level"]), "samples": p["n"],
                               "play_s": round(float(p["span"] or 0), 1), "finished": p["level"] in done}
                  for p in played if p["level"] in LOBBY_GAMES}
-        session_id = conn.execute(
-            """INSERT INTO sessions (participant_id, mode, protocol_version, connection, status, quality,
-                                   is_synthetic, started_at, completed_at)
-               VALUES (%s, 'free_play', %s, %s, %s, NULL, %s, %s, %s) RETURNING session_id""",
-            (row["participant_id"], LOBBY_PROTOCOL, "simulated" if synthetic else "unknown",
-             "completed" if done else "abandoned", synthetic, row["started_at"], row["ended_at"]),
-        ).fetchone()["session_id"]
-        conn.execute(
-            "INSERT INTO session_summaries (session_id, metrics, code_version) VALUES (%s, %s, %s)",
-            (session_id, Jsonb({"games": games, "games_finished": done, "reach_trials": metrics.get("reach_trials", [])}),
-             LOBBY_PROTOCOL),
-        )
+        status = "in_progress" if not final else ("completed" if done else "abandoned")
+        summary = {"games": games, "games_finished": done, "reach_trials": metrics.get("reach_trials", [])}
+        connection = "simulated" if synthetic else "unknown"
+        session_id = row["db_session_id"]
+        if session_id is None:
+            session_id = conn.execute(
+                """INSERT INTO sessions (participant_id, mode, protocol_version, connection, status, quality,
+                                       is_synthetic, started_at, completed_at)
+                   VALUES (%s, 'free_play', %s, %s, %s, NULL, %s, %s, %s) RETURNING session_id""",
+                (row["participant_id"], LOBBY_PROTOCOL, connection, status, synthetic, row["started_at"],
+                 row["ended_at"] if final else None),
+            ).fetchone()["session_id"]
+            conn.execute(
+                "INSERT INTO session_summaries (session_id, metrics, code_version) VALUES (%s, %s, %s)",
+                (session_id, Jsonb(summary), LOBBY_PROTOCOL),
+            )
+            conn.execute("UPDATE live_sessions SET db_session_id = %s WHERE live_id = %s", (session_id, live_id))
+        else:
+            # `||` only replaces these keys, so a pattern-model report attached later is kept
+            conn.execute(
+                """UPDATE sessions SET status = %s, connection = %s, is_synthetic = %s,
+                          completed_at = %s WHERE session_id = %s""",
+                (status, connection, synthetic, row["ended_at"] if final else None, session_id),
+            )
+            conn.execute(
+                "UPDATE session_summaries SET metrics = metrics || %s WHERE session_id = %s",
+                (Jsonb(summary), session_id),
+            )
+        last = conn.execute("SELECT COALESCE(max(seq), 0) AS m FROM raw_samples WHERE session_id = %s",
+                            (session_id,)).fetchone()["m"]
         conn.execute(
             """INSERT INTO raw_samples (time, session_id, seq, t_ms, lx, ly, rx, ry, connected, activity, game,
                                       trial_id, target_lx, target_ly, target_rx, target_ry,
@@ -628,10 +666,9 @@ def save_lobby(live_id: UUID) -> Optional[UUID]:
                       CASE level WHEN 'fish' THEN 'target_tracking' ELSE 'target_reach' END, level,
                       trial, tgt_lx, tgt_ly, tgt_rx, tgt_ry, cur_lx, cur_ly, cur_rx, cur_ry
                FROM live_samples
-               WHERE live_id = %s AND level <> 'lobby' AND phase IS NOT NULL AND lx IS NOT NULL""",
-            (row["started_at"], session_id, live_id),
+               WHERE live_id = %s AND level <> 'lobby' AND phase IS NOT NULL AND lx IS NOT NULL AND seq > %s""",
+            (row["started_at"], session_id, live_id, last),
         )
-        conn.execute("UPDATE live_sessions SET db_session_id = %s WHERE live_id = %s", (session_id, live_id))
         return session_id
 
 
@@ -656,9 +693,9 @@ def save_unsaved_lobbies(min_gap_s: float = 30.0) -> int:
     _last_sweep = time.monotonic()
     with pool.connection() as conn:
         ids = [r["live_id"] for r in conn.execute(
-            f"""SELECT live_id FROM live_sessions
-                WHERE levels ? 'lobby' AND db_session_id IS NULL
-                  AND (status NOT IN ({",".join(["%s"] * len(ACTIVE))}) OR updated_at < now() - make_interval(secs => %s))""",
+            f"""SELECT l.live_id FROM live_sessions l LEFT JOIN sessions s ON s.session_id = l.db_session_id
+                WHERE l.levels ? 'lobby' AND (l.db_session_id IS NULL OR s.status = 'in_progress')
+                  AND (l.status NOT IN ({",".join(["%s"] * len(ACTIVE))}) OR l.updated_at < now() - make_interval(secs => %s))""",
             (*ACTIVE, STALE_S),
         ).fetchall()]
     saved = 0
@@ -728,6 +765,9 @@ def ingest(body: IngestIn, x_live_token: str = Header(...)):
     _store_samples(rows)
     if changed or time.monotonic() - s.last_state_write >= STATE_EVERY_S:
         _persist(s)
+    if s.needs_save:
+        s.needs_save = False
+        threading.Thread(target=_save_so_far, args=(s.id,), daemon=True).start()
     return {"ok": True}
 
 

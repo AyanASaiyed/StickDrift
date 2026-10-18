@@ -171,11 +171,16 @@ function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recent
                 p == null ? null : (
                   <g key={i}>
                     {s.flagged?.[i] && <circle className="chart-flag" cx={p[0]} cy={p[1]} r={9} />}
-                    <circle className="chart-dot" cx={p[0]} cy={p[1]} r={4.5} style={{ fill: s.color }}>
+                    <circle className="chart-dot" cx={p[0]} cy={p[1]} r={n === 1 ? 7 : 4.5} style={{ fill: s.color }}>
                       <title>{`${s.label} · ${xLabels[i]}: ${format(s.points[i] as number)}${
                         s.flagged?.[i] ? ' (changed from usual)' : ''
                       }`}</title>
                     </circle>
+                    {n === 1 && (
+                      <text className="chart-axis" x={p[0] + 14} y={p[1]} dominantBaseline="middle">
+                        {format(s.points[i] as number)}
+                      </text>
+                    )}
                   </g>
                 ),
               )}
@@ -183,6 +188,7 @@ function LineChart({ title, caption, xLabels, series, format, yMin, yMax, recent
           )
         })}
       </svg>
+      {n === 1 && <p className="hint">This is the first visit. A line appears once there is a second one to compare.</p>}
       {findings && findings.length > 0 && (
         <ul className="chart-findings">
           {findings.map((f) => (
@@ -216,13 +222,8 @@ export function TrendCharts({ sessions, insights }: { sessions: SessionSummary[]
     .slice()
     .reverse()
 
-  if (usable.length < 2) {
-    return (
-      <p className="muted">
-        Charts appear once there are at least two completed sessions to compare.{' '}
-        {usable.length === 1 ? '1 so far.' : ''}
-      </p>
-    )
+  if (usable.length < 1) {
+    return <p className="muted">Charts appear after the first completed session.</p>
   }
 
   const findings = new Map(insights.findings.map((f) => [f.key, f]))
@@ -378,9 +379,9 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
   const scored = ordered.filter((v) => v.tcn?.scores)
   const live = ordered.filter((v) => v.live)
 
-  const empty = (n: number, what: string) => (
+  const empty = (what: string) => (
     <p className="muted">
-      {what} appears after at least two visits with this data. {n === 1 ? '1 so far.' : ''}
+      {what} appears after the first visit with this data.
     </p>
   )
 
@@ -388,8 +389,8 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
     <div className="chart-single">
       <Tabs variant="pills" label="Garden chart" value={view} onChange={setView} items={GARDEN_TABS} />
       {view === 'patterns' &&
-        (scored.length < 2 ? (
-          empty(scored.length, 'The pattern-score chart')
+        (scored.length < 1 ? (
+          empty('The pattern-score chart')
         ) : (
           <LineChart
             title="Pattern scores"
@@ -406,8 +407,8 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
           />
         ))}
       {view === 'reach' &&
-        (live.length < 2 ? (
-          empty(live.length, 'The reach-time chart')
+        (live.length < 1 ? (
+          empty('The reach-time chart')
         ) : (
           <LineChart
             title="Time to reach an apple"
@@ -421,8 +422,8 @@ export function GardenTrendCharts({ visits }: { visits: GardenSession[] }) {
           />
         ))}
       {view === 'tracking' &&
-        (live.length < 2 ? (
-          empty(live.length, 'The tracking chart')
+        (live.length < 1 ? (
+          empty('The tracking chart')
         ) : (
           <LineChart
             title="Distance from target"
@@ -490,10 +491,9 @@ export function GameTrendCharts({ visits }: { visits: GameSession[] }) {
         onChange={setView}
         items={GAME_TABS.map((t) => ({ ...t, badge: played(t.key).length || null }))}
       />
-      {rows.length < 2 ? (
+      {rows.length < 1 ? (
         <p className="muted">
-          This chart appears after at least two visits that include {GAME_TABS.find((t) => t.key === view)!.label}.{' '}
-          {rows.length === 1 ? '1 so far.' : ''}
+          This chart appears after the first visit that includes {GAME_TABS.find((t) => t.key === view)!.label}.
         </p>
       ) : (
         <LineChart

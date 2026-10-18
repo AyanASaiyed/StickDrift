@@ -133,7 +133,7 @@ export default function ResidentDetail() {
       <TabPanel>
         {tab === 'overview' && <Overview data={data} insights={insights} />}
         {tab === 'trends' && <Trends data={data} insights={insights} />}
-        {tab === 'games' && <GameVisits visits={data.game_sessions} />}
+        {tab === 'games' && <GameVisits visits={data.game_sessions} name={data.display_name} />}
         {tab === 'garden' && <GardenVisits visits={data.garden_sessions} />}
         {tab === 'ask' && (
           <Assistant
