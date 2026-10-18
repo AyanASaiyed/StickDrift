@@ -598,7 +598,7 @@ export function RatPoints({ rat, labeled = true }: { rat: RatReport; labeled?: b
 }
 
 export function hasPatternScores(scores: PatternScores | null | undefined) {
-  return !!scores && Object.values(scores).some((v) => v != null);
+  return !!scores && PATTERN_ORDER.some((k) => scores[k] != null);
 }
 
 // ---- TCN pattern judgement --------------------------------------------------------

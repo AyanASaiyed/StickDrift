@@ -147,7 +147,7 @@ def _strings(v) -> List[str]:
 def _problems(draft: dict, facts: str, has_concerns: bool) -> Optional[str]:
     text = "\n".join(_strings(draft))
     if names_condition(text):
-        return ("It named a medical condition outside the pattern model's five pattern names. Describe only the "
+        return ("It named a medical condition outside the pattern model's pattern names. Describe only the "
                 "measured functional change.")
     extra = unverified(text, facts)
     if extra:

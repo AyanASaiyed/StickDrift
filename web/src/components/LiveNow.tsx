@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { api, type LiveBrief, type LiveStatus, type PatternKey } from '../api'
-import { levelName, PATTERN_LABELS } from './liveData'
+import { api, type LiveBrief, type LiveStatus } from '../api'
+import { levelName, PATTERN_LABELS, PATTERN_ORDER } from './liveData'
 
 const ACTIVE: LiveStatus[] = ['starting', 'waiting', 'ready', 'playing', 'paused', 'saving', 'scoring']
 
@@ -25,7 +25,8 @@ const chapterCount = (levels: string[]) => levels.filter((l) => l !== 'lobby').l
 
 function topPattern(b: LiveBrief) {
   if (!b.tcn_scores) return null
-  const entries = Object.entries(b.tcn_scores).filter(([, v]) => v != null) as [PatternKey, number][]
+  const scores = b.tcn_scores
+  const entries = PATTERN_ORDER.filter((k) => scores[k] != null).map((k) => [k, scores[k] as number] as const)
   if (!entries.length) return null
   const [key, value] = entries.sort((a, z) => z[1] - a[1])[0]
   return { label: PATTERN_LABELS[key], value }

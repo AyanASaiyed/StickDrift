@@ -780,6 +780,7 @@ td.num {
 .pattern-list li { display: grid; grid-template-columns: 260px 1fr 70px 120px; gap: 12px; align-items: center; }
 @media (max-width: 760px) { .pattern-list li { grid-template-columns: 1fr auto; } .pattern-track { grid-column: 1 / -1; } }
 .pattern-label { font-weight: 700; }
+.pattern-note { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); font-size: 0.92rem; line-height: 1.45; }
 .pattern-hint { display: block; font-weight: 400; font-size: 0.82rem; color: var(--muted); margin-top: 1px; }
 .pattern-track { position: relative; height: 16px; border-radius: 8px; background: color-mix(in srgb, var(--line) 55%, transparent); }
 .pattern-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: var(--accent); }

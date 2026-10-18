@@ -4,11 +4,12 @@ import { api, type Finding, type GameSession, type GardenSession, type Insights,
 import { Assistant } from '../components/Assistant'
 import { GameVisits } from '../components/GameVisits'
 import { ConcernCard, RiskAlert, RiskBadge } from '../components/Insights'
-import { PatternBars, RatPoints, hasPatternScores } from '../components/LiveCharts'
+import { PatternBars, RatPoints } from '../components/LiveCharts'
 import { PATTERN_LABELS, PATTERN_ORDER, pct, secs } from '../components/liveData'
 import { LiveNow } from '../components/LiveNow'
 import { SessionTable } from '../components/SessionTable'
 import { TabPanel, Tabs } from '../components/Tabs'
+import { VisitPatterns } from '../components/VisitPatterns'
 import { GameTrendCharts, GardenTrendCharts, TrendCharts } from '../components/TrendCharts'
 import { formatDateTime } from '../format'
 
@@ -175,7 +176,7 @@ function Overview({ data, insights }: { data: Detail; insights: Insights }) {
 
   return (
     <>
-      {latestGame && <LatestJudgement visit={latestGame} />}
+      {latestGame && <LatestJudgement visits={data.game_sessions} />}
       {insights.status === 'ok' && (
         <section className="glance" aria-label="Latest session compared with usual">
           {rows.map((row) => (
@@ -232,21 +233,15 @@ function Overview({ data, insights }: { data: Detail; insights: Insights }) {
   )
 }
 
-function LatestJudgement({ visit }: { visit: GameSession }) {
-  const scores = visit.tcn?.scores
+function LatestJudgement({ visits }: { visits: GameSession[] }) {
+  const visit = visits[0]
   const rat = visit.visit?.games?.rat
-  const scored = hasPatternScores(scores)
-  const failed = !scored && !!visit.tcn?.levels?.some((level) => level.error)
-  if (!scored && rat?.score == null && !failed) return null
   return (
     <section className="panel judge judge-done">
       <h2>
         Latest visit <span className="muted section-sub">{formatDateTime(visit.started_at)}</span>
       </h2>
-      {scored && scores && <PatternBars scores={scores} levels={visit.tcn?.levels} />}
-      {!scored && visit.tcn?.levels?.some((level) => level.error) && (
-        <p className="error">The pattern model could not score Apple Picking and Harbour Fishing for this visit.</p>
-      )}
+      <VisitPatterns visits={visits} />
       {rat && <RatPoints rat={rat} />}
     </section>
   )

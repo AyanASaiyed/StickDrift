@@ -339,7 +339,7 @@ def add_model_concerns(insights: dict, garden_sessions: List[dict], kind: str = 
     Harbour Fishing are scored). Scores are 0-100 pattern resemblance, not disease probabilities.
     """
     judged = [g for g in garden_sessions
-              if g.get("tcn") and any(v is not None for v in (g["tcn"].get("scores") or {}).values())]
+              if g.get("tcn") and any((g["tcn"].get("scores") or {}).get(k) is not None for k in PATTERN_LABELS)]
     noun = "garden session" if kind == "garden" else "game visit"
     if kind == "garden":
         visits, n_judged = len(garden_sessions), len(judged)
