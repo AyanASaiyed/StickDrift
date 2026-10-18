@@ -1,15 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 294 64" role="img" aria-labelledby="title">
   <title id="title">Stick Drift</title>
   <style>
-    .heads, .name { fill: #1b1f23; }
-    .bridge { fill: none; stroke: #1f5f8b; stroke-width: 7; stroke-linecap: round; }
+    .name { fill: #1b1f23; }
     @media (prefers-color-scheme: dark) {
-      .heads, .name { fill: #f2f0eb; }
-      .bridge { stroke: #6fb3e0; }
+      .name { fill: #f2f0eb; }
     }
   </style>
-  <path class="bridge" d="M16 26c0 14 7 22 16 22s16-8 16-22"/>
-  <circle class="heads" cx="16" cy="19" r="8"/>
-  <circle class="heads" cx="48" cy="19" r="8"/>
+  <rect x="2" y="2" width="60" height="60" rx="9" fill="#d93a2b"/>
+  <rect x="7" y="7" width="50" height="50" rx="5" fill="none" stroke="#fff3ea" stroke-opacity="0.55" stroke-width="2"/>
+  <circle cx="22" cy="34" r="9" fill="#fff3ea"/>
+  <circle cx="42" cy="34" r="9" fill="#fff3ea"/>
+  <circle cx="24.5" cy="31" r="3.4" fill="#d93a2b"/>
+  <circle cx="44.5" cy="37" r="3.4" fill="#d93a2b"/>
   <text class="name" x="77" y="43" font-family="Atkinson Hyperlegible, Segoe UI, Arial, sans-serif" font-size="31" font-weight="700" letter-spacing="-0.6">Stick Drift</text>
 </svg>

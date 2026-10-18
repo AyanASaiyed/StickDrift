@@ -155,17 +155,9 @@ kbd {
   color: var(--ink);
   text-decoration: none;
 }
-.mark {
-  width: 32px;
-  height: 32px;
+.wordmark .stamp-mark {
   flex: none;
-}
-.mark-head { fill: var(--ink); }
-.mark-bridge {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3.5;
-  stroke-linecap: round;
+  border-radius: 8px;
 }
 
 /* Profile menu */
