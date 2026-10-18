@@ -22,6 +22,9 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
+from tcn.config import CHANNELS
 from tcn.recording import Example, Recording, RecordingError
 from tcn.synthetic import CONDITIONS
 
@@ -138,6 +141,58 @@ def _labelled_examples(folder: Path) -> list[Example]:
     return examples
 
 
+# Gyro shake (residual RMS, raw DualSense units) of the played recordings: healthy and
+# Parkinson's play is about 20-55, real tremor is 410-1040. With only those two
+# groups the model called anything above healthy a full tremor, so a hand that shakes
+# a little scored like one that shakes hard. These copies fill in the middle.
+SHAKE_NONE = 60.0  # at or below this, no tremor
+SHAKE_FULL = 450.0  # at or above this, full tremor
+SHAKE_LADDER = (70.0, 110.0, 160.0, 230.0, 330.0)
+_GYRO = [CHANNELS.index(name) for name in ("gyro_x", "gyro_y", "gyro_z")]
+
+
+def _shake(values: np.ndarray, hz: float) -> float:
+    window = max(3, int(round(0.16 * hz)))
+    kernel = np.ones(window) / window
+    parts = [values[:, c] - np.convolve(values[:, c], kernel, mode="same") for c in _GYRO]
+    return float(np.sqrt(np.mean([part.std() ** 2 for part in parts])))
+
+
+def shake_label(shake: float) -> float:
+    """How much tremor a gyro shake of this size is, from 0 to 100."""
+    return float(np.clip((shake - SHAKE_NONE) / (SHAKE_FULL - SHAKE_NONE), 0.0, 1.0) * 100.0)
+
+
+def weaker_tremors(example: Example) -> list[Example]:
+    """Copies of a full-tremor recording with the shake scaled down, each labelled by its size."""
+    old = example.recording
+    if float(example.target[2]) < 100.0 or not np.abs(old.values[:, _GYRO]).max() > 0.0:
+        return []
+    hz = len(old.time_s) / max(float(old.time_s[-1] - old.time_s[0]), 1e-6)
+    window = max(3, int(round(0.16 * hz)))
+    kernel = np.ones(window) / window
+    current = _shake(old.values, hz)
+    copies = []
+    for target in SHAKE_LADDER:
+        if target >= current:
+            continue
+        scale = target / current
+        values = old.values.copy()
+        for c in _GYRO:
+            slow = np.convolve(values[:, c], kernel, mode="same")
+            values[:, c] = slow + scale * (values[:, c] - slow)
+        twin = Recording(
+            old.time_s, values, old.name, cues=old.cue_s, task_spans=old.task_spans,
+            targets=old.targets, cursors=old.cursors, bounds=old.bounds, activity=old.activity,
+        )
+        copies.append(Example(
+            twin, example.target[0], example.target[1], shake_label(target),
+            weak_hand=example.weak_hand, tremor_hand=example.tremor_hand,
+            diabetes=example.diabetes, ataxia=example.ataxia, activity=example.activity,
+        ))
+    return copies
+
+
 def load_training_examples(root: str | Path = "data") -> list[Example]:
     """Apple and fishing recordings, played (new_game_data, ultimate_data) and synthetic. Rat files are left out."""
     base = Path(root)
@@ -149,6 +204,8 @@ def load_training_examples(root: str | Path = "data") -> list[Example]:
         examples.extend(
             example for example in _labelled_examples(folder) if example.activity != "rat"
         )
+    for example in list(examples):
+        examples.extend(weaker_tremors(example))
     if not examples:
         raise RecordingError(f"{base} has no new-game or synthetic recordings.")
     return examples
