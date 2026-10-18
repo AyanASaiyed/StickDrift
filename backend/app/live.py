@@ -461,6 +461,9 @@ def _run_report(capture: dict) -> dict:
         detail = out.stderr.strip().splitlines()
         raise RuntimeError(detail[-1] if detail else "visit report failed")
     report = json.loads(out.stdout)
+    errors = [level.get("error") for level in (report.get("dashboard") or {}).get("levels") or [] if level.get("error")]
+    if errors:
+        log.warning("Visit report scored with errors (python=%s): %s", python, errors)
     if _holds_frames(report):
         raise RuntimeError("visit report still held the raw frames")
     return report

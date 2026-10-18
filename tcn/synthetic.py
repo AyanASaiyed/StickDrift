@@ -13,7 +13,11 @@ change how they push, using what the played recordings show:
 - Stroke: the same broken, late pushes, on the weak hand only.
 - Essential tremor: a 6-7.5 Hz shake added to the stick while pushing.
 - Diabetes (apple only): the reach passes the apple or stops short, pauses, then corrects.
-- Ataxia (fishing only): the aim wanders slowly off the lane, with choppier pushes.
+- Ataxia (fishing only): the hand drifts slowly sideways off the lane while pushing steadily.
+
+In Harbour Fishing the lane only moves while the player pushes along it, so a
+stop-start player (Parkinson) pauses with the lane and stays on it; the pauses
+show as time with the stick let go, not as a miss.
 
 The fishing lane has no stored border: reached_l / reached_r is 1 while the
 cursor is inside the lane and 0 while it is outside. On apple, reached is 1
@@ -34,7 +38,9 @@ import numpy as np
 HZ = 100
 LANE_HALF = 0.10
 REACH = 0.08
-GAIN = {"apple": 0.87, "fish": 0.60}
+LOOK_AHEAD = 0.25  # fishing: how far along the lane the player aims
+CAUGHT_UP = 0.05  # fishing: let go once this close along the lane
+GAIN = {"apple": 0.87, "fish": 0.95}  # hand speed per unit of stick, measured from played files
 TEMPLATES = Path("data/new_game_data/Baseline Data")
 
 COLUMNS = (
@@ -129,9 +135,17 @@ class _Apple:
 
 
 @dataclass(frozen=True)
+class _Lane:
+    hand: str
+    idle_s: float  # pause before this lane appears
+    path: np.ndarray  # (n, 2) points along the lane
+    along: np.ndarray  # distance along the lane at each point
+
+
+@dataclass(frozen=True)
 class _Fish:
-    time_s: np.ndarray
-    targets: dict[str, np.ndarray]  # hand -> (n, 2), NaN while that hand has no lane
+    lanes: tuple[_Lane, ...]
+    tail_s: float  # pause after the last lane
 
 
 def _read(path: Path) -> list[dict]:
@@ -166,13 +180,39 @@ def _apple_layout(path: Path) -> _Apple:
 
 
 def _fish_layout(path: Path) -> _Fish:
+    """Each lane as the path its target travelled. The game moves it as the player progresses."""
     rows = _read(path)
-    time_s = np.array([float(row["t"]) for row in rows])
-    targets = {
-        hand: np.array([[_value(row, f"tgt_{side}x"), _value(row, f"tgt_{side}y")] for row in rows])
-        for hand, side in (("left", "l"), ("right", "r"))
-    }
-    return _Fish(time_s, targets)
+    lanes: list[_Lane] = []
+    idle_from = float(rows[0]["t"])
+    current: tuple[str, list] | None = None
+    for row in rows:
+        hand = None
+        for name, side in (("left", "l"), ("right", "r")):
+            if not math.isnan(_value(row, f"tgt_{side}x")):
+                hand, point = name, (_value(row, f"tgt_{side}x"), _value(row, f"tgt_{side}y"))
+        if hand is None:
+            if current is not None:
+                lanes.append(_lane(current, idle_s))
+                current = None
+                idle_from = float(row["t"])
+            continue
+        if current is None or current[0] != hand:
+            if current is not None:
+                lanes.append(_lane(current, idle_s))
+            idle_s = max(float(row["t"]) - idle_from, 0.3)
+            current = (hand, [])
+        if not current[1] or current[1][-1] != point:
+            current[1].append(point)
+    if current is not None:
+        lanes.append(_lane(current, idle_s))
+        idle_from = float(rows[-1]["t"])
+    return _Fish(tuple(lane for lane in lanes if lane.along[-1] > 0.2), max(float(rows[-1]["t"]) - idle_from, 0.5))
+
+
+def _lane(current: tuple[str, list], idle_s: float) -> _Lane:
+    path = np.array(current[1], dtype=float)
+    steps = np.hypot(*np.diff(path, axis=0).T) if len(path) > 1 else np.zeros(0)
+    return _Lane(current[0], idle_s, path, np.concatenate([[0.0], np.cumsum(steps)]))
 
 
 @cache
@@ -214,9 +254,10 @@ def _hands(condition: Condition, rng: np.random.Generator, level: str) -> dict[s
     hands = {}
     for hand in ("left", "right"):
         weak = condition.stroke / 100.0 if condition.weak_hand == hand else 0.0
-        broken = max(pd, weak, 0.6 * ax)
+        broken = max(pd, weak)
         if level == "fish":
-            broken *= 0.2  # played recordings still follow the lane; only apple pushes break up
+            # some players stop and start on the lane as much as on apples, some barely do
+            broken *= float(rng.uniform(0.25, 1.0))
         hands[hand] = _Hand(
             latency_s=spread(0.15 + 0.35 * pd + 0.30 * weak),
             push_s=math.inf if broken == 0 else spread(1.3 - 0.95 * broken),
@@ -226,7 +267,7 @@ def _hands(condition: Condition, rng: np.random.Generator, level: str) -> dict[s
             tremor_hz=float(rng.uniform(6.0, 7.5)),
             tremor_phase=float(rng.uniform(0.0, 2.0 * math.pi)),
             overshoot=db,
-            wander=spread(0.008 + 0.022 * ax) if ax else 0.0,
+            wander=spread(0.06 + 0.035 * ax),  # on fishing everyone strays a little; ataxia strays more
             wander_hz=(float(rng.uniform(0.18, 0.3)), float(rng.uniform(0.32, 0.45))),
             stiffness=spread(2.2, 0.25),
         )
@@ -340,47 +381,74 @@ def _fish(condition: Condition, seed: int) -> list[list]:
     layout = layouts[seed % len(layouts)]
     hands = _hands(condition, rng, "fish")
     players = {hand: _Player(hands[hand], GAIN["fish"], rng, (0.0, 0.0)) for hand in hands}
-    active = {hand: False for hand in hands}
-    rows = []
-    previous_time = layout.time_s[0]
-    for index, time_s in enumerate(layout.time_s):
-        dt = max(float(time_s - previous_time), 1e-3) if index else 1.0 / HZ
-        previous_time = time_s
-        sticks, targets, reached = {}, {}, {}
-        for hand, player in players.items():
-            target = layout.targets[hand][index]
-            has = bool(np.isfinite(target).all())
-            if has and not active[hand]:
-                player.cursor = target + rng.normal(0.0, 0.02, 2)
-                player.new_goal(float(time_s))
-            active[hand] = has
-            aim, lead = None, None
-            if has:
-                aim = target.copy()
-                lead = _lane_speed(layout, hand, index)
-                p = hands[hand]
-                if p.wander:
-                    aim = aim + p.wander * np.array([
-                        math.sin(2 * math.pi * p.wander_hz[0] * time_s),
-                        0.8 * math.sin(2 * math.pi * p.wander_hz[1] * time_s + 0.6),
-                    ])
-            sticks[hand] = player.step(float(time_s), dt, aim, lead)
-            targets[hand] = tuple(target) if has else None
-            reached[hand] = 1 if has and np.hypot(*(player.cursor - target)) <= LANE_HALF else 0
-        phase = "track" if any(active.values()) else ""
-        rows.append(_row(float(time_s), "fish", phase, sticks, targets, players, reached))
+    rows: list[list] = []
+    dt = 1.0 / HZ
+    clock = 0.0
+    for lane in layout.lanes:
+        clock = _fish_idle(rows, clock, lane.idle_s, players)
+        player, p = players[lane.hand], hands[lane.hand]
+        player.cursor = lane.path[0] + rng.normal(0.0, 0.01, 2)
+        player.new_goal(clock)
+        progress = 0.0
+        give_up = clock + 25.0
+        while progress < lane.along[-1] - 0.01 and clock < give_up:
+            target = _on_lane(lane, progress)
+            ahead = _on_lane(lane, progress + LOOK_AHEAD)  # aim well ahead: real players push hard, then let go
+            aim = ahead
+            if p.wander:  # drift to the side of the lane, slowly (more with ataxia)
+                tangent = ahead - target
+                size = float(np.hypot(*tangent)) or 1.0
+                normal = np.array([-tangent[1], tangent[0]]) / size
+                aim = aim + normal * p.wander * (
+                    math.sin(2 * math.pi * p.wander_hz[0] * clock) + 0.5 * math.sin(2 * math.pi * p.wander_hz[1] * clock + 0.6)
+                )
+            # let go once caught up with the lane, wherever the hand is to the side of it
+            tangent = ahead - target
+            size = float(np.hypot(*tangent))
+            near_end = progress + LOOK_AHEAD + 0.05 >= lane.along[-1]
+            if size > 1e-6 and not near_end and float(np.dot(ahead - player.cursor, tangent / size)) < CAUGHT_UP:
+                aim = None
+            sticks = {hand: np.zeros(2) for hand in hands}
+            sticks[lane.hand] = player.step(clock, dt, aim)
+            # the lane follows the player: it moves up to where the hand has got along it
+            progress = max(progress, _progress_near(lane, player.cursor, progress))
+            target = _on_lane(lane, progress)
+            targets = {hand: None for hand in hands}
+            targets[lane.hand] = tuple(target)
+            reached = {hand: 0 for hand in hands}
+            reached[lane.hand] = 1 if np.hypot(*(player.cursor - target)) <= LANE_HALF else 0
+            rows.append(_row(clock, "fish", "track", sticks, targets, players, reached))
+            clock += dt
+    _fish_idle(rows, clock, layout.tail_s, players)
     return rows
 
 
-def _lane_speed(layout: _Fish, hand: str, index: int, window_s: float = 0.25) -> np.ndarray | None:
-    """The lane's speed over the next quarter second. The log repeats a position, then jumps."""
-    ahead = int(np.searchsorted(layout.time_s, layout.time_s[index] + window_s))
-    ahead = min(ahead, len(layout.time_s) - 1)
-    later, now = layout.targets[hand][ahead], layout.targets[hand][index]
-    span = float(layout.time_s[ahead] - layout.time_s[index])
-    if span <= 0 or not (np.isfinite(later).all() and np.isfinite(now).all()):
-        return None
-    return (later - now) / span
+def _fish_idle(rows: list, clock: float, duration: float, players: dict) -> float:
+    still = {hand: np.zeros(2) for hand in players}
+    for _ in range(int(duration * HZ)):
+        rows.append(_row(clock, "fish", "", still, {h: None for h in players}, players, {h: 0 for h in players}))
+        clock += 1.0 / HZ
+    return clock
+
+
+def _on_lane(lane: _Lane, distance: float) -> np.ndarray:
+    distance = min(max(distance, 0.0), float(lane.along[-1]))
+    return np.array([np.interp(distance, lane.along, lane.path[:, 0]), np.interp(distance, lane.along, lane.path[:, 1])])
+
+
+def _progress_near(lane: _Lane, cursor: np.ndarray, progress: float) -> float:
+    """How far along the lane the hand is: its projection onto the lane, near where the lane is now."""
+    best, best_gap = progress, math.inf
+    for index in range(len(lane.path) - 1):
+        start, end = lane.along[index], lane.along[index + 1]
+        if end < progress - 0.05 or start > progress + 0.3 or end <= start:
+            continue
+        a, b = lane.path[index], lane.path[index + 1]
+        share = float(np.clip(np.dot(cursor - a, b - a) / float(np.dot(b - a, b - a)), 0.0, 1.0))
+        gap = float(np.hypot(*(a + share * (b - a) - cursor)))
+        if gap < best_gap:
+            best, best_gap = start + share * (end - start), gap
+    return best
 
 
 # ---------------------------------------------------------------- files
@@ -393,7 +461,7 @@ def write_synthetic(root: str | Path, apple_seeds: int = 1) -> int:
     count = 0
     for condition in CONDITIONS:
         for level in condition.levels:
-            seeds = range(1, apple_seeds + 1) if level == "apple" else range(1, 2)
+            seeds = range(1, apple_seeds + 1) if level == "apple" else range(1, 3)
             for seed in seeds:
                 folder = destination / condition.folder / f"{level}_s{seed}"
                 folder.mkdir(parents=True)

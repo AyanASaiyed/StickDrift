@@ -91,6 +91,8 @@ def _hand_stretches(
     stretches: list[tuple[float, Stretch]] = []
     matched = _matched_runs(runs, prepared.time_s, cues, task_spans, segment.max_latency_s)
     for start, end, latency_s, has_cue, span in matched:
+        if _idle_hand(prepared, aim_pair, start, end):
+            continue
         override = None if span is None else _span_amplitude(position, prepared.time_s, span[0], span[1])
         piece = _stretch(
             prepared,
@@ -240,7 +242,24 @@ def _motion_limits(position: np.ndarray, segment: Segment) -> dict[str, float]:
     typical = float(np.percentile(np.abs(position), 95)) if position.size else 0.0
     if typical > 3.0:
         return {}
-    return {"move_counts": 0.04, "min_amplitude": 0.08}
+    # 0.015 per 0.1 s is a hand moving at 0.15 units a second: slow, deliberate pushes
+    # (a sign we want to see) still count, while a hand at rest does not.
+    return {"move_counts": 0.015, "min_amplitude": 0.08}
+
+
+def _idle_hand(prepared: Prepared, aim_pair: tuple[int, int], start: int, end: int) -> bool:
+    """True when the file gives this hand targets but not for most of this movement.
+
+    In Harbour Fishing one hand follows the lane while the other has nothing to
+    do, and when a lane ends the hand is put back, which looks like a fast move
+    off the lane. Neither is the player leaving the lane, so neither is scored.
+    """
+    if prepared.aim is None:
+        return False
+    target = prepared.aim[list(aim_pair)]
+    if not np.isfinite(target).all(axis=0).any():
+        return False  # this hand never has a target in the file: keep the old behaviour
+    return float(np.isfinite(target[:, start:end]).all(axis=0).mean()) < 0.5
 
 
 def _bounds_slice(prepared: Prepared, hand_index: int, start: int, end: int) -> np.ndarray:
