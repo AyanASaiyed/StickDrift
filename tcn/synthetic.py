@@ -1,35 +1,41 @@
 """Synthetic apple and fishing recordings for the pattern model.
 
-Each condition is one person. The apple file and the fishing file share the
-same scores. Diabetes changes the apple reach only. Ataxia changes the fishing
-path only. The fishing lane has no stored border: reached_l / reached_r is 1
-while the cursor is inside the lane and 0 while it is outside. The cursor is
-always written.
+Each condition is one simulated player. The level layouts (where each apple
+appears, where the basket is, how the fishing lane moves) are replayed from
+the played Baseline recordings, so the games look like the real ones.
 
-Folder names are the labels. Recorded folders such as "Diabetes Data" and
-"Cerebellar ataxia" are different names, so they are not picked up here.
+The stick sets the hand's speed, as in the real games: the cursor moves by
+GAIN * stick per second. A player pushes the stick toward where they are
+aiming, mostly at full tilt, and lets go near the target. The conditions
+change how they push, using what the played recordings show:
+
+- Parkinson: late starts, short broken pushes with pauses, more jitter, both hands.
+- Stroke: the same broken, late pushes, on the weak hand only.
+- Essential tremor: a 6-7.5 Hz shake added to the stick while pushing.
+- Diabetes (apple only): the reach passes the apple or stops short, pauses, then corrects.
+- Ataxia (fishing only): the aim wanders slowly off the lane, with choppier pushes.
+
+The fishing lane has no stored border: reached_l / reached_r is 1 while the
+cursor is inside the lane and 0 while it is outside. On apple, reached is 1
+while that hand carries an apple. Folder names are the labels. Recorded
+folders such as "Diabetes Data" and "Cerebellar ataxia" are different names,
+so they are not picked up here.
 """
 
 import csv
 import math
 import shutil
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 import numpy as np
 
-HZ = 60
+HZ = 100
 LANE_HALF = 0.10
-
-APPLES_LEFT = (
-    (0.42, -0.28),
-    (-0.36, 0.18),
-    (0.18, 0.40),
-    (-0.48, -0.16),
-    (0.52, 0.08),
-    (0.02, -0.42),
-)
-APPLES_RIGHT = tuple((-x, y + 0.05) for x, y in APPLES_LEFT)
+REACH = 0.08
+GAIN = {"apple": 0.87, "fish": 0.60}
+TEMPLATES = Path("data/new_game_data/Baseline Data")
 
 COLUMNS = (
     "t", "level", "phase",
@@ -50,12 +56,6 @@ class Condition:
     ataxia: float = 0.0
     weak_hand: str | None = None
     tremor_hand: str | None = None
-    latency_s: float = 0.10
-    move_s: float = 0.45
-    gain_left: float = 1.0
-    gain_right: float = 1.0
-    stick_shake: float = 0.0
-    tremor_hz: float = 6.5
     levels: tuple[str, ...] = ("apple", "fish")
 
 
@@ -68,28 +68,8 @@ def _person(
     ataxia: float = 0.0,
     weak_hand: str | None = None,
 ) -> Condition:
-    shared = parkinson / 100.0
-    sided = stroke / 100.0
-    shake = tremor / 100.0
-    gain_left = 1.0 - 0.22 * shared
-    gain_right = 1.0 - 0.22 * shared
-    if weak_hand == "left":
-        gain_left *= 1.0 - 0.55 * sided
-    elif weak_hand == "right":
-        gain_right *= 1.0 - 0.55 * sided
     return Condition(
-        folder,
-        parkinson,
-        stroke,
-        tremor,
-        diabetes=diabetes,
-        ataxia=ataxia,
-        weak_hand=weak_hand,
-        latency_s=0.10 + 0.50 * shared + 0.12 * sided,
-        move_s=0.40 + 0.80 * shared + 0.20 * sided,
-        gain_left=gain_left,
-        gain_right=gain_right,
-        stick_shake=0.055 * shake,
+        folder, parkinson, stroke, tremor, diabetes=diabetes, ataxia=ataxia, weak_hand=weak_hand,
         levels=_levels(parkinson, stroke, tremor, diabetes, ataxia),
     )
 
@@ -138,6 +118,273 @@ def _conditions() -> tuple[Condition, ...]:
 CONDITIONS = _conditions()
 
 
+# ---------------------------------------------------------------- level layouts
+
+@dataclass(frozen=True)
+class _Apple:
+    duration: float
+    first_cue: dict[str, float]
+    apples: dict[str, list[tuple[float, float]]]
+    basket: tuple[float, float]
+
+
+@dataclass(frozen=True)
+class _Fish:
+    time_s: np.ndarray
+    targets: dict[str, np.ndarray]  # hand -> (n, 2), NaN while that hand has no lane
+
+
+def _read(path: Path) -> list[dict]:
+    with path.open(newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _value(row: dict, key: str) -> float:
+    text = row.get(key)
+    return float(text) if text not in (None, "") else math.nan
+
+
+def _apple_layout(path: Path) -> _Apple:
+    rows = _read(path)
+    apples: dict[str, list[tuple[float, float]]] = {"left": [], "right": []}
+    first: dict[str, float] = {}
+    basket = (0.0, 0.351)
+    for hand, side in (("left", "l"), ("right", "r")):
+        last = None
+        for row in rows:
+            point = (_value(row, f"tgt_{side}x"), _value(row, f"tgt_{side}y"))
+            if math.isnan(point[0]) or point == last:
+                last = point if not math.isnan(point[0]) else last
+                continue
+            last = point
+            if row["phase"] == "carry" or abs(point[0]) < 1e-6 and point[1] > 0.3:
+                basket = point
+                continue
+            apples[hand].append(point)
+            first.setdefault(hand, float(row["t"]))
+    return _Apple(float(rows[-1]["t"]), first, apples, basket)
+
+
+def _fish_layout(path: Path) -> _Fish:
+    rows = _read(path)
+    time_s = np.array([float(row["t"]) for row in rows])
+    targets = {
+        hand: np.array([[_value(row, f"tgt_{side}x"), _value(row, f"tgt_{side}y")] for row in rows])
+        for hand, side in (("left", "l"), ("right", "r"))
+    }
+    return _Fish(time_s, targets)
+
+
+@cache
+def _layouts(level: str) -> list:
+    name = "level_1_apple" if level == "apple" else "level_2_fish"
+    paths = sorted(TEMPLATES.rglob(f"{name}/controller_data.csv"))
+    if not paths:
+        raise FileNotFoundError(f"No {name} recordings under {TEMPLATES} to take the layout from.")
+    return [_apple_layout(path) if level == "apple" else _fish_layout(path) for path in paths]
+
+
+# ---------------------------------------------------------------- the player
+
+@dataclass
+class _Hand:
+    """How one hand pushes the stick. Built from the condition and a little per-player spread."""
+
+    latency_s: float
+    push_s: float  # math.inf for one smooth push
+    gap_s: float
+    jitter: float
+    tremor_amp: float
+    tremor_hz: float
+    tremor_phase: float
+    overshoot: float  # diabetes strength, 0..1
+    wander: float  # ataxia lane departure, in cursor units
+    wander_hz: tuple[float, float]
+    stiffness: float  # how close to the target the push starts to ease off
+
+
+def _hands(condition: Condition, rng: np.random.Generator, level: str) -> dict[str, _Hand]:
+    def spread(value: float, amount: float = 0.15) -> float:
+        return value * float(rng.uniform(1.0 - amount, 1.0 + amount))
+
+    pd = condition.parkinson / 100.0
+    tr = condition.tremor / 100.0
+    db = condition.diabetes / 100.0
+    ax = condition.ataxia / 100.0
+    hands = {}
+    for hand in ("left", "right"):
+        weak = condition.stroke / 100.0 if condition.weak_hand == hand else 0.0
+        broken = max(pd, weak, 0.6 * ax)
+        if level == "fish":
+            broken *= 0.2  # played recordings still follow the lane; only apple pushes break up
+        hands[hand] = _Hand(
+            latency_s=spread(0.15 + 0.35 * pd + 0.30 * weak),
+            push_s=math.inf if broken == 0 else spread(1.3 - 0.95 * broken),
+            gap_s=spread(0.06 + 0.18 * broken),
+            jitter=spread(0.012 + 0.045 * pd + 0.03 * weak),
+            tremor_amp=spread(0.17 * tr),
+            tremor_hz=float(rng.uniform(6.0, 7.5)),
+            tremor_phase=float(rng.uniform(0.0, 2.0 * math.pi)),
+            overshoot=db,
+            wander=spread(0.008 + 0.022 * ax) if ax else 0.0,
+            wander_hz=(float(rng.uniform(0.18, 0.3)), float(rng.uniform(0.32, 0.45))),
+            stiffness=spread(2.2, 0.25),
+        )
+    return hands
+
+
+class _Player:
+    def __init__(self, hand: _Hand, gain: float, rng: np.random.Generator, start: tuple[float, float]):
+        self.p = hand
+        self.gain = gain
+        self.rng = rng
+        self.cursor = np.array(start, dtype=float)
+        self.goal_since = 0.0
+        self.cycle = 0.0
+        self.aim_override: np.ndarray | None = None
+        self.paused_until = -1.0
+
+    def new_goal(self, time_s: float) -> None:
+        self.goal_since = time_s
+        self.cycle = 0.0
+        self.aim_override = None
+
+    def step(self, time_s: float, dt: float, aim: np.ndarray | None, lead: np.ndarray | None = None) -> np.ndarray:
+        stick = np.zeros(2)
+        if aim is not None and time_s - self.goal_since >= self.p.latency_s and time_s >= self.paused_until:
+            error = aim - self.cursor
+            distance = float(np.hypot(*error))
+            pushing = True
+            if math.isfinite(self.p.push_s):
+                self.cycle += dt
+                period = self.p.push_s + self.p.gap_s
+                pushing = (self.cycle % period) < self.p.push_s
+            if pushing and distance > 1e-4:
+                # ease off near the target but keep a firm push, and let go once on it
+                size = 0.0 if distance < 0.04 else min(1.0, max(0.3, self.p.stiffness * distance))
+                stick = error / distance * size
+                if lead is not None:
+                    stick = stick + lead / self.gain
+                stick = stick + self.rng.normal(0.0, self.p.jitter, 2)
+                if self.p.tremor_amp:
+                    phase = 2.0 * math.pi * self.p.tremor_hz * time_s + self.p.tremor_phase
+                    stick = stick + self.p.tremor_amp * np.array([math.sin(phase), 0.7 * math.cos(phase)])
+        size = float(np.hypot(*stick))
+        if size > 1.05:  # the stick moves inside a circle, not a square
+            stick = stick / size * 1.05
+        stick = np.clip(stick, -1.0, 1.0)
+        self.cursor = np.clip(self.cursor + self.gain * stick * dt, -1.0, 1.0)
+        return stick
+
+
+# ---------------------------------------------------------------- the levels
+
+def _apple(condition: Condition, seed: int) -> list[list]:
+    rng = np.random.default_rng(_seed(condition, seed))
+    layouts = _layouts("apple")
+    layout = layouts[seed % len(layouts)]
+    hands = _hands(condition, rng, "apple")
+    players = {hand: _Player(hands[hand], GAIN["apple"], rng, layout.basket) for hand in hands}
+    # each hand: waiting for its first apple, reaching an apple, or carrying one to the basket
+    state = {hand: {"stage": "wait", "index": 0, "goal": None, "start": None} for hand in hands}
+    rows = []
+    dt = 1.0 / HZ
+    for step in range(int(layout.duration * HZ)):
+        time_s = step * dt
+        sticks, targets, reached = {}, {}, {}
+        for hand, player in players.items():
+            s = state[hand]
+            apples = layout.apples[hand]
+            if s["stage"] == "wait" and apples and time_s >= layout.first_cue.get(hand, math.inf):
+                s.update(stage="cue", goal=np.array(apples[0]), start=player.cursor.copy())
+                player.new_goal(time_s)
+                _plan_miss(player, s, hands[hand], rng)
+            aim = None
+            if s["stage"] in ("cue", "carry"):
+                aim = s["goal"] if player.aim_override is None else player.aim_override
+                if player.aim_override is not None and np.hypot(*(player.cursor - player.aim_override)) < REACH:
+                    # passed the apple or stopped short: pause, then correct
+                    player.aim_override = None
+                    player.paused_until = time_s + 0.08 + 0.15 * hands[hand].overshoot
+                    aim = s["goal"]
+            sticks[hand] = player.step(time_s, dt, aim)
+            targets[hand] = None if s["goal"] is None else tuple(s["goal"])
+            if s["stage"] == "cue" and player.aim_override is None and np.hypot(*(player.cursor - s["goal"])) < REACH:
+                s.update(stage="carry", goal=np.array(layout.basket))
+                player.new_goal(time_s)
+            elif s["stage"] == "carry" and np.hypot(*(player.cursor - s["goal"])) < REACH:
+                s["index"] += 1
+                next_apple = apples[s["index"] % len(apples)]
+                s.update(stage="cue", goal=np.array(next_apple), start=player.cursor.copy())
+                player.new_goal(time_s)
+                _plan_miss(player, s, hands[hand], rng)
+            reached[hand] = 1 if s["stage"] == "carry" else 0
+        stages = {state[hand]["stage"] for hand in hands}
+        phase = "cue" if "cue" in stages else "carry" if "carry" in stages else ""
+        rows.append(_row(time_s, "apple", phase, sticks, targets, players, reached))
+    return rows
+
+
+def _plan_miss(player: _Player, s: dict, hand: _Hand, rng: np.random.Generator) -> None:
+    """Diabetes: aim past the apple or short of it first."""
+    if not hand.overshoot:
+        return
+    long_way = bool(rng.random() < 0.5)
+    miss = 1.25 + 0.45 * hand.overshoot if long_way else 0.6 - 0.3 * hand.overshoot
+    player.aim_override = np.clip(s["start"] + (s["goal"] - s["start"]) * miss, -1.0, 1.0)
+
+
+def _fish(condition: Condition, seed: int) -> list[list]:
+    rng = np.random.default_rng(_seed(condition, seed))
+    layouts = _layouts("fish")
+    layout = layouts[seed % len(layouts)]
+    hands = _hands(condition, rng, "fish")
+    players = {hand: _Player(hands[hand], GAIN["fish"], rng, (0.0, 0.0)) for hand in hands}
+    active = {hand: False for hand in hands}
+    rows = []
+    previous_time = layout.time_s[0]
+    for index, time_s in enumerate(layout.time_s):
+        dt = max(float(time_s - previous_time), 1e-3) if index else 1.0 / HZ
+        previous_time = time_s
+        sticks, targets, reached = {}, {}, {}
+        for hand, player in players.items():
+            target = layout.targets[hand][index]
+            has = bool(np.isfinite(target).all())
+            if has and not active[hand]:
+                player.cursor = target + rng.normal(0.0, 0.02, 2)
+                player.new_goal(float(time_s))
+            active[hand] = has
+            aim, lead = None, None
+            if has:
+                aim = target.copy()
+                lead = _lane_speed(layout, hand, index)
+                p = hands[hand]
+                if p.wander:
+                    aim = aim + p.wander * np.array([
+                        math.sin(2 * math.pi * p.wander_hz[0] * time_s),
+                        0.8 * math.sin(2 * math.pi * p.wander_hz[1] * time_s + 0.6),
+                    ])
+            sticks[hand] = player.step(float(time_s), dt, aim, lead)
+            targets[hand] = tuple(target) if has else None
+            reached[hand] = 1 if has and np.hypot(*(player.cursor - target)) <= LANE_HALF else 0
+        phase = "track" if any(active.values()) else ""
+        rows.append(_row(float(time_s), "fish", phase, sticks, targets, players, reached))
+    return rows
+
+
+def _lane_speed(layout: _Fish, hand: str, index: int, window_s: float = 0.25) -> np.ndarray | None:
+    """The lane's speed over the next quarter second. The log repeats a position, then jumps."""
+    ahead = int(np.searchsorted(layout.time_s, layout.time_s[index] + window_s))
+    ahead = min(ahead, len(layout.time_s) - 1)
+    later, now = layout.targets[hand][ahead], layout.targets[hand][index]
+    span = float(layout.time_s[ahead] - layout.time_s[index])
+    if span <= 0 or not (np.isfinite(later).all() and np.isfinite(now).all()):
+        return None
+    return (later - now) / span
+
+
+# ---------------------------------------------------------------- files
+
 def write_synthetic(root: str | Path, apple_seeds: int = 1) -> int:
     """Write one apple file and one fishing file per condition. Returns the file count."""
     destination = Path(root)
@@ -156,155 +403,15 @@ def write_synthetic(root: str | Path, apple_seeds: int = 1) -> int:
     return count
 
 
-def _apple(condition: Condition, seed: int) -> list[list]:
-    rng = np.random.default_rng(_seed(condition, seed))
-    rows: list[list] = []
-    clock = 0.0
-    clock = _hold(rows, clock, 0.45, "apple", "", (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
-    for index, (left_goal, right_goal) in enumerate(zip(APPLES_LEFT, APPLES_RIGHT, strict=True)):
-        clock = _reach(rows, clock, rng, condition, index, "apple", "cue", left_goal, right_goal, diabetes=True)
-        clock = _reach(
-            rows, clock, rng, condition, index, "apple", "carry",
-            (0.0, 0.15), (0.0, 0.15), diabetes=False, origin=(left_goal, right_goal),
-        )
-        clock = _hold(rows, clock, 0.30, "apple", "", (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
-    return rows
-
-
-def _fish(condition: Condition, seed: int) -> list[list]:
-    rows: list[list] = []
-    clock = 0.0
-    for hand, sign in (("left", 1.0), ("right", -1.0)):
-        clock = _hold(rows, clock, 0.40, "fish", "", (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
-        duration = 8.0
-        count = int(round(duration * HZ))
-        for step in range(count):
-            time_s = clock + step / HZ
-            along = -0.75 + 1.50 * (step / max(count - 1, 1))
-            center = (sign * along, 0.22 * math.sin(2.0 * math.pi * (0.55 + 0.15 * seed) * time_s))
-            cursor = _fish_cursor(condition, hand, center, time_s)
-            other = (0.0, 0.0)
-            left_cur, right_cur = (cursor, other) if hand == "left" else (other, cursor)
-            left_tgt, right_tgt = (center, None) if hand == "left" else (None, center)
-            reached_l = _inside(left_cur, left_tgt)
-            reached_r = _inside(right_cur, right_tgt)
-            stick_l = _stick_command(condition, "left", left_cur, time_s, moving=hand == "left")
-            stick_r = _stick_command(condition, "right", right_cur, time_s, moving=hand == "right")
-            rows.append(_row(time_s, "fish", "track", stick_l, stick_r, left_tgt, right_tgt, left_cur, right_cur, reached_l, reached_r))
-        clock += duration
-    return rows
-
-
-def _reach(rows, clock, rng, condition, index, level, phase, left_goal, right_goal, diabetes: bool, origin=None):
-    start_left, start_right = ((0.0, 0.0), (0.0, 0.0)) if origin is None else origin
-    duration = condition.latency_s + condition.move_s + (0.55 if diabetes and condition.diabetes else 0.20)
-    count = max(2, int(round(duration * HZ)))
-    for step in range(count):
-        elapsed = step / HZ
-        time_s = clock + elapsed
-        left = _aimed(condition, "left", start_left, left_goal, elapsed, index, diabetes)
-        right = _aimed(condition, "right", start_right, right_goal, elapsed, index, diabetes)
-        left = _wobble(condition, "left", left, time_s)
-        right = _wobble(condition, "right", right, time_s)
-        stick_l = _stick_command(condition, "left", left, time_s, moving=elapsed > condition.latency_s)
-        stick_r = _stick_command(condition, "right", right, time_s, moving=elapsed > condition.latency_s)
-        rows.append(_row(
-            time_s, level, phase, stick_l, stick_r, left_goal, right_goal, left, right, 0, 0, rng=rng,
-        ))
-    return clock + duration
-
-
-def _aimed(condition, hand, start, goal, elapsed, index, diabetes: bool):
-    gain = condition.gain_left if hand == "left" else condition.gain_right
-    if elapsed < condition.latency_s:
-        scale = 0.0
-    else:
-        unit = (elapsed - condition.latency_s) / condition.move_s
-        scale = _ease(unit)
-        if diabetes and condition.diabetes > 0.0:
-            scale = _diabetes_scale(unit, condition.diabetes / 100.0, index)
-    aimed = (
-        start[0] + (goal[0] - start[0]) * gain * scale,
-        start[1] + (goal[1] - start[1]) * gain * scale,
-    )
-    return aimed
-
-
-def _diabetes_scale(unit: float, strength: float, index: int) -> float:
-    """Go past the apple or stop short, then come back. The outbound speed stays ordinary."""
-    miss = (1.15 + 0.55 * strength) if index % 2 == 0 else (0.45 - 0.25 * strength)
-    if unit < 1.0:
-        return miss * _ease(unit)
-    correct = _ease(min(unit - 1.0, 1.0))
-    return miss + (1.0 - miss) * correct
-
-
-def _fish_cursor(condition, hand, center, time_s):
-    gain = condition.gain_left if hand == "left" else condition.gain_right
-    point = (center[0] * gain, center[1] * gain)
-    if condition.ataxia <= 0.0:
-        return _wobble(condition, hand, point, time_s)
-    amount = 0.06 + 0.28 * condition.ataxia / 100.0
-    side = amount * math.sin(2.0 * math.pi * 0.28 * time_s)
-    lead = amount * 0.7 * math.sin(2.0 * math.pi * 0.18 * time_s + 0.6)
-    tx, ty = center
-    radius = math.hypot(tx, ty) or 1.0
-    ux, uy = tx / radius, ty / radius
-    offset = (ux * lead - uy * side, uy * lead + ux * side)
-    return _wobble(condition, hand, (point[0] + offset[0], point[1] + offset[1]), time_s)
-
-
-def _wobble(condition, hand, point, time_s):
-    if condition.stick_shake <= 0.0:
-        return point
-    cycle = 2.0 * math.pi * condition.tremor_hz * time_s
-    shift = 0.4 if hand == "right" else 0.0
-    return (
-        point[0] + condition.stick_shake * 0.35 * math.sin(cycle + shift),
-        point[1] + condition.stick_shake * 0.22 * math.cos(cycle + shift),
-    )
-
-
-def _stick_command(condition, hand, cursor, time_s, moving: bool):
-    if not moving:
-        base = (0.0, 0.0)
-    else:
-        base = (max(-1.0, min(1.0, cursor[0])), max(-1.0, min(1.0, cursor[1] * 0.5)))
-    if condition.stick_shake <= 0.0:
-        return base
-    cycle = 2.0 * math.pi * condition.tremor_hz * time_s
-    return (
-        max(-1.0, min(1.0, base[0] + condition.stick_shake * math.sin(cycle))),
-        max(-1.0, min(1.0, base[1] + condition.stick_shake * 0.7 * math.cos(cycle))),
-    )
-
-
-def _inside(cursor, target) -> int:
-    if target is None:
-        return 0
-    return 1 if math.dist(cursor, target) <= LANE_HALF else 0
-
-
-def _hold(rows, clock, duration, level, phase, left_tgt, right_tgt, left_cur, right_cur) -> float:
-    count = max(2, int(round(duration * HZ)))
-    for step in range(count):
-        time_s = clock + step / HZ
-        rows.append(_row(time_s, level, phase, (0.0, 0.0), (0.0, 0.0), left_tgt, right_tgt, left_cur, right_cur, 0, 0))
-    return clock + duration
-
-
-def _row(time_s, level, phase, stick_l, stick_r, left_tgt, right_tgt, left_cur, right_cur, reached_l, reached_r, rng=None):
-    del rng
+def _row(time_s, level, phase, sticks, targets, players, reached) -> list:
+    left, right = sticks["left"], sticks["right"]
     return [
-        round(time_s, 4),
-        level,
-        phase,
-        _num(stick_l[0]), _num(stick_l[1]), _num(stick_r[0]), _num(stick_r[1]),
-        *_point(left_tgt),
-        *_point(right_tgt),
-        reached_l,
-        reached_r,
-        _num(left_cur[0]), _num(left_cur[1]), _num(right_cur[0]), _num(right_cur[1]),
+        round(time_s, 4), level, phase,
+        _num(left[0]), _num(left[1]), _num(right[0]), _num(right[1]),
+        *_point(targets["left"]), *_point(targets["right"]),
+        reached["left"], reached["right"],
+        _num(players["left"].cursor[0]), _num(players["left"].cursor[1]),
+        _num(players["right"].cursor[0]), _num(players["right"].cursor[1]),
     ]
 
 
@@ -316,11 +423,6 @@ def _point(point) -> tuple[str, str]:
 
 def _num(value: float) -> str:
     return f"{value:.4f}"
-
-
-def _ease(unit: float) -> float:
-    unit = min(max(unit, 0.0), 1.0)
-    return 0.5 - 0.5 * math.cos(math.pi * unit)
 
 
 def _seed(condition: Condition, seed: int) -> int:
