@@ -73,28 +73,31 @@ def _person(
     shared = parkinson / 100.0
     sided = stroke / 100.0
     shake = tremor / 100.0
-    # Parkinson weakens both hands. Stroke does not; its trait is speed.
-    # The reach stays fast enough in each step that the stretch cutter still sees it.
-    gain_left = 1.0 - 0.32 * shared
-    gain_right = 1.0 - 0.32 * shared
-    move_left = 0.35 + 1.05 * shared
-    move_right = 0.35 + 1.05 * shared
+    # Parkinson weakens both hands a little. A moderate slowdown is already the
+    # full pattern, so the score rises before the reach is extremely slow.
+    # Stroke changes speed on one hand only. Mild tremor is a small gyroscope
+    # wobble; the shake has to be strong before it matches a high score.
+    gain_left = 1.0 - 0.22 * shared
+    gain_right = 1.0 - 0.22 * shared
+    move_left = 0.35 + 0.62 * shared
+    move_right = 0.35 + 0.62 * shared
     if weak_hand == "left":
-        move_left += 1.15 * sided
+        move_left += 0.72 * sided
     elif weak_hand == "right":
-        move_right += 1.15 * sided
+        move_right += 0.72 * sided
     return Condition(
         folder,
         parkinson,
         stroke,
         tremor,
         weak_hand=weak_hand,
-        latency_s=0.08 + 0.42 * shared,
+        latency_s=0.08 + 0.22 * shared,
         move_s_left=move_left,
         move_s_right=move_right,
         gain_left=gain_left,
         gain_right=gain_right,
-        gyro_shake=160.0 * shake,
+        # Mild tremor already shakes hard. A small wobble stays well below a score of 25.
+        gyro_shake=0.0 if shake <= 0.0 else 220.0 * (shake ** 0.55),
     )
 
 

@@ -61,13 +61,14 @@ class PatternTCN(nn.Module):
         self.gyro_index = HAND_CHANNELS.index("gyro_level")
         self.speed_index = HAND_CHANNELS.index("move_speed")
         self.shrink_index = HAND_CHANNELS.index("shrink_ratio")
-        # Tremor leans on gyroscope shake. Impairment leans on a slow hand.
-        # The added terms stay in the forward pass so later training cannot
-        # drop those two columns.
-        self.gyro_trait = 1.25
-        self.speed_trait = 1.15
-        _favor(self.tremor_head, [3.5])
-        _favor(self.impair_head, [-3.5, -1.2])
+        # A little gyroscope noise should not count as tremor. Slowness should
+        # count before the reach is extremely slow. These terms stay in the
+        # forward pass so training cannot drop them.
+        self.gyro_floor = 0.85
+        self.gyro_trait = 0.45
+        self.speed_trait = 2.6
+        _favor(self.tremor_head, [0.6])
+        _favor(self.impair_head, [2.4, -1.2])
         if n_scores != 2:
             raise ValueError("The pattern network scores tremor and impairment.")
 
@@ -88,8 +89,12 @@ class PatternTCN(nn.Module):
         gyro = x[:, self.gyro_index].abs().mean(dim=-1, keepdim=True)
         speed = x[:, self.speed_index].mean(dim=-1, keepdim=True)
         shrink = x[:, self.shrink_index].mean(dim=-1, keepdim=True)
-        tremor = self.tremor_head(torch.cat([pooled, gyro], dim=1)) + self.gyro_trait * gyro
-        impairment = self.impair_head(torch.cat([pooled, speed, shrink], dim=1)) - self.speed_trait * speed
+        # Ignore the quiet part of the gyroscope. Count only speed below the
+        # training average, and count it more than once.
+        gyro_drive = torch.relu(gyro - self.gyro_floor)
+        slow = torch.relu(-speed)
+        tremor = self.tremor_head(torch.cat([pooled, gyro_drive], dim=1)) + self.gyro_trait * gyro_drive
+        impairment = self.impair_head(torch.cat([pooled, slow, shrink], dim=1)) + self.speed_trait * slow
         return torch.sigmoid(torch.cat([tremor, impairment], dim=1)) * 100.0
 
 
