@@ -385,7 +385,11 @@ export const api = {
       garden_sessions: d.garden_sessions ?? [],
       game_sessions: d.game_sessions ?? [],
     })),
-  residentReport: (id: string) => download(`/caregiver/residents/${id}/report.pdf`),
+  // the PDF prints times in the reader's zone so they match the site
+  residentReport: (id: string) =>
+    download(
+      `/caregiver/residents/${id}/report.pdf?tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`,
+    ),
   caregiverLive: () => request<LiveBrief[]>('/caregiver/live'),
   caregiverLiveSnapshot: (id: string, since: number) =>
     request<LiveSnapshot>(`/caregiver/live/${id}?since=${since}`),

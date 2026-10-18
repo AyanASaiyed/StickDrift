@@ -94,10 +94,15 @@ def _session_line(s: dict) -> str:
 
 def _resident_facts(p: dict, full: bool) -> str:
     ins = p["insights"]
-    lines = [f"RESIDENT: {p['display_name']} (dominant hand: {p['dominant_hand']}, "
-             f"{len(p['sessions'])} sessions, {ins['usable_sessions']} usable"
+    games, garden = p.get("game_sessions", []), p.get("garden_sessions", [])
+    lines = [f"RESIDENT: {p['display_name']} (dominant hand: {p['dominant_hand']}, recorded activity: "
+             f"{len(games)} game visits, {len(garden)} garden visits, {len(p['sessions'])} reaction-test sessions "
+             f"({ins['usable_sessions']} usable for a baseline)"
              f"{', data is SIMULATED/synthetic' if ins['synthetic'] else ''})",
              f"Overall: risk level '{ins['risk']}'. {ins['summary']}"]
+    if ins["status"] != "ok" and (games or garden):
+        lines.append("The baseline above needs reaction-test sessions. Game and garden visits are real recorded "
+                     "activity; they are described visit by visit and do not set a baseline.")
     if ins["status"] == "ok":
         lines.append(f"Baseline = median of {ins['baseline_sessions']} earlier sessions; latest = most recent session.")
         lines.append("Measurements (latest vs usual, change):")
@@ -111,12 +116,18 @@ def _resident_facts(p: dict, full: bool) -> str:
         lines.append("  Recommended caregiver checks: " + " ".join(c["recommended_checks"]))
         if full:
             lines.append("  Research basis: " + " | ".join(c["references"]))
-    games = p.get("game_sessions", [])
     if games:
+        pad = [g for g in games if not g.get("is_synthetic")]
         lines.append(f"Game visits (web lobby games, newest first, {len(games)} total; free play, no baseline):")
-        lines += [f"  {_game_line(g)}" for g in games[: 10 if full else 1]]
-    if full:
-        lines.append("Session history (newest first):")
+        lines += [f"  {_game_line(g)}" for g in pad[: 10 if full else 1]]
+        if len(pad) < len(games):
+            lines.append(f"  {len(games) - len(pad)} other game visits used keyboard input instead of the controller. "
+                         "They do not reflect thumb movement, so their measurements are left out.")
+    if garden:
+        lines.append(f"Garden visits (newest first, {len(garden)} total):")
+        lines += [f"  {_garden_line(g)}" for g in garden[: 10 if full else 1]]
+    if full and p["sessions"]:
+        lines.append("Reaction-test session history (newest first):")
         lines += [f"  {_session_line(s)}" for s in p["sessions"][:30]]
     return "\n".join(lines)
 
@@ -124,15 +135,27 @@ def _resident_facts(p: dict, full: bool) -> str:
 GAME_NAMES = {"apple": "Apple Picking", "fish": "Harbour Fishing", "rat": "Rat Catching"}
 
 
-def _game_line(g: dict) -> str:
-    """One lobby visit as text, left/right per measurement."""
-    def lr(hands, key, fmt):
-        vals = [hands.get(h, {}).get(key) for h in ("left", "right")]
-        return None if all(v is None for v in vals) else "left " + " / right ".join(
-            "n/a" if v is None else fmt(v) for v in vals)
+def _lr(hands, key, fmt):
+    vals = [(hands or {}).get(h, {}).get(key) for h in ("left", "right")]
+    return None if all(v is None for v in vals) else "left " + " / right ".join(
+        "n/a" if v is None else fmt(v) for v in vals)
 
-    secs = lambda v: f"{v:.2f}s"
-    pct = lambda v: f"{v * 100:.0f}%"
+
+def _secs(v):
+    return f"{v:.2f}s"
+
+
+def _pct(v):
+    return f"{v * 100:.0f}%"
+
+
+def _when(d) -> str:
+    return d.strftime("%b %d %H:%M") if hasattr(d, "strftime") else str(d)
+
+
+def game_parts(g: dict) -> List[tuple]:
+    """(game name, measurements as text) for each game played in one lobby visit."""
+    lr, secs, pct = _lr, _secs, _pct
     parts = []
     for key in ("apple", "fish", "rat"):
         game = (g.get("games") or {}).get(key)
@@ -149,7 +172,14 @@ def _game_line(g: dict) -> str:
             v = lr(h, k, f)
             if v:
                 bits.append(f"{label} {v}")
-        parts.append(f"{GAME_NAMES[key]}{'' if game.get('finished') else ' (left early)'}: " + "; ".join(bits or ["no measurements"]))
+        parts.append((f"{GAME_NAMES[key]}{'' if game.get('finished') else ' (left early)'}",
+                      "; ".join(bits or ["no measurements"])))
+    return parts
+
+
+def _game_line(g: dict) -> str:
+    """One lobby visit as text, left/right per measurement."""
+    parts = [f"{name}: {text}" for name, text in game_parts(g)]
     scores = ((g.get("tcn") or {}).get("scores") or {})
     pattern = [f"{PATTERN_LABELS[k].lower()} {v:.0f}/100" for k, v in scores.items() if v is not None and k in PATTERN_LABELS]
     if pattern:
@@ -160,8 +190,24 @@ def _game_line(g: dict) -> str:
         parts.append(f"rat score {rat['score']} points{stars}")
     if rat.get("median_reaction_s") is not None:
         parts.append(f"rat timing: median {rat['median_reaction_s']:.2f}s nose-to-slam")
-    when = g["started_at"].strftime("%b %d %H:%M") if hasattr(g["started_at"], "strftime") else str(g["started_at"])
-    return f"{when}{' [simulated input]' if g.get('is_synthetic') else ''} - " + " | ".join(parts or ["no games played"])
+    return f"{_when(g['started_at'])}{' [keyboard input]' if g.get('is_synthetic') else ''} - " + " | ".join(
+        parts or ["no games played"])
+
+
+def _garden_line(g: dict) -> str:
+    """One garden visit as text: chapters, reach and tracking per hand, pattern scores."""
+    parts = [f"{g.get('levels_completed') or 0}/{g.get('levels_total') or 4} chapters finished"]
+    hands = (g.get("live") or {}).get("hands")
+    for label, k, f in (("reaction", "reaction_s", _secs), ("time to reach", "reach_s", _secs),
+                        ("distance from target", "tracking_error", _pct), ("time on target", "on_target", _pct)):
+        v = _lr(hands, k, f)
+        if v:
+            parts.append(f"{label} {v}")
+    scores = (g.get("tcn") or {}).get("scores") or {}
+    pattern = [f"{PATTERN_LABELS[k].lower()} {v:.0f}/100" for k, v in scores.items() if v is not None and k in PATTERN_LABELS]
+    if pattern:
+        parts.append("pattern model (resemblance, not diagnosis): " + ", ".join(pattern))
+    return f"{_when(g['started_at'])}{' [simulated input]' if g.get('is_synthetic') else ''} - " + " | ".join(parts)
 
 
 def build_facts(profiles: List[dict], focus: Optional[dict]) -> str:

@@ -11,15 +11,16 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from io import BytesIO
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from reportlab.graphics.charts.legends import Legend
 from reportlab.graphics.charts.lineplots import LinePlot
+from reportlab.graphics.widgets.markers import makeMarker
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -28,7 +29,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from .assistant import GEMINI_FALLBACKS, GEMINI_MODEL, build_facts, names_condition, unverified
+from .assistant import GEMINI_FALLBACKS, GEMINI_MODEL, build_facts, game_parts, names_condition, unverified
 from .auth import current_caregiver
 from .db import pool
 from .insights import fmt
@@ -160,11 +161,25 @@ def _template_draft(p: dict) -> dict:
     """Same shape as the Gemini draft, built from the deterministic insights."""
     ins = p["insights"]
     if ins["status"] != "ok":
-        return {"summary": ins["summary"],
-                "data_description": f"{ins['usable_sessions']} usable completed sessions are on record.",
-                "observations": [], "irregularities": [],
-                "limitations": ["A personal baseline needs at least 4 usable sessions."],
-                "considerations": ["Consider generating this report again after more sessions are recorded."]}
+        games = [g for g in p.get("game_sessions", []) if g["games"]]
+        garden = p.get("garden_sessions", [])
+        if not games and not garden:
+            return {"summary": ins["summary"],
+                    "data_description": f"{ins['usable_sessions']} usable completed sessions are on record.",
+                    "observations": [], "irregularities": [],
+                    "limitations": ["A personal baseline needs at least 4 usable sessions."],
+                    "considerations": ["Consider generating this report again after more sessions are recorded."]}
+        latest = next((g for g in games if not g["is_synthetic"]), games[0]) if games else None
+        observations = [{"measure": f"{name} ({_fmt_when(latest['started_at'])})", "statement": text.capitalize() + "."}
+                        for name, text in game_parts(latest)] if latest else []
+        return {"summary": f"{len(games)} game visits and {len(garden)} garden visits are recorded. These are "
+                           "described visit by visit; a personal baseline for flagging changes is not set yet.",
+                "data_description": "Measurements come from the web lobby games (Apple Picking, Harbour Fishing, "
+                                    "Rat Catching) and the garden game, played in free play. Each visit is shown on "
+                                    "its own; none is used as a baseline.",
+                "observations": observations, "irregularities": [],
+                "limitations": ["Free-play games do not set a personal baseline, so changes are not flagged."],
+                "considerations": ["Consider comparing left and right hands across the visits listed below."]}
     return {
         "summary": ins["summary"],
         "data_description": f"The latest session was compared with the median of {ins['baseline_sessions']} "
@@ -237,15 +252,39 @@ def _fmt_date(d) -> str:
     return d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)[:10]
 
 
-def _chart(title: str, series: List[tuple], baseline: Optional[float], yfmt: str) -> Drawing:
-    """series: [(name, [(x, y), ...], color)]; x is the session number."""
+def _fmt_when(d) -> str:
+    return d.strftime("%Y-%m-%d %H:%M") if hasattr(d, "strftime") else str(d)[:16]
+
+
+def _localize(p: dict, tz: tzinfo) -> dict:
+    """Copy of the profile with every start time in the reader's time zone, so the PDF matches the site."""
+    def conv(rows):
+        return [{**r, "started_at": r["started_at"].astimezone(tz)} if hasattr(r["started_at"], "astimezone") else r
+                for r in rows]
+    return {**p, "sessions": conv(p["sessions"]), "garden_sessions": conv(p.get("garden_sessions", [])),
+            "game_sessions": conv(p.get("game_sessions", []))}
+
+
+def _zone(name: Optional[str]) -> tzinfo:
+    if name:
+        try:
+            from zoneinfo import ZoneInfo
+            return ZoneInfo(name)
+        except Exception:
+            log.warning("Unknown time zone %r for the report; using UTC", name)
+    return timezone.utc
+
+
+def _chart(title: str, series: List[tuple], baseline: Optional[float], yfmt: str,
+           xlabel: str = "Session (oldest to newest)") -> Drawing:
+    """series: [(name, [(x, y), ...], color)]; x is the session or visit number."""
     w, h = 250, 150
     d = Drawing(w, h + 18)
     d.add(String(0, h + 6, title, fontName="Helvetica-Bold", fontSize=8.5, fillColor=INK))
     series = [s for s in series if s[1]]
     pts = [y for _, s, _ in series for _, y in s]
     if not pts:
-        d.add(String(10, h / 2, "No completed sessions", fontSize=8, fillColor=MUTED))
+        d.add(String(10, h / 2, "No data yet", fontSize=8, fillColor=MUTED))
         return d
     lo, hi = min(pts), max(pts)
     if baseline is not None:
@@ -257,6 +296,7 @@ def _chart(title: str, series: List[tuple], baseline: Optional[float], yfmt: str
     lp.data = [s for _, s, _ in series] + ([[(min(xs), baseline), (max(xs), baseline)]] if baseline is not None else [])
     for i, (_, _, c) in enumerate(series):
         lp.lines[i].strokeColor, lp.lines[i].strokeWidth = c, 1.6
+        lp.lines[i].symbol = makeMarker("FilledCircle", size=4, fillColor=c, strokeColor=c)
     if baseline is not None:
         k = len(series)
         lp.lines[k].strokeColor, lp.lines[k].strokeWidth, lp.lines[k].strokeDashArray = MUTED, 0.8, [3, 2]
@@ -266,8 +306,9 @@ def _chart(title: str, series: List[tuple], baseline: Optional[float], yfmt: str
     lp.yValueAxis.visibleGrid, lp.yValueAxis.gridStrokeColor = True, RULE
     lp.xValueAxis.valueMin, lp.xValueAxis.valueMax = min(xs), max(max(xs), min(xs) + 1)
     lp.xValueAxis.labelTextFormat = "%d"
+    lp.xValueAxis.valueSteps = list(range(int(min(xs)), int(max(max(xs), min(xs) + 1)) + 1))
     d.add(lp)
-    d.add(String(lp.x + 20, 6, "Session (oldest to newest)", fontSize=7, fillColor=MUTED))
+    d.add(String(lp.x + 20, 6, xlabel, fontSize=7, fillColor=MUTED))
     lg = Legend()
     lg.x, lg.y, lg.fontSize, lg.alignment = lp.x, h - 2, 7, "right"
     lg.colorNamePairs = [(c, n) for n, _, c in series] + ([(MUTED, "Usual")] if baseline is not None else [])
@@ -296,10 +337,52 @@ def _page(canvas, doc):
     canvas.restoreState()
 
 
-def build_pdf(p: dict, draft: dict, source: str, note: Optional[str]) -> bytes:
+def _n(count: int, word: str) -> str:
+    return f"{count} {word}{'' if count == 1 else 's'}"
+
+
+def _game_cell(g: dict, key: str) -> str:
+    """Headline result of one lobby game in one visit, as on the Game visits tab."""
+    r = g["games"].get(key)
+    if not r:
+        return "Not played"
+    h = r.get("hands") or {}
+    l, rt = h.get("left") or {}, h.get("right") or {}
+    if key == "fish":
+        on = [x for x in (l.get("on_target"), rt.get("on_target")) if x is not None]
+        txt = f"On lane {round(100 * sum(on) / len(on))}%" if on else "Played"
+    else:
+        got = (l.get("apples_reached") or 0) + (rt.get("apples_reached") or 0)
+        total = (l.get("apples_total") or 0) + (rt.get("apples_total") or 0)
+        txt = (f"Picked {got} of {total}" if key == "apple" else f"Caught {got} of {total}") if total else "Played"
+        score = (((g.get("visit") or {}).get("games") or {}).get("rat") or {}).get("score") if key == "rat" else None
+        if score is not None:
+            txt += f", {score} pts"
+    if key not in (g.get("games_finished") or []):
+        txt += " (left early)"
+    return txt
+
+
+def _per_hand(rows: List[dict], get) -> List[tuple]:
+    """Left and right series over visits (x = 1, 2, ...), skipping visits without a value."""
+    out = []
+    for name, side, color in (("Left", "left", BLUE), ("Right", "right", ORANGE)):
+        pts = []
+        for i, r in enumerate(rows):
+            v = get(r, side)
+            if v is not None:
+                pts.append((i + 1, v))
+        out.append((name, pts, color))
+    return out
+
+
+def build_pdf(p: dict, draft: dict, source: str, note: Optional[str], tz: tzinfo = timezone.utc) -> bytes:
     ins = p["insights"]
     done = [s for s in reversed(p["sessions"]) if s["status"] == "completed"]
-    now = datetime.now(timezone.utc)
+    games = [g for g in p.get("game_sessions", []) if g["games"]]  # newest first
+    garden = p.get("garden_sessions", [])
+    keyboard = sum(1 for g in games if g["is_synthetic"])
+    now = datetime.now(tz)
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=letter, leftMargin=0.75 * inch, rightMargin=0.75 * inch,
                             topMargin=0.7 * inch, bottomMargin=0.8 * inch,
@@ -308,13 +391,23 @@ def build_pdf(p: dict, draft: dict, source: str, note: Optional[str]) -> bytes:
     el = [P("Movement Activity Data Summary", H1),
           P("Prepared for clinician review. Descriptive only; no diagnosis is made.", SMALL), Spacer(1, 6)]
 
-    period = f"{_fmt_date(done[0]['started_at'])} to {_fmt_date(done[-1]['started_at'])}" if done else "no completed sessions"
-    synth = "Yes. Some or all data are simulated and not from a real person." if ins["synthetic"] else "No"
+    starts = [x["started_at"] for x in done + games + garden]
+    period = f"{_fmt_date(min(starts))} to {_fmt_date(max(starts))}" if starts else "no recorded activity yet"
+    activity = [_n(len(games), "game visit")] if games else []
+    activity += [_n(len(garden), "garden visit")] if garden else []
+    if p["sessions"]:
+        activity.append(f"{_n(len(done), 'reaction-test session')} ({ins['usable_sessions']} usable for comparison)")
+    if ins["synthetic"] or any(g["is_synthetic"] for g in garden):
+        synth = "Yes. Some or all data are simulated and not from a real person."
+    elif keyboard:
+        synth = f"No. {keyboard} of {_n(len(games), 'game visit')} used keyboard input, not the controller."
+    else:
+        synth = "No"
     narrative = "Drafted by Gemini, checked automatically" if source == "gemini" else "Template wording"
     meta = [[P("Resident (alias)", CELLB), P(p["display_name"], CELL), P("Report generated", CELLB),
-             P(now.strftime("%Y-%m-%d %H:%M UTC"), CELL)],
+             P(now.strftime("%Y-%m-%d %H:%M %Z"), CELL)],
             [P("Dominant hand", CELLB), P(p["dominant_hand"], CELL), P("Period covered", CELLB), P(period, CELL)],
-            [P("Completed sessions", CELLB), P(f"{len(done)} ({ins['usable_sessions']} usable for comparison)", CELL),
+            [P("Recorded activity", CELLB), P(", ".join(activity) or "None yet", CELL),
              P("Simulated data", CELLB), P(synth, CELL)],
             [P("Instrument", CELLB), P("Stick Drift two-thumbstick activity, PS5 controller", CELL),
              P("Narrative", CELLB), P(narrative, CELL)]]
@@ -343,34 +436,95 @@ def build_pdf(p: dict, draft: dict, source: str, note: Optional[str]) -> bytes:
     else:
         el.append(P("No measurements moved beyond the thresholds used to flag a change."))
 
-    left = [(i + 1, s["left_median_latency_ms"] / 1000) for i, s in enumerate(done)
-            if s["left_median_latency_ms"] is not None]
-    right = [(i + 1, s["right_median_latency_ms"] / 1000) for i, s in enumerate(done)
-             if s["right_median_latency_ms"] is not None]
+    charts, notes = [], []
+    if done:
+        left = [(i + 1, s["left_median_latency_ms"] / 1000) for i, s in enumerate(done)
+                if s["left_median_latency_ms"] is not None]
+        right = [(i + 1, s["right_median_latency_ms"] / 1000) for i, s in enumerate(done)
+                 if s["right_median_latency_ms"] is not None]
 
-    def accs(c, v):
-        return [(i + 1, 100 * s[c] / s[v]) for i, s in enumerate(done) if s[c] is not None and s[v]]
+        def accs(c, v):
+            return [(i + 1, 100 * s[c] / s[v]) for i, s in enumerate(done) if s[c] is not None and s[v]]
 
-    by = {f["key"]: f for f in ins["findings"]}
-    base = by["left_latency"]["baseline"] / 1000 if "left_latency" in by else None
-    lat = _chart("Median response time (seconds)", [("Left", left, BLUE), ("Right", right, ORANGE)], base, "%.2f")
-    acc = _chart("Accuracy (% of prompts correct)", [("Left", accs("left_correct", "left_valid"), BLUE),
-                 ("Right", accs("right_correct", "right_valid"), ORANGE),
-                 ("Both", accs("both_correct", "both_valid"), GREEN)], None, "%.0f")
-    el += [P("5. Trends across sessions", H2), Table([[lat, acc]], colWidths=[W / 2, W / 2]),
-           P("Dashed line: the resident's usual left-hand response time (median of earlier sessions).", SMALL)]
+        by = {f["key"]: f for f in ins["findings"]}
+        base = by["left_latency"]["baseline"] / 1000 if "left_latency" in by else None
+        charts += [_chart("Reaction test: median response time (s)", [("Left", left, BLUE), ("Right", right, ORANGE)],
+                          base, "%.2f"),
+                   _chart("Reaction test: accuracy (% correct)", [("Left", accs("left_correct", "left_valid"), BLUE),
+                          ("Right", accs("right_correct", "right_valid"), ORANGE),
+                          ("Both", accs("both_correct", "both_valid"), GREEN)], None, "%.0f")]
+        if base is not None:
+            notes.append("Dashed line: the resident's usual left-hand response time (median of earlier sessions).")
 
-    rows = [[P(h, CELLB) for h in ("Date", "Status/quality", "Left RT", "Right RT", "Left acc.", "Right acc.", "Both acc.")]]
-    for s in p["sessions"][:10]:
-        a = lambda c, v: f"{round(100 * s[c] / s[v])}%" if s[c] is not None and s[v] else "-"
-        ms = lambda k: fmt("latency", s[k]) if s[k] is not None else "-"
-        rows.append([P(_fmt_date(s["started_at"]) + (" (sim.)" if s.get("is_synthetic") else ""), CELL),
-                     P(f"{s['status']}/{s['quality'] or '-'}", CELL),
-                     P(ms("left_median_latency_ms"), CELL), P(ms("right_median_latency_ms"), CELL),
-                     P(a("left_correct", "left_valid"), CELL), P(a("right_correct", "right_valid"), CELL),
-                     P(a("both_correct", "both_valid"), CELL)])
-    el += [P("6. Session data (most recent first)", H2),
-           _tbl(rows, [1.35 * inch, 1.1 * inch] + [(W - 2.45 * inch) / 5] * 5)]
+    # lobby games: controller visits only, oldest first, one chart per game's headline measure
+    real = [g for g in reversed(games) if not g["is_synthetic"]]
+    hand = lambda r, game, side: (((r["games"].get(game) or {}).get("hands") or {}).get(side) or {})
+    for game, title, key, scale, yfmt in (
+            ("apple", "Apple Picking: time to pick (s)", "reach_s", 1, "%.2f"),
+            ("fish", "Harbour Fishing: time on the lane (%)", "on_target", 100, "%.0f"),
+            ("rat", "Rat Catching: time to slam (s)", "reach_s", 1, "%.2f")):
+        rows = [g for g in real if game in g["games"]]
+        series = _per_hand(rows, lambda r, side: None if hand(r, game, side).get(key) is None
+                           else hand(r, game, side)[key] * scale)
+        if any(pts for _, pts, _ in series):
+            charts.append(_chart(title, series, None, yfmt, "Visit with this game (oldest to newest)"))
+    seen = [g for g in reversed(garden) if g.get("live") and not g["is_synthetic"]]
+    live = lambda r, side: ((r["live"].get("hands") or {}).get(side) or {})
+    for title, key, scale, yfmt in (("Garden: time to reach an apple (s)", "reach_s", 1, "%.2f"),
+                                    ("Garden: distance from target (%)", "tracking_error", 100, "%.0f")):
+        series = _per_hand(seen, lambda r, side: None if live(r, side).get(key) is None else live(r, side)[key] * scale)
+        if any(pts for _, pts, _ in series):
+            charts.append(_chart(title, series, None, yfmt, "Garden visit (oldest to newest)"))
+    if games or garden:
+        notes.append("Game and garden charts: each point is one visit. Free-play games have no usual level, so "
+                     "nothing is marked as changed." + (" Keyboard visits are left out." if keyboard else ""))
+
+    el.append(P("5. Trends across visits", H2))
+    if charts:
+        if len(charts) % 2:
+            charts.append("")
+        el.append(Table([charts[i:i + 2] for i in range(0, len(charts), 2)], colWidths=[W / 2, W / 2]))
+        el += [P(n, SMALL) for n in notes]
+    else:
+        el.append(P("No measurements to chart yet."))
+
+    el.append(P("6. Recorded activity (most recent first)", H2))
+    if not (games or garden or p["sessions"]):
+        el.append(P("Nothing has been recorded for this resident yet."))
+    if games:
+        rows = [[P(h, CELLB) for h in ("Date", "Games", "Apple Picking", "Harbour Fishing", "Rat Catching", "Input")]]
+        for g in games[:12]:
+            rows.append([P(_fmt_when(g["started_at"]) + (" (in progress)" if g["status"] == "in_progress" else ""), CELL),
+                         P(f"{len(g['games'])} of 3", CELL)]
+                        + [P(_game_cell(g, k), CELL) for k in ("apple", "fish", "rat")]
+                        + [P("Keyboard" if g["is_synthetic"] else "Controller", CELL)])
+        shown = f", latest {min(len(games), 12)} shown" if len(games) > 12 else ""
+        el += [P(f"Game visits ({len(games)}{shown})", TITLE),
+               _tbl(rows, [1.15 * inch, 0.55 * inch] + [(W - 2.45 * inch) / 3] * 3 + [0.75 * inch]), Spacer(1, 6)]
+    if garden:
+        secs = lambda v: "-" if v is None else f"{v:.2f} s"
+        rows = [[P(h, CELLB) for h in ("Date", "Chapters", "Reach (left)", "Reach (right)", "Status")]]
+        for g in garden[:10]:
+            hands = (g.get("live") or {}).get("hands") or {}
+            rows.append([P(_fmt_when(g["started_at"]) + (" (sim.)" if g["is_synthetic"] else ""), CELL),
+                         P(f"{g.get('levels_completed') or 0}/{g.get('levels_total') or 4}", CELL),
+                         P(secs((hands.get("left") or {}).get("reach_s")), CELL),
+                         P(secs((hands.get("right") or {}).get("reach_s")), CELL),
+                         P("Finished" if g["status"] == "completed" else "Stopped early", CELL)])
+        el += [P(f"Garden visits ({len(garden)}{', latest 10 shown' if len(garden) > 10 else ''})", TITLE), _tbl(rows, [1.35 * inch] + [(W - 1.35 * inch) / 4] * 4),
+               Spacer(1, 6)]
+    if p["sessions"]:
+        rows = [[P(h, CELLB) for h in ("Date", "Status/quality", "Left RT", "Right RT", "Left acc.", "Right acc.", "Both acc.")]]
+        for s in p["sessions"][:10]:
+            a = lambda c, v: f"{round(100 * s[c] / s[v])}%" if s[c] is not None and s[v] else "-"
+            ms = lambda k: fmt("latency", s[k]) if s[k] is not None else "-"
+            rows.append([P(_fmt_date(s["started_at"]) + (" (sim.)" if s.get("is_synthetic") else ""), CELL),
+                         P(f"{s['status']}/{s['quality'] or '-'}", CELL),
+                         P(ms("left_median_latency_ms"), CELL), P(ms("right_median_latency_ms"), CELL),
+                         P(a("left_correct", "left_valid"), CELL), P(a("right_correct", "right_valid"), CELL),
+                         P(a("both_correct", "both_valid"), CELL)])
+        el += [P(f"Reaction-test sessions ({len(p['sessions'])})", TITLE),
+               _tbl(rows, [1.35 * inch, 1.1 * inch] + [(W - 2.45 * inch) / 5] * 5)]
 
     lim = list(draft["limitations"]) + [
         "Comparison is against this resident's own earlier sessions, not a population norm.",
@@ -396,14 +550,17 @@ def build_pdf(p: dict, draft: dict, source: str, note: Optional[str]) -> bytes:
 
 
 @router.get("/caregiver/residents/{participant_id}/report.pdf")
-def report_pdf(participant_id: UUID, _: dict = Depends(current_caregiver)):
+def report_pdf(participant_id: UUID, tz: Optional[str] = Query(None, max_length=64),
+               _: dict = Depends(current_caregiver)):
     with pool.connection() as conn:
         p = resident_profile(conn, participant_id)
     if p is None:
         raise HTTPException(404, "Resident not found.")
+    zone = _zone(tz)
+    p = _localize(p, zone)
     facts = build_facts([p], p)
     draft, source, note = draft_report(p, facts)
-    pdf = build_pdf(p, draft, source, note)
+    pdf = build_pdf(p, draft, source, note, zone)
     name = re.sub(r"[^A-Za-z0-9]+", "_", p["display_name"]).strip("_") or "resident"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="stick-drift-summary-{name}.pdf"',
