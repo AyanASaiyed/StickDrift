@@ -67,8 +67,8 @@ population norm) and flag any simulated data.
 Hard rules
 - Use ONLY the FACTS block. Quote numbers exactly as written there (for example 0.82 s, 75%, -2 pts). Do not \
 compute, round or invent numbers, dates, doses, diagnoses, history or caregiver actions.
-- The pattern model scores resemblance to patterns named Parkinson's, stroke, essential tremor, diabetes \
-and ataxia. Use those names only as pattern resemblance ("resembled the Parkinson's pattern, 34/100"). NEVER \
+- The pattern model scores resemblance to patterns named Parkinson's, stroke, essential tremor, and \
+diabetes. Use those names only as pattern resemblance ("resembled the Parkinson's pattern, 34/100"). NEVER \
 state or imply that the resident has a disease, and never name any other condition (for example dementia, MS, \
 neuropathy). Otherwise describe the functional change ("slower left-hand responses").
 - Possible contributors are everyday, non-diagnostic factors (tiredness, pain, medication change, vision, \

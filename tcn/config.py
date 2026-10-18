@@ -4,7 +4,7 @@ Each hand is scored on what remains after its slow path is removed, and on how
 far the stick sits from that hand's own target. Parkinson is the impairment
 shared by both hands. Stroke is the gap between the hands. Essential tremor is
 the leftover shake. Diabetes is a reach that passes the apple or stops short,
-then corrects. Ataxia is a hand that leaves the butterfly or watering path.
+then corrects.
 Scores are resemblance from 0 to 100, not disease probabilities, and more than
 one may be high. They do not sum to 100.
 """
@@ -52,10 +52,10 @@ HAND_CHANNELS = (
 )
 
 # Network outputs for a single hand. Recording scores are derived from these.
-HAND_SCORES = ("tremor", "impairment", "diabetes", "ataxia")
+HAND_SCORES = ("tremor", "impairment", "diabetes")
 
 # Recording-level scores returned to callers.
-SCORES = ("parkinson", "stroke", "essential_tremor", "diabetes", "ataxia")
+SCORES = ("parkinson", "stroke", "essential_tremor", "diabetes")
 
 # Midpoint of a 0..255 stick byte. Used only when a file has targets but no
 # cursor columns. Played files already store cursor_* in the game's -1..1 space.
@@ -66,7 +66,7 @@ LEVELS = 6
 KERNEL = 3
 DROPOUT = 0.1
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCORE_MEANING = "0-100 pattern resemblance, not a disease probability"
 
 

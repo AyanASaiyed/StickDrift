@@ -43,7 +43,6 @@ def score_recording(
             bags.get("tremor", {}),
             bags.get("impairment", {}),
             bags.get("diabetes"),
-            bags.get("ataxia"),
             activity=recording.activity,
             has_targets=recording.has_targets,
         ),
@@ -55,7 +54,6 @@ def fuse(apple: dict, path: dict) -> dict[str, float | None]:
 
     Parkinson and essential tremor are averaged across the two files. A null
     is left out of that average. Stroke and diabetes stay with the apple file.
-    Ataxia stays with the path file.
     """
 
     def average(left: float | None, right: float | None) -> float | None:
@@ -72,7 +70,6 @@ def fuse(apple: dict, path: dict) -> dict[str, float | None]:
         "stroke": keep(apple.get("stroke")),
         "essential_tremor": average(apple.get("essential_tremor"), path.get("essential_tremor")),
         "diabetes": keep(apple.get("diabetes")),
-        "ataxia": keep(path.get("ataxia")),
     }
 
 
@@ -80,15 +77,13 @@ def _aggregate(
     tremor: dict[str, list[float]],
     impairment: dict[str, list[float]],
     diabetes: dict[str, list[float]] | None = None,
-    ataxia: dict[str, list[float]] | None = None,
     activity: str | None = None,
     has_targets: bool = False,
 ) -> dict[str, float | None]:
     """Parkinson is the impairment shared by both hands. Stroke is the gap.
 
-    Diabetes is scored only on an apple file that has targets. Ataxia is scored
-    only on a butterfly or water file that has targets. One hand moving leaves
-    stroke null; the hands do not have to move at the same time.
+    Diabetes is scored only on an apple file that has targets. One hand moving
+    leaves stroke null; the hands do not have to move at the same time.
     """
     tremor_means = _means(tremor)
     impairment_means = _means(impairment)
@@ -102,11 +97,9 @@ def _aggregate(
     else:
         scores["parkinson"] = next(iter(impairment_means.values()))
         scores["stroke"] = None
-    diabetes_open, ataxia_open = activity_gates(activity)
+    diabetes_open, _ataxia_open = activity_gates(activity)
     if diabetes_open and has_targets:
         scores["diabetes"] = _max_mean(diabetes)
-    if ataxia_open and has_targets:
-        scores["ataxia"] = _max_mean(ataxia)
     return scores
 
 

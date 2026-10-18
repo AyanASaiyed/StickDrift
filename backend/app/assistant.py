@@ -28,7 +28,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 # Tried in order when the primary model is overloaded or rate-limited.
 GEMINI_FALLBACKS = ["gemini-3.5-flash", "gemini-flash-latest"]
 
-# The pattern model's names (Parkinson's, stroke, essential tremor, diabetes, ataxia) are shown on the site,
+# The pattern model's names (Parkinson's, stroke, essential tremor, diabetes) are shown on the site,
 # so answers may use them as pattern names. Every other condition name is still refused.
 BANNED_WORDS = re.compile(
     r"\b(dementia|alzheimer\w*|multiple sclerosis|amyotrophic|huntington\w*|"
@@ -48,8 +48,8 @@ accuracy for each hand and both hands together.
 Rules:
 - Use ONLY the FACTS block. Quote numbers exactly as written there; do not compute new numbers.
 - If the facts do not answer the question, say so plainly and suggest what to observe or record.
-- The pattern model scores resemblance to five patterns named Parkinson's, stroke, essential tremor, \
-diabetes and ataxia. You may use those names only as pattern resemblance ("resembled the Parkinson's \
+- The pattern model scores resemblance to patterns named Parkinson's, stroke, essential tremor, \
+and diabetes. You may use those names only as pattern resemblance ("resembled the Parkinson's \
 pattern, 34/100"). Never say or suggest a resident has a disease, and never name any other condition (for \
 example dementia or MS). The game is not a medical device. Talk about measured changes, possible everyday \
 contributors and the recommended checks that appear in the facts.

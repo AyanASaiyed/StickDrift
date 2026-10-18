@@ -121,14 +121,19 @@ def _played(
 
 
 def load_training_examples(root: str | Path = "data") -> list[Example]:
-    """Apple and fishing recordings in data/ultimate_data. Rat files are left out.
+    """Apple and fishing recordings in data/ultimate_data.
 
-    Diabetes is not a trained pattern. Ataxia is learned from fishing only.
+    Rat files and cerebral-ataxia visits are left out. Diabetes stays in the
+    network but these recordings label it 0.
     """
     folder = Path(root) / "ultimate_data"
     if not folder.is_dir() or not any(folder.rglob("controller_data.csv")):
         raise RecordingError(f"{folder} has no recorded controller files.")
-    examples = [example for example in load_examples(folder) if example.activity != "rat"]
+    examples = [
+        example
+        for example in load_examples(folder)
+        if example.activity != "rat" and not set(Path(example.recording.name).parts) & _ATAXIA
+    ]
     if not examples:
         raise RecordingError(f"{folder} has no apple or fishing recordings.")
     return examples

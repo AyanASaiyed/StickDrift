@@ -7,7 +7,7 @@ is the impairment shared by both hands. Stroke is the gap between them.
 Essential tremor is the shake. Diabetes is a mistimed apple reach. Ataxia is
 leaving the butterfly or watering path.
 
-Scores come back as parkinson, stroke, essential_tremor, diabetes, and ataxia,
+Scores come back as parkinson, stroke, essential_tremor, and diabetes,
 each from 0 to 100. They are pattern resemblance, not disease probabilities,
 and they do not sum to 100.
 """

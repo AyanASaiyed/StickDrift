@@ -104,13 +104,12 @@ def _target(example: Example, stretch: Stretch) -> np.ndarray:
         impairment = min(100.0, parkinson + stroke)
     else:
         impairment = parkinson
-    diabetes_open, ataxia_open = activity_gates(example.activity)
+    diabetes_open, _ataxia_open = activity_gates(example.activity)
     target = np.asarray(
         [
             tremor,
             impairment,
             _labeled(example.diabetes, diabetes_open),
-            _labeled(example.ataxia, ataxia_open),
         ],
         dtype=np.float32,
     )

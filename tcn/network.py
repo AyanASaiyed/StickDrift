@@ -2,7 +2,7 @@
 
 The recording is scored offline, so each layer looks both backward and forward.
 One shared network reads a single hand. Independent sigmoids produce that
-hand's tremor, impairment, diabetes, and ataxia scores. Nothing in the head
+hand's tremor, impairment, and diabetes scores. Nothing in the head
 forces those scores to add up to 100.
 """
 

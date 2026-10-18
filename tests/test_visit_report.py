@@ -38,7 +38,6 @@ def _score(game, frames):
         "stroke": 5.0 if game == "apple" else None,
         "essential_tremor": 8.0 if game == "apple" else 12.0,
         "diabetes": 15.0 if game == "apple" else None,
-        "ataxia": None if game == "apple" else 22.0,
     }
     return {"duration_s": 2.0, "stretches": {"left": 1, "right": 1}, "scores": scores}
 
@@ -134,7 +133,7 @@ class VisitReportTest(unittest.TestCase):
         self.assertEqual(rat["median_reaction_s"], 0.2)
         self.assertNotIn("rat", report["model"]["by_game"])
         self.assertEqual(report["model"]["scores"]["parkinson"], 30.0)
-        self.assertEqual(report["model"]["scores"]["ataxia"], 22.0)
+        self.assertNotIn("ataxia", report["model"]["scores"])
         self.assertEqual(report["dashboard"]["scores"]["parkinson"], 30.0)
         self.assertEqual(report["dashboard"]["rat"]["score"], 250)
         self.assertEqual(report["dashboard"]["rat"]["stars"], 1)
@@ -155,7 +154,7 @@ class VisitReportTest(unittest.TestCase):
         self.assertEqual(scores["stroke"], 5.0)
         self.assertEqual(scores["essential_tremor"], 10.0)
         self.assertEqual(scores["diabetes"], 15.0)
-        self.assertEqual(scores["ataxia"], 22.0)
+        self.assertNotIn("ataxia", scores)
         self.assertEqual(set(report["model"]["by_game"]), {"apple", "fish"})
         live = report["live"]["hands"]["left"]
         self.assertIn("reach_s", live)
