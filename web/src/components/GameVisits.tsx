@@ -2,8 +2,9 @@ import { Fragment, useState } from 'react'
 import type { GameResult, GameSession, HandLive, LobbyGame, RatReport } from '../api'
 import { formatDateTime } from '../format'
 import { HandReplay } from './HandReplay'
-import { PatternBars, RatPoints, hasPatternScores } from './LiveCharts'
+import { RatPoints } from './LiveCharts'
 import { pct, secs } from './liveData'
+import { VisitPatterns } from './VisitPatterns'
 
 const GAME_NAMES: Record<LobbyGame, string> = {
   apple: 'Apple Picking',
@@ -296,17 +297,14 @@ export function GameVisits({ visits, name }: { visits: GameSession[]; name: stri
             />
           ))}
         </div>
-        {latest.has_hand_replay && <HandReplay sessionId={latest.session_id} info={latest.hand_replay} name={name} />}
-        {hasPatternScores(latest.tcn?.scores) && latest.tcn?.scores && (
-          <div className="game-patterns">
-            <h3>Pattern model</h3>
-            <p className="muted">Apple Picking and Harbour Fishing, scored when the resident left the garden.</p>
-            <PatternBars scores={latest.tcn.scores} levels={latest.tcn.levels} />
-          </div>
+        {latest.has_hand_replay && (
+          <HandReplay sessionId={latest.session_id} info={latest.hand_replay} name={name} />
         )}
-        {!hasPatternScores(latest.tcn?.scores) && latest.tcn?.levels?.some((level) => level.error) && (
-          <p className="error">The pattern model could not score Apple Picking and Harbour Fishing for this visit.</p>
-        )}
+        <div className="game-patterns">
+          <h3>Pattern model</h3>
+          <p className="muted">Apple Picking and Harbour Fishing, scored when the resident leaves the lobby.</p>
+          <VisitPatterns visits={visits} />
+        </div>
         <details className="game-more game-glossary">
           <summary>What these measurements mean</summary>
           <dl>

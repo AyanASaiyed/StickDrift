@@ -15,9 +15,9 @@ SCHEMA_VERSION = 1
 MEANING = "0-100 pattern resemblance, not a disease probability"
 GAMES = ("apple", "fish", "rat")
 HANDS = ("left", "right")
-SCORES = ("parkinson", "stroke", "essential_tremor", "diabetes")
-# The trained model knows these two task names. Apple Picking is the reach
-# task (diabetes). Harbour Fishing is scored for the same patterns. Rat Catching is not scored.
+SCORES = ("parkinson", "stroke", "essential_tremor")
+# The trained model knows these two task names. Apple Picking and Harbour Fishing are
+# scored for the same patterns. Rat Catching is not scored.
 ACTIVITY = {"apple": "apples", "fish": "butterfly"}
 DEFAULT_CHECKPOINT = Path(__file__).resolve().parents[1] / "runs" / "tcn" / "model.pt"
 
@@ -555,7 +555,6 @@ def _fuse(apple, fish):
         "parkinson": average(apple.get("parkinson"), fish.get("parkinson")),
         "stroke": keep(apple.get("stroke")),
         "essential_tremor": average(apple.get("essential_tremor"), fish.get("essential_tremor")),
-        "diabetes": keep(apple.get("diabetes")),
     }
 
 

@@ -46,20 +46,17 @@ export const PATTERN_LABELS: Record<PatternKey, string> = {
   parkinson: "Parkinson's",
   stroke: "Stroke",
   essential_tremor: "Essential tremor",
-  diabetes: "Diabetes",
 };
 /** What each pattern looks like in the games, in plain words. */
 export const PATTERN_HINTS: Record<PatternKey, string> = {
   parkinson: "Slowed, smaller movements in both hands",
   stroke: "One hand clearly weaker or slower than the other",
   essential_tremor: "Rhythmic shake while the hand moves",
-  diabetes: "Reaches land past or short, then correct",
 };
 export const PATTERN_ORDER: PatternKey[] = [
   "parkinson",
   "stroke",
   "essential_tremor",
-  "diabetes",
 ];
 const LEVEL_NAMES: Record<string, string> = {
   apples: "Apples",

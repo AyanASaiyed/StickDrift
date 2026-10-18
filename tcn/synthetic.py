@@ -8,12 +8,10 @@ same scores. Three traits are kept apart so a mix can carry more than one:
 - Essential tremor is a gyroscope oscillation. The hands keep a normal speed.
 - Stroke slows one hand and leaves the other at a normal speed.
 
-Diabetes changes the apple reach only. Ataxia changes the fishing path only.
 The fishing lane has no stored border: reached_l / reached_r is 1 while the
 cursor is inside the lane and 0 while it is outside. The cursor is always written.
 
-Folder names are the labels. Recorded folders such as "Diabetes Data" and
-"Cerebellar ataxia" are different names, so they are not picked up here.
+Folder names are the labels.
 """
 
 import csv
@@ -53,8 +51,6 @@ class Condition:
     parkinson: float
     stroke: float
     tremor: float
-    diabetes: float = 0.0
-    ataxia: float = 0.0
     weak_hand: str | None = None
     tremor_hand: str | None = None
     latency_s: float = 0.08
@@ -72,50 +68,37 @@ def _person(
     parkinson: float = 0.0,
     stroke: float = 0.0,
     tremor: float = 0.0,
-    diabetes: float = 0.0,
-    ataxia: float = 0.0,
     weak_hand: str | None = None,
 ) -> Condition:
     shared = parkinson / 100.0
     sided = stroke / 100.0
     shake = tremor / 100.0
-    # Parkinson weakens both hands. Stroke does not; its trait is speed.
-    # The reach stays fast enough in each step that the stretch cutter still sees it.
-    gain_left = 1.0 - 0.32 * shared
-    gain_right = 1.0 - 0.32 * shared
-    move_left = 0.35 + 1.05 * shared
-    move_right = 0.35 + 1.05 * shared
+    # Parkinson weakens both hands a little. A moderate slowdown is already the
+    # full pattern, so the score rises before the reach is extremely slow.
+    # Stroke changes speed on one hand only. Mild tremor is a small gyroscope
+    # wobble; the shake has to be strong before it matches a high score.
+    gain_left = 1.0 - 0.22 * shared
+    gain_right = 1.0 - 0.22 * shared
+    move_left = 0.35 + 0.62 * shared
+    move_right = 0.35 + 0.62 * shared
     if weak_hand == "left":
-        move_left += 1.15 * sided
+        move_left += 0.72 * sided
     elif weak_hand == "right":
-        move_right += 1.15 * sided
+        move_right += 0.72 * sided
     return Condition(
         folder,
         parkinson,
         stroke,
         tremor,
-        diabetes=diabetes,
-        ataxia=ataxia,
         weak_hand=weak_hand,
-        latency_s=0.08 + 0.42 * shared,
+        latency_s=0.08 + 0.22 * shared,
         move_s_left=move_left,
         move_s_right=move_right,
         gain_left=gain_left,
         gain_right=gain_right,
-        gyro_shake=160.0 * shake,
-        levels=_levels(parkinson, stroke, tremor, diabetes, ataxia),
+        # Mild tremor already shakes hard. A small wobble stays well below a score of 25.
+        gyro_shake=0.0 if shake <= 0.0 else 220.0 * (shake ** 0.55),
     )
-
-
-def _levels(parkinson: float, stroke: float, tremor: float, diabetes: float, ataxia: float) -> tuple[str, ...]:
-    """Apple cannot show ataxia. Fishing cannot show diabetes. Rat is not generated."""
-    normal = parkinson == stroke == tremor == diabetes == ataxia == 0
-    levels = []
-    if normal or parkinson or stroke or tremor or diabetes:
-        levels.append("apple")
-    if normal or parkinson or stroke or tremor or ataxia:
-        levels.append("fish")
-    return tuple(levels)
 
 
 _SEVERITIES = (25.0, 50.0, 75.0, 100.0)
@@ -124,8 +107,6 @@ _DISEASES = (
     ("Tremor", "tremor", None),
     ("Stroke Left", "stroke", "left"),
     ("Stroke Right", "stroke", "right"),
-    ("Diabetes", "diabetes", None),
-    ("Ataxia", "ataxia", None),
 )
 
 
@@ -174,10 +155,10 @@ def _apple(condition: Condition, seed: int) -> list[list]:
     clock = 0.0
     clock = _hold(rows, clock, 0.45, "apple", "", (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), condition)
     for index, (left_goal, right_goal) in enumerate(zip(APPLES_LEFT, APPLES_RIGHT, strict=True)):
-        clock = _reach(rows, clock, rng, condition, index, "apple", "cue", left_goal, right_goal, diabetes=True)
+        clock = _reach(rows, clock, rng, condition, index, "apple", "cue", left_goal, right_goal)
         clock = _reach(
             rows, clock, rng, condition, index, "apple", "carry",
-            (0.0, 0.15), (0.0, 0.15), diabetes=False, origin=(left_goal, right_goal),
+            (0.0, 0.15), (0.0, 0.15), origin=(left_goal, right_goal),
         )
         clock = _hold(rows, clock, 0.30, "apple", "", (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0), condition)
     return rows
@@ -211,17 +192,17 @@ def _fish(condition: Condition, seed: int) -> list[list]:
     return rows
 
 
-def _reach(rows, clock, rng, condition, index, level, phase, left_goal, right_goal, diabetes: bool, origin=None):
+def _reach(rows, clock, rng, condition, index, level, phase, left_goal, right_goal, origin=None):
     del rng
     start_left, start_right = ((0.0, 0.0), (0.0, 0.0)) if origin is None else origin
     longest = max(condition.move_s_left, condition.move_s_right)
-    duration = condition.latency_s + longest + (0.55 if diabetes and condition.diabetes else 0.20)
+    duration = condition.latency_s + longest + 0.20
     count = max(2, int(round(duration * HZ)))
     for step in range(count):
         elapsed = step / HZ
         time_s = clock + elapsed
-        left = _aimed(condition, "left", start_left, left_goal, elapsed, index, diabetes)
-        right = _aimed(condition, "right", start_right, right_goal, elapsed, index, diabetes)
+        left = _aimed(condition, "left", start_left, left_goal, elapsed, index)
+        right = _aimed(condition, "right", start_right, right_goal, elapsed, index)
         moving = elapsed > condition.latency_s
         stick_l = _stick_command("left", left, moving=moving)
         stick_r = _stick_command("right", right, moving=moving)
@@ -231,7 +212,7 @@ def _reach(rows, clock, rng, condition, index, level, phase, left_goal, right_go
     return clock + duration
 
 
-def _aimed(condition, hand, start, goal, elapsed, index, diabetes: bool):
+def _aimed(condition, hand, start, goal, elapsed, index):
     gain = condition.gain_left if hand == "left" else condition.gain_right
     move_s = condition.move_s_left if hand == "left" else condition.move_s_right
     # Later reaches get smaller. That is the parkinson decrement, shared by both hands.
@@ -243,21 +224,10 @@ def _aimed(condition, hand, start, goal, elapsed, index, diabetes: bool):
         moved = elapsed - condition.latency_s
         unit = moved / move_s
         scale = _progress(moved, unit, condition.parkinson / 100.0)
-        if diabetes and condition.diabetes > 0.0:
-            scale = _diabetes_scale(unit, condition.diabetes / 100.0, index)
     return (
         start[0] + (goal[0] - start[0]) * gain * scale,
         start[1] + (goal[1] - start[1]) * gain * scale,
     )
-
-
-def _diabetes_scale(unit: float, strength: float, index: int) -> float:
-    """Go past the apple or stop short, then come back. The outbound speed stays ordinary."""
-    miss = (1.15 + 0.55 * strength) if index % 2 == 0 else (0.45 - 0.25 * strength)
-    if unit < 1.0:
-        return miss * _ease(unit)
-    correct = _ease(min(unit - 1.0, 1.0))
-    return miss + (1.0 - miss) * correct
 
 
 def _follow(previous, target, move_s):
@@ -273,16 +243,7 @@ def _follow(previous, target, move_s):
 def _fish_cursor(condition, hand, center, time_s, seed: int):
     gain = condition.gain_left if hand == "left" else condition.gain_right
     point = (center[0] * gain, center[1] * gain)
-    point = _steps(point, condition.parkinson / 100.0, seed)
-    if condition.ataxia <= 0.0:
-        return point
-    amount = 0.06 + 0.28 * condition.ataxia / 100.0
-    side = amount * math.sin(2.0 * math.pi * 0.28 * time_s)
-    lead = amount * 0.7 * math.sin(2.0 * math.pi * 0.18 * time_s + 0.6)
-    tx, ty = center
-    radius = math.hypot(tx, ty) or 1.0
-    ux, uy = tx / radius, ty / radius
-    return (point[0] + ux * lead - uy * side, point[1] + uy * lead + ux * side)
+    return _steps(point, condition.parkinson / 100.0, seed)
 
 
 def _stick_command(hand, cursor, moving: bool):

@@ -282,14 +282,12 @@ PATTERN_LABELS = {
     "parkinson": "Parkinson's",
     "stroke": "Stroke",
     "essential_tremor": "Essential tremor",
-    "diabetes": "Diabetes",
 }
 
 PATTERN_HINTS = {
     "parkinson": "slowed, smaller movements in both hands",
     "stroke": "one hand clearly weaker or slower than the other",
     "essential_tremor": "rhythmic shake while the hand moves",
-    "diabetes": "reaches land past or short, then correct",
 }
 
 PATTERN_GUIDE = {
@@ -317,15 +315,6 @@ PATTERN_GUIDE = {
          "Ask about caffeine, stress, cold and recent medication changes.",
          "If the shake is new or getting worse, mention it at the next nursing review."],
     ),
-    "diabetes": (
-        ["Glasses not worn or vision changes", "Reduced feeling in the fingertips", "A missed meal or low energy",
-         "Unfamiliarity with the game"],
-        ["Ask about numbness, tingling or burning in the fingers or feet, and check the hands and feet for unnoticed "
-         "cuts or sores.",
-         "Check they had their usual meal, and follow any blood-sugar monitoring plan already in their care plan.",
-         "Check the setup: glasses, lighting and screen position.",
-         "Repeat the game in 1-2 days. If reaches keep landing off target, mention it at the next nursing review."],
-    ),
 }
 
 
@@ -339,7 +328,7 @@ def add_model_concerns(insights: dict, garden_sessions: List[dict], kind: str = 
     Harbour Fishing are scored). Scores are 0-100 pattern resemblance, not disease probabilities.
     """
     judged = [g for g in garden_sessions
-              if g.get("tcn") and any(v is not None for v in (g["tcn"].get("scores") or {}).values())]
+              if g.get("tcn") and any((g["tcn"].get("scores") or {}).get(k) is not None for k in PATTERN_LABELS)]
     noun = "garden session" if kind == "garden" else "game visit"
     if kind == "garden":
         visits, n_judged = len(garden_sessions), len(judged)

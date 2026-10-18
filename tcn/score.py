@@ -1,11 +1,11 @@
-"""Turn per-hand stretch scores into the five recording scores."""
+"""Turn per-hand stretch scores into the three recording scores."""
 
 import numpy as np
 import torch
 
 from tcn.config import SCORES, Segment
 from tcn.prepare import prepare
-from tcn.recording import Recording, activity_gates
+from tcn.recording import Recording
 from tcn.stretch import build_stretches
 
 
@@ -39,13 +39,7 @@ def score_recording(
         recording.name,
         prepared.duration_s,
         counts,
-        _aggregate(
-            bags.get("tremor", {}),
-            bags.get("impairment", {}),
-            bags.get("diabetes"),
-            activity=recording.activity,
-            has_targets=recording.has_targets,
-        ),
+        _aggregate(bags.get("tremor", {}), bags.get("impairment", {})),
     )
 
 
@@ -53,7 +47,7 @@ def fuse(apple: dict, path: dict) -> dict[str, float | None]:
     """Combine one apple recording with one butterfly or water recording.
 
     Parkinson and essential tremor are averaged across the two files. A null
-    is left out of that average. Stroke and diabetes stay with the apple file.
+    is left out of that average. Stroke stays with the apple file.
     """
 
     def average(left: float | None, right: float | None) -> float | None:
@@ -69,21 +63,16 @@ def fuse(apple: dict, path: dict) -> dict[str, float | None]:
         "parkinson": average(apple.get("parkinson"), path.get("parkinson")),
         "stroke": keep(apple.get("stroke")),
         "essential_tremor": average(apple.get("essential_tremor"), path.get("essential_tremor")),
-        "diabetes": keep(apple.get("diabetes")),
     }
 
 
 def _aggregate(
     tremor: dict[str, list[float]],
     impairment: dict[str, list[float]],
-    diabetes: dict[str, list[float]] | None = None,
-    activity: str | None = None,
-    has_targets: bool = False,
 ) -> dict[str, float | None]:
     """Parkinson is the impairment shared by both hands. Stroke is the gap.
 
-    Diabetes is scored only on an apple file that has targets. One hand moving
-    leaves stroke null; the hands do not have to move at the same time.
+    One hand moving leaves stroke null; the hands do not have to move at the same time.
     """
     tremor_means = _means(tremor)
     impairment_means = _means(impairment)
@@ -97,9 +86,6 @@ def _aggregate(
     else:
         scores["parkinson"] = next(iter(impairment_means.values()))
         scores["stroke"] = None
-    diabetes_open, _ataxia_open = activity_gates(activity)
-    if diabetes_open and has_targets:
-        scores["diabetes"] = _max_mean(diabetes)
     return scores
 
 
@@ -107,13 +93,6 @@ def _means(groups: dict[str, list[float]] | None) -> dict[str, float]:
     if not groups:
         return {}
     return {hand: float(np.mean(values)) for hand, values in groups.items() if values}
-
-
-def _max_mean(groups: dict[str, list[float]] | None) -> float | None:
-    means = _means(groups)
-    if not means:
-        return None
-    return max(means.values())
 
 
 def _result(name: str, duration_s: float, counts: dict[str, int], scores: dict[str, float | None]) -> dict:

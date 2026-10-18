@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Stick Drift symbol</title>
+  <style>
+    .heads { fill: #1b1f23; }
+    .bridge { fill: none; stroke: #1f5f8b; stroke-width: 7; stroke-linecap: round; }
+    @media (prefers-color-scheme: dark) {
+      .heads { fill: #f2f0eb; }
+      .bridge { stroke: #6fb3e0; }
+    }
+  </style>
+  <path class="bridge" d="M16 26c0 14 7 22 16 22s16-8 16-22"/>
+  <circle class="heads" cx="16" cy="19" r="8"/>
+  <circle class="heads" cx="48" cy="19" r="8"/>
+</svg>

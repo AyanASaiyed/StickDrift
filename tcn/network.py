@@ -2,7 +2,7 @@
 
 The recording is scored offline, so each layer looks both backward and forward.
 One shared network reads a single hand. Independent sigmoids produce that
-hand's tremor, impairment, and diabetes scores. Nothing in the head
+hand's tremor and impairment scores. Nothing in the head
 forces those scores to add up to 100.
 """
 
@@ -58,19 +58,19 @@ class PatternTCN(nn.Module):
         # they share.
         self.tremor_head = nn.Linear(hidden + 1, 1)
         self.impair_head = nn.Linear(hidden + 2, 1)
-        self.diabetes_head = nn.Linear(hidden, 1)
         self.gyro_index = HAND_CHANNELS.index("gyro_level")
         self.speed_index = HAND_CHANNELS.index("move_speed")
         self.shrink_index = HAND_CHANNELS.index("shrink_ratio")
-        # Tremor leans on gyroscope shake. Impairment leans on a slow hand.
-        # The added terms stay in the forward pass so later training cannot
-        # drop those two columns.
-        self.gyro_trait = 1.25
-        self.speed_trait = 1.15
-        _favor(self.tremor_head, [3.5])
-        _favor(self.impair_head, [-3.5, -1.2])
-        if n_scores != 3:
-            raise ValueError("The pattern network scores tremor, impairment, and diabetes.")
+        # A little gyroscope noise should not count as tremor. Slowness should
+        # count before the reach is extremely slow. These terms stay in the
+        # forward pass so training cannot drop them.
+        self.gyro_floor = 0.85
+        self.gyro_trait = 0.45
+        self.speed_trait = 2.6
+        _favor(self.tremor_head, [0.6])
+        _favor(self.impair_head, [2.4, -1.2])
+        if n_scores != 2:
+            raise ValueError("The pattern network scores tremor and impairment.")
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
         """Score a batch of single-hand stretches.
@@ -89,10 +89,13 @@ class PatternTCN(nn.Module):
         gyro = x[:, self.gyro_index].abs().mean(dim=-1, keepdim=True)
         speed = x[:, self.speed_index].mean(dim=-1, keepdim=True)
         shrink = x[:, self.shrink_index].mean(dim=-1, keepdim=True)
-        tremor = self.tremor_head(torch.cat([pooled, gyro], dim=1)) + self.gyro_trait * gyro
-        impairment = self.impair_head(torch.cat([pooled, speed, shrink], dim=1)) - self.speed_trait * speed
-        diabetes = self.diabetes_head(pooled)
-        return torch.sigmoid(torch.cat([tremor, impairment, diabetes], dim=1)) * 100.0
+        # Ignore the quiet part of the gyroscope. Count only speed below the
+        # training average, and count it more than once.
+        gyro_drive = torch.relu(gyro - self.gyro_floor)
+        slow = torch.relu(-speed)
+        tremor = self.tremor_head(torch.cat([pooled, gyro_drive], dim=1)) + self.gyro_trait * gyro_drive
+        impairment = self.impair_head(torch.cat([pooled, slow, shrink], dim=1)) + self.speed_trait * slow
+        return torch.sigmoid(torch.cat([tremor, impairment], dim=1)) * 100.0
 
 
 def _favor(layer: nn.Linear, feature_weights: list[float]) -> None:

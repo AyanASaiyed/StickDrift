@@ -311,3 +311,24 @@ a.hm-card:hover {
     animation: none;
   }
 }
+
+/* ---- evening room: lantern by the greeting, paper cards, stamp button ---- */
+.hm.room { min-height: 0; overflow: visible; isolation: auto; }
+.hm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.hm-head h1 { font-family: var(--display); font-weight: 900; font-size: clamp(2.4rem, 6vw, 4rem); line-height: 1; }
+.hm-head .eyebrow { margin-bottom: 14px; color: #ff8d80; }
+.hm-lamps { flex: none; width: 150px; margin-top: -32px; overflow: visible; }
+.hm-lamps .lt { --w: 150px; }
+.hm-lamps .lt-label b { font-size: 1.3rem; }
+.hm-hero, .hm-card { border-radius: 8px; box-shadow: 0 14px 28px -14px rgba(5, 2, 10, 0.75); }
+.hm-hero-copy h2, .hm-sec h2, .hm-card h3 { font-family: var(--display); font-weight: 900; }
+.hm-eyebrow { color: #ff8d80; font-family: var(--display); }
+.hm-btn { text-decoration: none; }
+.hm-btn:hover { transform: none; }
+.hm-chip { background: var(--accent-soft); color: var(--ink); }
+.hm-gold, .hm-stars .on { color: #ffcf4a; }
+.hm-soon { background: transparent; }
+@media (max-width: 600px) { .hm-lamps { display: none; } }
+
+/* the night-room link colour must not turn the stamp's label into the same colour as its background */
+.hm .hm-btn.stamp { background: var(--stamp); color: var(--stamp-ink); }

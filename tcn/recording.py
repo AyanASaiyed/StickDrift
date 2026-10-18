@@ -151,9 +151,7 @@ class Recording:
 class Example:
     """A recording plus the pattern it should match.
 
-    `parkinson`, `stroke`, and `essential_tremor` are always present, from 0 to
-    100. `diabetes` and `ataxia` are absent (`None`) when that pattern was not
-    labeled. Absent is not the same as 0: the loss skips an absent score.
+    `parkinson`, `stroke`, and `essential_tremor` are from 0 to 100.
     The weak hand is trained on the shared Parkinson score plus the stroke gap.
     The other hand is trained on the shared score. `tremor_hand` limits the
     tremor target to one hand.
@@ -167,12 +165,10 @@ class Example:
         essential_tremor: float,
         weak_hand: str | None = None,
         tremor_hand: str | None = None,
-        diabetes: float | None = None,
-        ataxia: float | None = None,
         activity: str | None = None,
     ):
         target = np.asarray([parkinson, stroke, essential_tremor], dtype=np.float32)
-        for score_name, value in zip(SCORES[:3], target, strict=True):
+        for score_name, value in zip(SCORES, target, strict=True):
             if not 0.0 <= float(value) <= 100.0:
                 raise RecordingError(f"{score_name} must be from 0 to 100.")
         if weak_hand not in (None, "left", "right"):
@@ -187,8 +183,6 @@ class Example:
         self.target = target
         self.weak_hand = weak_hand
         self.tremor_hand = "both" if tremor_hand is None else tremor_hand
-        self.diabetes = _optional_score("diabetes", diabetes)
-        self.ataxia = _optional_score("ataxia", ataxia)
         self.activity = _checked_activity(
             recording.activity if activity is None else activity,
             recording.name,
@@ -300,21 +294,6 @@ def activity_from_name(name: str) -> str | None:
     return None
 
 
-def activity_gates(activity: str | None) -> tuple[bool, bool]:
-    """Whether diabetes and ataxia are meaningful on this task.
-
-    Diabetes is an apple miss. Ataxia is leaving the fishing lane, or the older
-    butterfly and water paths. The other score is left out of the loss.
-    """
-    if activity is None or activity == "rat":
-        return False, False
-    if activity == "apples":
-        return True, False
-    if activity in ("butterfly", "water", "fish"):
-        return False, True
-    raise RecordingError(f"activity must be apples, fish, butterfly, water, or rat, not {activity}.")
-
-
 def _activity_token(token: str) -> str | None:
     if _word(token, "butterfly"):
         return "butterfly"
@@ -330,7 +309,7 @@ def _activity_token(token: str) -> str | None:
 
 
 def _word(token: str, word: str) -> bool:
-    """Match a game name without treating the 'rat' inside 'ataxia' as the rat game."""
+    """Match a game name as a whole word, so 'rat' inside a longer folder name is not the rat game."""
     return token == word or token.startswith(word + "_") or token.endswith("_" + word) or f"_{word}_" in token
 
 
@@ -351,15 +330,6 @@ def _checked_activity(activity: str | None, name: str) -> str | None:
     if activity not in _ACTIVITIES:
         raise RecordingError(f"{_label(name)} activity must be apples, fish, butterfly, water, or rat.")
     return activity
-
-
-def _optional_score(name: str, value: float | None) -> float | None:
-    if value is None:
-        return None
-    number = float(value)
-    if not 0.0 <= number <= 100.0:
-        raise RecordingError(f"{name} must be from 0 to 100.")
-    return number
 
 
 def _aliases(header: set[str], logicals: tuple[str, ...]) -> list[str] | None:
