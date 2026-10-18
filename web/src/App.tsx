@@ -2,6 +2,8 @@ import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { AuthProvider, RequireRole, useAuth } from './auth'
 import { TopBar } from './components/TopBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { useNightRoom } from './components/useNightRoom'
+import './components/night.css'
 import AuthPage from './pages/AuthPage'
 import CaregiverDashboard from './pages/CaregiverDashboard'
 import Home from './pages/Home'
@@ -19,6 +21,7 @@ function Root() {
 
 export default function App() {
   const { pathname } = useLocation()
+  useNightRoom() // every page sits in the evening room; welcome, sign-in and the resident home add lanterns
   return (
     <AuthProvider>
       <TopBar />

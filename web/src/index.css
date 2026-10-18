@@ -153,13 +153,14 @@ kbd {
 .mark {
   width: 32px;
   height: 32px;
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 2;
+  flex: none;
 }
-.mark-dot {
-  fill: var(--accent);
-  stroke: none;
+.mark-head { fill: var(--ink); }
+.mark-bridge {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-linecap: round;
 }
 
 /* Profile menu */

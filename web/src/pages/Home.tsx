@@ -1,5 +1,6 @@
 import { useAuth } from '../auth'
 import { GameArt, type ArtKind } from '../components/GameArt'
+import { Lantern } from '../components/Lantern'
 import { LobbyPreview } from '../components/LobbyPreview'
 import './Home.css'
 
@@ -86,10 +87,18 @@ export default function Home() {
   const best = readBest()
 
   return (
-    <main className="wrap hm">
+    <main className="wrap hm room">
       <header className="hm-head">
-        <h1>Hi, {me?.display_name}.</h1>
-        <p>Ready for a game today?</p>
+        <div className="hm-head-copy">
+          <p className="eyebrow">Resident</p>
+          <h1>Hi, {me?.display_name}.</h1>
+          <p>Ready for a game today?</p>
+        </div>
+        <div className="hm-lamps dye-resident" aria-hidden>
+          <Lantern shape="column" cord={26} delay={200}>
+            <b>Play</b>
+          </Lantern>
+        </div>
       </header>
 
       <section className="hm-hero" aria-labelledby="hm-hero-title">
@@ -102,7 +111,7 @@ export default function Home() {
             your visit.
           </p>
           <div className="hm-actions">
-            <a className="hm-btn" href="/lobby.html" target="_blank" rel="noopener noreferrer">
+            <a className="stamp hm-btn" href="/lobby.html" target="_blank" rel="noopener noreferrer">
               Open the lobby
             </a>
             <span className="hm-note">Opens in a new tab · works best with a PS5 controller</span>
@@ -119,7 +128,7 @@ export default function Home() {
           {PLAYABLE.map((g) => {
             const b = best[g.id]
             return (
-              <a key={g.id} className="hm-card" href="/lobby.html" target="_blank" rel="noopener noreferrer">
+              <article key={g.id} className="hm-card">
                 <img src={g.img} alt="" loading="lazy" width={1280} height={720} />
                 <div className="hm-card-body">
                   <h3>{g.title}</h3>
@@ -135,7 +144,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-              </a>
+              </article>
             )
           })}
         </div>
