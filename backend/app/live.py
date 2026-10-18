@@ -482,17 +482,30 @@ def _store_visit(s: LiveSession, report: dict) -> UUID:
 
 
 def _report_metrics(report: dict) -> dict:
+    model = report.get("model") or {}
+    dashboard = report.get("dashboard") or {}
     return {
         "levels_completed": int(report.get("levels_completed") or 0),
         "tcn": {
-            "scores": report["model"]["scores"],
-            "by_game": report["model"]["by_game"],
-            "meaning": report["model"]["meaning"],
-            "schema_version": report["schema_version"],
+            "scores": dashboard.get("scores") if "scores" in dashboard else model.get("scores"),
+            "levels": dashboard.get("levels") or [],
+            "by_game": model.get("by_game") or {},
+            "meaning": model.get("meaning"),
+            "schema_version": report.get("schema_version"),
         },
-        "live": report["live"],
+        "live": report.get("live"),
         "visit": report,
     }
+
+
+def _model_error(view: dict) -> Optional[str]:
+    """Say why the pattern bars are missing. A visit that did score stays quiet."""
+    if view.get("scores"):
+        return None
+    errors = [level["error"] for level in view.get("levels") or [] if isinstance(level, dict) and level.get("error")]
+    if not errors:
+        return None
+    return "The pattern model could not score this visit (" + "; ".join(errors) + ")."
 
 
 def _attach_report(session_id: UUID, report: dict):
@@ -511,21 +524,21 @@ def _finish_visit(s: LiveSession, capture: dict, session_id: Optional[UUID] = No
             _attach_report(session_id, report)
         else:  # nothing in-game reached the live buffer, so store the report as the visit
             session_id = _store_visit(s, report)
-        scores = (report.get("model") or {}).get("scores") or {}
-        scored = any(v is not None for v in scores.values())
+        view = report.get("dashboard") or {}
+        scored = bool(view.get("scores")) or view.get("rat") is not None
         with s.lock:
-            s.result = {"scores": scores} if scored else None
+            s.result = view if scored else None
             s.db_session_id = session_id
             s.status = "finished" if scored else "ended"
             s.ended_at = _now()
-            s.error = None
+            s.error = _model_error(view)
     except Exception as error:
         log.exception("Lobby visit report failed")
         with s.lock:
             # The visit itself is already in the history when session_id is set; only the scores are missing.
             s.status = "ended" if session_id is not None else "failed"
             s.ended_at = _now()
-            s.error = None if session_id is not None else str(error)
+            s.error = str(error)
     finally:
         capture.clear()
         _persist(s)
@@ -683,11 +696,21 @@ def lobby_start(body: LobbyStart, me: dict = Depends(current_senior)):
     return {"live_id": s.id, "token": s.token}
 
 
+class LiveEnd(BaseModel):
+    """The last samples ride with the close, so they are scored before the session is forgotten."""
+    items: List[Union[List[Any], Dict[str, Any]]] = Field(default_factory=list, max_length=5000)
+
+
 @router.post("/live/end", status_code=204)
-def lobby_end(x_live_token: str = Header(...)):
+def lobby_end(x_live_token: str = Header(...), body: Optional[LiveEnd] = None):
     s = BY_TOKEN.get(x_live_token)
-    if s is not None and s.proc is None:
-        _end_lobby(s)
+    if s is None or s.proc is not None:
+        return
+    if body is not None and body.items:
+        rows, _changed = s.ingest(body.items)
+        _store_samples(rows)
+        _persist(s)
+    _end_lobby(s)
 
 
 # ---- game -------------------------------------------------------------------
@@ -713,6 +736,7 @@ def ingest(body: IngestIn, x_live_token: str = Header(...)):
 BRIEF_COLUMNS = """live_id, participant_id, name, status, level, levels, levels_done, synthetic,
                    started_at, ended_at, updated_at, db_session_id, error, host,
                    result->'scores' AS tcn_scores,
+                   result->'rat' AS rat,
                    EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) AS elapsed_s,
                    updated_at < now() - make_interval(secs => %s) AS stale"""
 
@@ -729,6 +753,7 @@ def _brief(row: dict) -> dict:
         "status": status, "level": row["level"], "levels": row["levels"], "levels_done": row["levels_done"],
         "synthetic": row["synthetic"], "started_at": row["started_at"],
         "elapsed_s": round(float(row["elapsed_s"]), 1), "tcn_scores": row["tcn_scores"],
+        "rat": row["rat"],
         "db_session_id": row["db_session_id"], "error": error,
     }
 

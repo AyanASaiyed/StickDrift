@@ -1,6 +1,6 @@
 import type { GameResult, GameSession, HandLive, LobbyGame, RatReport } from '../api'
 import { formatDateTime } from '../format'
-import { PatternBars } from './LiveCharts'
+import { PatternBars, RatPoints, hasPatternScores } from './LiveCharts'
 import { pct, secs } from './liveData'
 
 const GAME_NAMES: Record<LobbyGame, string> = {
@@ -45,6 +45,7 @@ function GameCard({ game, result, rat }: { game: LobbyGame; result: GameResult; 
           <span className="badge">Left early</span>
         )}
       </header>
+      {game === 'rat' && rat && <RatPoints rat={rat} labeled={false} />}
       <table className="game-table">
         <thead>
           <tr>
@@ -86,6 +87,7 @@ function GameCard({ game, result, rat }: { game: LobbyGame; result: GameResult; 
 function headline(v: GameSession, game: LobbyGame): string {
   const r = v.games[game]
   if (!r) return '—'
+  if (game === 'rat' && v.visit?.games?.rat?.score != null) return `${v.visit.games.rat.score} pts`
   const { left: l, right: rt } = r.hands
   if (game === 'fish') {
     const on = [l.on_target, rt.on_target].filter((x): x is number => x != null)
@@ -118,12 +120,15 @@ export function GameVisits({ visits }: { visits: GameSession[] }) {
             <GameCard key={g} game={g} result={latest.games[g]!} rat={g === 'rat' ? latest.visit?.games?.rat : null} />
           ))}
         </div>
-        {latest.tcn?.scores && Object.values(latest.tcn.scores).some((v) => v != null) && (
+        {hasPatternScores(latest.tcn?.scores) && latest.tcn?.scores && (
           <div className="game-patterns">
             <h3>Pattern model</h3>
-            <p className="muted">Apple Picking and Harbour Fishing, scored at the end of the visit.</p>
-            <PatternBars scores={latest.tcn.scores} />
+            <p className="muted">Apple Picking and Harbour Fishing, scored when the resident left the garden.</p>
+            <PatternBars scores={latest.tcn.scores} levels={latest.tcn.levels} />
           </div>
+        )}
+        {!hasPatternScores(latest.tcn?.scores) && latest.tcn?.levels?.some((level) => level.error) && (
+          <p className="error">The pattern model could not score Apple Picking and Harbour Fishing for this visit.</p>
         )}
         <p className="hint">
           Lobby games are free play: each visit is shown on its own and does not set a baseline. Hover a measurement

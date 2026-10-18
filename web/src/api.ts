@@ -207,11 +207,17 @@ export interface GameSession {
 }
 
 export interface RatReport {
+  score: number | null
+  stars: number | null
+  caught?: number | null
+  missed?: number | null
+  wrong?: number | null
+  empty?: number | null
   target_rats: number | null
   correctness_pct: number | null
   median_reaction_s: number | null
-  reaction_spread_s: number | null
-  early_slams: number
+  reaction_spread_s?: number | null
+  early_slams?: number
 }
 
 export type LiveStatus =
@@ -240,6 +246,8 @@ export interface LiveBrief {
   started_at: string
   elapsed_s: number
   tcn_scores: PatternScores | null
+  /** Rat Catching points from the visit that just ended. Null while playing, or when that game was not played. */
+  rat: RatReport | null
   db_session_id: string | null
   error: string | null
 }
@@ -262,7 +270,8 @@ export interface LiveSnapshot extends LiveBrief {
   seq: number
   samples: LiveSample[]
   metrics: LiveMetrics
-  result: TcnResult | null
+  /** Garden visits fill scores and levels. Lobby visits also carry the rat-game score. */
+  result: (Partial<TcnResult> & { scores?: PatternScores | null; rat?: RatReport | null }) | null
 }
 
 export interface GardenStatus {

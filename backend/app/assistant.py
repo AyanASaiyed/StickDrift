@@ -155,6 +155,9 @@ def _game_line(g: dict) -> str:
     if pattern:
         parts.append("pattern model (resemblance, not diagnosis): " + ", ".join(pattern))
     rat = ((g.get("visit") or {}).get("games") or {}).get("rat") or {}
+    if rat.get("score") is not None:
+        stars = f", {rat['stars']} stars" if rat.get("stars") is not None else ""
+        parts.append(f"rat score {rat['score']} points{stars}")
     if rat.get("median_reaction_s") is not None:
         parts.append(f"rat timing: median {rat['median_reaction_s']:.2f}s nose-to-slam")
     when = g["started_at"].strftime("%b %d %H:%M") if hasattr(g["started_at"], "strftime") else str(g["started_at"])

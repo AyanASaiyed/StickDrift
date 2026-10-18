@@ -56,11 +56,13 @@ def finish_visit(capture, score=None, checkpoint=None):
         if block is not None:
             block.pop("_scored", None)
             block.pop("_model", None)
+    model = {"scores": fused, "by_game": by_game, "meaning": MEANING}
     return {
         "schema_version": SCHEMA_VERSION,
         "levels_completed": sum(block is not None and block.get("finished") for block in games.values()),
         "games": games,
-        "model": {"scores": fused, "by_game": by_game, "meaning": MEANING},
+        "model": model,
+        "dashboard": _dashboard(fused, by_game, games.get("rat")),
         "live": _chart(games.get("apple"), games.get("fish")),
     }
 
@@ -498,6 +500,42 @@ def _rounds(slams, misses):
     for miss in misses:
         slot(miss.get("round"))["missed"] += 1
     return [by_round[key] for key in sorted(by_round, key=lambda number: (number is None, number or 0))]
+
+
+def _dashboard(scores, by_game, rat):
+    """What the caregiver sees after the visit: fused pattern scores and the rat-game score."""
+    scored = isinstance(scores, dict) and any(value is not None for value in scores.values())
+    levels = []
+    for name, block in by_game.items():
+        if not isinstance(block, dict):
+            continue
+        levels.append({
+            "level": name,
+            "completed": "error" not in block,
+            "scores": block.get("scores") or {key: None for key in SCORES},
+            "stretches": block.get("stretches"),
+            "duration_s": block.get("duration_s"),
+            "error": block.get("error"),
+        })
+    shown = None
+    if isinstance(rat, dict) and rat.get("score") is not None:
+        shown = {
+            "score": rat.get("score"),
+            "stars": rat.get("stars"),
+            "caught": rat.get("caught"),
+            "missed": rat.get("missed"),
+            "wrong": rat.get("wrong"),
+            "empty": rat.get("empty"),
+            "target_rats": rat.get("target_rats"),
+            "correctness_pct": rat.get("correctness_pct"),
+            "median_reaction_s": rat.get("median_reaction_s"),
+        }
+    return {
+        "scores": scores if scored else None,
+        "levels": levels,
+        "meaning": MEANING,
+        "rat": shown,
+    }
 
 
 def _fuse(apple, fish):

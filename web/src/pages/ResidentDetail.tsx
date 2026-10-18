@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { api, type Finding, type GardenSession, type Insights, type ResidentDetail as Detail } from '../api'
+import { api, type Finding, type GameSession, type GardenSession, type Insights, type ResidentDetail as Detail } from '../api'
 import { Assistant } from '../components/Assistant'
 import { GameVisits } from '../components/GameVisits'
 import { ConcernCard, RiskAlert, RiskBadge } from '../components/Insights'
-import { PatternBars } from '../components/LiveCharts'
+import { PatternBars, RatPoints, hasPatternScores } from '../components/LiveCharts'
 import { PATTERN_LABELS, PATTERN_ORDER, pct, secs } from '../components/liveData'
 import { LiveNow } from '../components/LiveNow'
 import { SessionTable } from '../components/SessionTable'
@@ -165,6 +165,7 @@ function glance(f: Finding | undefined) {
 }
 
 function Overview({ data, insights }: { data: Detail; insights: Insights }) {
+  const latestGame = data.game_sessions[0]
   const by = new Map(insights.findings.map((f) => [f.key, f]))
   const rows: { label: string; l?: Finding; r?: Finding }[] = [
     { label: 'Response time', l: by.get('left_latency'), r: by.get('right_latency') },
@@ -174,6 +175,7 @@ function Overview({ data, insights }: { data: Detail; insights: Insights }) {
 
   return (
     <>
+      {latestGame && <LatestJudgement visit={latestGame} />}
       {insights.status === 'ok' && (
         <section className="glance" aria-label="Latest session compared with usual">
           {rows.map((row) => (
@@ -227,6 +229,26 @@ function Overview({ data, insights }: { data: Detail; insights: Insights }) {
         </section>
       )}
     </>
+  )
+}
+
+function LatestJudgement({ visit }: { visit: GameSession }) {
+  const scores = visit.tcn?.scores
+  const rat = visit.visit?.games?.rat
+  const scored = hasPatternScores(scores)
+  const failed = !scored && !!visit.tcn?.levels?.some((level) => level.error)
+  if (!scored && rat?.score == null && !failed) return null
+  return (
+    <section className="panel judge judge-done">
+      <h2>
+        Latest visit <span className="muted section-sub">{formatDateTime(visit.started_at)}</span>
+      </h2>
+      {scored && scores && <PatternBars scores={scores} levels={visit.tcn?.levels} />}
+      {!scored && visit.tcn?.levels?.some((level) => level.error) && (
+        <p className="error">The pattern model could not score Apple Picking and Harbour Fishing for this visit.</p>
+      )}
+      {rat && <RatPoints rat={rat} />}
+    </section>
   )
 }
 

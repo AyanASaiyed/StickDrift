@@ -135,6 +135,10 @@ class VisitReportTest(unittest.TestCase):
         self.assertNotIn("rat", report["model"]["by_game"])
         self.assertEqual(report["model"]["scores"]["parkinson"], 30.0)
         self.assertEqual(report["model"]["scores"]["ataxia"], 22.0)
+        self.assertEqual(report["dashboard"]["scores"]["parkinson"], 30.0)
+        self.assertEqual(report["dashboard"]["rat"]["score"], 250)
+        self.assertEqual(report["dashboard"]["rat"]["stars"], 1)
+        self.assertEqual(report["dashboard"]["levels"][0]["level"], "fish")
 
     def test_fuses_apple_and_fishing_scores(self):
         capture = {
@@ -177,6 +181,9 @@ class VisitReportTest(unittest.TestCase):
         self.assertEqual(report["games"]["apple"]["score"], 50)
         self.assertIn("error", report["model"]["by_game"]["apple"])
         self.assertIsNone(report["model"]["scores"])
+        self.assertIsNone(report["dashboard"]["scores"])
+        self.assertIn("error", report["dashboard"]["levels"][0])
+        self.assertIsNone(report["dashboard"]["rat"])
 
     def test_card_rat_times_come_from_the_game(self):
         report = finish_visit({
@@ -194,6 +201,8 @@ class VisitReportTest(unittest.TestCase):
         self.assertEqual(rat["card_rats"][0]["reaction_s"], 0.42)
         self.assertIsNone(rat["card_rats"][1]["reaction_s"])
         self.assertIsNone(report["model"]["scores"])
+        self.assertEqual(report["dashboard"]["rat"]["score"], 300)
+        self.assertIsNone(report["dashboard"]["scores"])
 
     def test_cli_prints_the_report_and_drops_frames(self):
         payload = {"rat": {"events": [

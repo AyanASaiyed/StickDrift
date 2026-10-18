@@ -3,6 +3,7 @@ import type {
   LiveMetrics,
   LiveSample,
   PatternScores,
+  RatReport,
   ReachTrial,
   TcnLevel,
 } from "../api";
@@ -577,6 +578,28 @@ export function DiffBars({
   );
 }
 
+// ---- end of a lobby visit ---------------------------------------------------------
+
+/** The points the resident earned in Rat Catching. The pattern model does not score that game. */
+export function RatPoints({ rat, labeled = true }: { rat: RatReport; labeled?: boolean }) {
+  if (rat.score == null) return null;
+  const stars = rat.stars;
+  return (
+    <p className="visit-score">
+      {labeled && <span className="visit-score-kicker">Rat Catching</span>}
+      <strong>{rat.score}</strong>
+      <span>
+        points
+        {stars != null ? ` · ${stars} ${stars === 1 ? "star" : "stars"}` : ""}
+      </span>
+    </p>
+  );
+}
+
+export function hasPatternScores(scores: PatternScores | null | undefined) {
+  return !!scores && Object.values(scores).some((v) => v != null);
+}
+
 // ---- TCN pattern judgement --------------------------------------------------------
 
 export function PatternBars({
@@ -622,7 +645,11 @@ export function PatternBars({
       </ul>
       {levels && levels.length > 0 && (
         <details className="pattern-levels">
-          <summary>Scores by chapter</summary>
+          <summary>
+            {levels.some((lv) => lv.level === "apple" || lv.level === "fish")
+              ? "Scores by game"
+              : "Scores by chapter"}
+          </summary>
           <table>
             <thead>
               <tr>

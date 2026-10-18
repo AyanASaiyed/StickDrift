@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { type HandLive, type LiveStatus } from '../api'
-import { DiffBars, PatternBars, ReachTrialsChart, RollingChart, StickFields } from '../components/LiveCharts'
+import { DiffBars, PatternBars, RatPoints, ReachTrialsChart, RollingChart, StickFields, hasPatternScores } from '../components/LiveCharts'
 import { handPoint, handPos, handTarget, levelName, pct, secs } from '../components/liveData'
 import { TabPanel, Tabs } from '../components/Tabs'
 import { useLiveFeed } from '../components/useLiveFeed'
@@ -175,7 +175,10 @@ export default function LiveSession() {
           <h2>End-of-session judgement</h2>
           {snap.result ? (
             <>
-              <PatternBars scores={snap.result.scores} levels={snap.result.levels} />
+              {hasPatternScores(snap.result.scores) && snap.result.scores && (
+                <PatternBars scores={snap.result.scores} levels={snap.result.levels} />
+              )}
+              {snap.result.rat && <RatPoints rat={snap.result.rat} />}
               {snap.db_session_id && (
                 <p className="muted">
                   Saved to {snap.name}’s record.{' '}

@@ -99,9 +99,9 @@ export class LiveStream {
     const token = this.token
     const items = this.queue.splice(0)
     const headers = { 'Content-Type': 'application/json', 'X-Live-Token': token }
-    // keepalive lets these finish while the tab is closing
-    if (items.length) fetch(`${API}/live/ingest`, { method: 'POST', headers, body: JSON.stringify({ items }), keepalive: true }).catch(() => {})
-    fetch(`${API}/live/end`, { method: 'POST', headers, keepalive: true }).catch(() => {})
+    // One request, so the last samples (including the rat-game result) are scored with the visit.
+    // keepalive lets it finish while the tab is closing.
+    fetch(`${API}/live/end`, { method: 'POST', headers, body: JSON.stringify({ items }), keepalive: true }).catch(() => {})
     this.stop()
   }
 }
