@@ -1,0 +1,587 @@
+/* Log in / sign up. Split stage + form, built from copy-paste patterns (aurora orbs, spotlight card, border beam,
+   animated tabs, floating labels, button-in-button, tilt frame) rewritten in plain CSS for this app's tokens. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap');
+
+.au {
+  --acc: var(--role-resident);
+  --acc-ink: var(--role-resident-ink);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100dvh - var(--topbar, 68px));
+  overflow: clip;
+}
+.au.au-care {
+  --acc: var(--role-care);
+  --acc-ink: var(--role-care-ink);
+}
+
+/* ---- ambient background: two drifting colour orbs + a faint grain (both fixed, pointer-events none) ---- */
+.au-orbs {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.au-orbs i {
+  position: absolute;
+  width: 62vmax;
+  height: 62vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--acc) 28%, transparent), transparent);
+  animation: au-drift 26s ease-in-out infinite alternate;
+}
+.au-orbs i:nth-child(1) {
+  top: -26vmax;
+  left: -18vmax;
+}
+.au-orbs i:nth-child(2) {
+  right: -24vmax;
+  bottom: -30vmax;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--acc) 16%, var(--ink) 4%), transparent);
+  animation-duration: 34s;
+  animation-direction: alternate-reverse;
+}
+@keyframes au-drift {
+  to {
+    transform: translate3d(7vmax, 5vmax, 0) scale(1.08);
+  }
+}
+.au::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.au-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  align-items: center;
+  gap: clamp(28px, 6vw, 88px);
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 64px) clamp(16px, 4vw, 32px);
+}
+
+/* ---- entrance: parts rise in one after another ---- */
+.au [data-in] {
+  animation: au-rise 0.9s var(--ease) both;
+  animation-delay: calc(var(--d, 0) * 80ms);
+}
+@keyframes au-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+}
+
+/* ---- the stage (left) ---- */
+.au-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.au-stage h1 {
+  margin: 0;
+  max-width: 14ch;
+  font: 600 clamp(2.4rem, 5.2vw, 4.2rem) / 1.02 var(--display);
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.au-stage h1 .w {
+  display: inline-block;
+  animation: au-rise 0.9s var(--ease) both;
+  animation-delay: calc(var(--w) * 70ms + 80ms);
+}
+.au-stage h1 em {
+  font-style: italic;
+  color: var(--acc);
+}
+.au-lede {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 1.12rem;
+  line-height: 1.55;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* the lobby capture, in a tilting double-bezel frame */
+.au-frame {
+  --rx: 0deg;
+  --ry: 0deg;
+  position: relative;
+  margin-top: 10px;
+  max-width: 560px;
+  padding: 8px;
+  border-radius: 28px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  box-shadow: 0 30px 60px -28px color-mix(in srgb, var(--acc) 38%, transparent);
+  transform: perspective(1100px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.6s var(--ease);
+}
+.au-frame > div {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18);
+}
+.au-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+.au-frame .tag {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border: 1px solid var(--line);
+  font-size: 0.82rem;
+  font-weight: 700;
+  animation: au-float 7s ease-in-out infinite alternate;
+}
+.au-frame .tag i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--acc);
+}
+.au-frame .tag:nth-of-type(1) {
+  top: 14px;
+  left: 14px;
+}
+.au-frame .tag:nth-of-type(2) {
+  right: 14px;
+  top: 38%;
+  animation-delay: -2.2s;
+}
+.au-frame .tag:nth-of-type(3) {
+  bottom: 14px;
+  left: 22%;
+  animation-delay: -4.4s;
+}
+@keyframes au-float {
+  to {
+    transform: translate3d(0, -7px, 0);
+  }
+}
+
+/* ---- the form card (right): double bezel + spotlight border + border beam ---- */
+@property --beam {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.au-card {
+  --mx: 50%;
+  --my: 0%;
+  position: relative;
+  padding: 8px;
+  border-radius: 32px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  box-shadow: 0 40px 80px -40px color-mix(in srgb, var(--acc) 45%, transparent);
+}
+.au-card::before,
+.au-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.au-card::before {
+  /* spotlight: a bright arc under the cursor */
+  background: radial-gradient(280px circle at var(--mx) var(--my), var(--acc), transparent 65%);
+  opacity: 0;
+  transition: opacity 0.35s var(--ease);
+}
+.au-card:hover::before,
+.au-card:focus-within::before {
+  opacity: 1;
+}
+.au-card::after {
+  /* beam: a short light that runs around the edge */
+  background: conic-gradient(from var(--beam), transparent 0 82%, var(--acc) 93%, transparent 100%);
+  animation: au-beam 7s linear infinite;
+}
+@keyframes au-beam {
+  to {
+    --beam: 360deg;
+  }
+}
+.au-core {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: clamp(22px, 3.4vw, 34px);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12);
+}
+.au-core h2 {
+  margin: 0;
+  font: 600 clamp(1.7rem, 3vw, 2.15rem) / 1.08 var(--display);
+  letter-spacing: -0.02em;
+}
+.au-core .au-sub {
+  margin: -8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---- animated tabs: who is signing in ---- */
+.au-toggle {
+  --i: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.au-pill {
+  position: absolute;
+  inset: 4px auto 4px 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--acc);
+  transform: translateX(calc(var(--i) * 100%));
+  transition: transform 0.55s var(--ease), background 0.4s var(--ease);
+}
+.au-tab {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: color 0.35s var(--ease);
+}
+.au-tab[aria-current='page'] {
+  color: var(--acc-ink);
+}
+.au-tab:not([aria-current]):hover {
+  color: var(--ink);
+}
+
+/* ---- fields: floating label ---- */
+.au-field {
+  position: relative;
+}
+.au-input {
+  position: relative;
+}
+.au-input input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 58px;
+  padding: 22px 52px 6px 46px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.05rem;
+  transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease), background 0.25s var(--ease);
+}
+.au-input input:hover {
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--line));
+}
+.au-input input:focus {
+  outline: none;
+  border-color: var(--acc);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 22%, transparent);
+}
+.au-input label {
+  position: absolute;
+  left: 46px;
+  top: 17px;
+  color: var(--muted);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: transform 0.3s var(--ease), color 0.3s var(--ease);
+}
+.au-input input:focus + label,
+.au-input input:not(:placeholder-shown) + label {
+  transform: translateY(-11px) scale(0.78);
+  color: var(--acc);
+  font-weight: 700;
+}
+.au-input .ico {
+  position: absolute;
+  left: 15px;
+  top: 17px;
+  color: var(--muted);
+  transition: color 0.25s var(--ease);
+}
+.au-input:focus-within .ico {
+  color: var(--acc);
+}
+.au-eye {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), transform 0.2s var(--ease);
+}
+.au-eye:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.au-eye:active {
+  transform: scale(0.94);
+}
+.au-eye:focus-visible {
+  outline: 3px solid var(--acc);
+  outline-offset: 1px;
+}
+.au-hint {
+  margin: 7px 4px 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* password strength */
+.au-meter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin: 9px 4px 0;
+}
+.au-meter i {
+  height: 5px;
+  border-radius: 5px;
+  background: var(--line);
+  transition: background 0.35s var(--ease), transform 0.35s var(--ease);
+  transform-origin: left;
+}
+.au-meter i.on {
+  background: var(--acc);
+}
+.au-meter span {
+  min-width: 4.4em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* hand choice (resident sign up) */
+.au-seg {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 8px 0 0;
+}
+.au-seg label {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface));
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.25s var(--ease), background 0.25s var(--ease), transform 0.2s var(--ease);
+}
+.au-seg label:hover {
+  border-color: color-mix(in srgb, var(--acc) 50%, var(--line));
+}
+.au-seg label:active {
+  transform: scale(0.97);
+}
+.au-seg label.on {
+  border-color: var(--acc);
+  background: color-mix(in srgb, var(--acc) 16%, var(--surface));
+}
+.au-seg input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.au-seg label:focus-within {
+  outline: 3px solid var(--acc);
+  outline-offset: 2px;
+}
+.au-legend {
+  padding: 0;
+  font-weight: 700;
+}
+fieldset.au-field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* error */
+.au-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent);
+  color: var(--ink);
+  line-height: 1.4;
+  animation: au-shake 0.5s var(--ease);
+}
+.au-error svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--bad);
+}
+@keyframes au-shake {
+  20% {
+    transform: translateX(-6px);
+  }
+  45% {
+    transform: translateX(5px);
+  }
+  70% {
+    transform: translateX(-3px);
+  }
+}
+
+/* ---- primary button: button-in-button ---- */
+.au-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 8px 8px 26px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font: inherit;
+  font-size: 1.08rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.25s var(--ease), filter 0.25s var(--ease), opacity 0.25s var(--ease);
+}
+.au-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.au-btn:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.au-btn:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+.au-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.au-btn .arrow {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--acc-ink) 16%, transparent);
+  transition: transform 0.4s var(--ease), background 0.3s var(--ease);
+}
+.au-btn:hover:not(:disabled) .arrow {
+  transform: translate3d(3px, -2px, 0) scale(1.06);
+  background: color-mix(in srgb, var(--acc-ink) 24%, transparent);
+}
+.au-btn .spin {
+  animation: au-spin 0.9s linear infinite;
+}
+@keyframes au-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.au-swap {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+.au-swap span {
+  color: var(--acc);
+  transition: transform 0.35s var(--ease);
+}
+.au-swap:hover {
+  background: color-mix(in srgb, var(--acc) 12%, transparent);
+}
+.au-swap:hover span {
+  transform: translateX(3px);
+}
+.au-swap:focus-visible {
+  outline: 3px solid var(--acc);
+  outline-offset: 2px;
+}
+
+/* ---- small screens: one column, a compact stage ---- */
+@media (max-width: 900px) {
+  .au-grid {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    padding-top: 28px;
+  }
+  .au-stage h1 {
+    max-width: 18ch;
+    font-size: clamp(2rem, 8vw, 2.8rem);
+  }
+  .au-frame {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au *,
+  .au *::before,
+  .au *::after,
+  .au::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
