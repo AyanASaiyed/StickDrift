@@ -70,7 +70,7 @@ LEVELS = 6
 KERNEL = 3
 DROPOUT = 0.1
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 SCORE_MEANING = "0-100 pattern resemblance, not a disease probability"
 
 

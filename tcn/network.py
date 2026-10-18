@@ -62,8 +62,13 @@ class PatternTCN(nn.Module):
         self.gyro_index = HAND_CHANNELS.index("gyro_level")
         self.speed_index = HAND_CHANNELS.index("move_speed")
         self.shrink_index = HAND_CHANNELS.index("shrink_ratio")
-        _favor(self.tremor_head, [2.5])
-        _favor(self.impair_head, [-2.5, -1.5])
+        # Tremor leans on gyroscope shake. Impairment leans on a slow hand.
+        # The added terms stay in the forward pass so later training cannot
+        # drop those two columns.
+        self.gyro_trait = 1.25
+        self.speed_trait = 1.15
+        _favor(self.tremor_head, [3.5])
+        _favor(self.impair_head, [-3.5, -1.2])
         if n_scores != 3:
             raise ValueError("The pattern network scores tremor, impairment, and diabetes.")
 
@@ -84,8 +89,8 @@ class PatternTCN(nn.Module):
         gyro = x[:, self.gyro_index].abs().mean(dim=-1, keepdim=True)
         speed = x[:, self.speed_index].mean(dim=-1, keepdim=True)
         shrink = x[:, self.shrink_index].mean(dim=-1, keepdim=True)
-        tremor = self.tremor_head(torch.cat([pooled, gyro], dim=1))
-        impairment = self.impair_head(torch.cat([pooled, speed, shrink], dim=1))
+        tremor = self.tremor_head(torch.cat([pooled, gyro], dim=1)) + self.gyro_trait * gyro
+        impairment = self.impair_head(torch.cat([pooled, speed, shrink], dim=1)) - self.speed_trait * speed
         diabetes = self.diabetes_head(pooled)
         return torch.sigmoid(torch.cat([tremor, impairment, diabetes], dim=1)) * 100.0
 
