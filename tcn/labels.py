@@ -21,13 +21,13 @@ from pathlib import Path
 from tcn.recording import Example, Recording, RecordingError
 from tcn.synthetic import CONDITIONS
 
-_BASELINE = "Baseline Data"
-_PARKINSON = "Parkinsons Data"
-_TREMOR = "Tremor Data"
-_DIABETES = "Diabetes Data"
-_ATAXIA = "Cerebellar ataxia"
-_LEFT = "Left Weak"
-_RIGHT = "Right Weak"
+_BASELINE = frozenset({"Baseline Data", "Baseline"})
+_PARKINSON = frozenset({"Parkinsons Data", "Parkinsons"})
+_TREMOR = frozenset({"Tremor Data", "Tremor"})
+_DIABETES = frozenset({"Diabetes Data"})
+_ATAXIA = frozenset({"Cerebellar ataxia", "Cerebral Ataxia"})
+_LEFT = frozenset({"Left Weak", "Left Hand Weak"})
+_RIGHT = frozenset({"Right Weak", "Right Hand Weak"})
 
 
 def load_examples(root: str | Path) -> list[Example]:
@@ -80,23 +80,23 @@ def _targets(path: Path) -> _FolderLabel:
                 weak_hand=condition.weak_hand,
                 tremor_hand=condition.tremor_hand,
             )
-    if _LEFT in parts:
+    if parts & _LEFT:
         return _played(0.0, 100.0, 0.0, weak_hand="left")
-    if _RIGHT in parts:
+    if parts & _RIGHT:
         return _played(0.0, 100.0, 0.0, weak_hand="right")
-    if _PARKINSON in parts:
+    if parts & _PARKINSON:
         return _played(100.0, 0.0, 0.0)
-    if _TREMOR in parts:
+    if parts & _TREMOR:
         return _played(0.0, 0.0, 100.0)
-    if _DIABETES in parts:
+    if parts & _DIABETES:
         return _played(0.0, 0.0, 0.0, diabetes=100.0)
-    if _ATAXIA in parts:
+    if parts & _ATAXIA:
         return _played(0.0, 0.0, 0.0, ataxia=100.0)
-    if _BASELINE in parts:
+    if parts & _BASELINE:
         return _played(0.0, 0.0, 0.0)
     raise RecordingError(
-        f"{path} is not under Baseline Data, Parkinsons Data, Tremor Data, "
-        "Stroke Data/Left Weak or Right Weak, Diabetes Data, Cerebellar ataxia, "
+        f"{path} is not under Baseline, Parkinsons, Tremor, "
+        "Stroke/Left Hand Weak or Right Hand Weak, Diabetes Data, Cerebral Ataxia, "
         "or a Synthetic condition folder."
     )
 
@@ -121,14 +121,14 @@ def _played(
 
 
 def load_training_examples(root: str | Path = "data") -> list[Example]:
-    """Apple and fishing recordings, played and synthetic. Rat files are left out."""
-    base = Path(root)
-    folders = [base / "new_game_data", base / "Synthetic"]
-    examples: list[Example] = []
-    for folder in folders:
-        if not folder.is_dir() or not any(folder.rglob("controller_data.csv")):
-            continue
-        examples.extend(example for example in load_examples(folder) if example.activity != "rat")
+    """Apple and fishing recordings in data/ultimate_data. Rat files are left out.
+
+    Diabetes is not a trained pattern. Ataxia is learned from fishing only.
+    """
+    folder = Path(root) / "ultimate_data"
+    if not folder.is_dir() or not any(folder.rglob("controller_data.csv")):
+        raise RecordingError(f"{folder} has no recorded controller files.")
+    examples = [example for example in load_examples(folder) if example.activity != "rat"]
     if not examples:
-        raise RecordingError(f"{base} has no new-game or synthetic recordings.")
+        raise RecordingError(f"{folder} has no apple or fishing recordings.")
     return examples

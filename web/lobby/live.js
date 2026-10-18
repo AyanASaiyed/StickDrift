@@ -61,12 +61,13 @@ export class LiveStream {
     }
   }
 
-  /** One 17-value sample from measure.js: t, trial, phase, sticks, targets, on-target flags, in-game hands. */
-  sample(item) {
+  /** One 17-value sample from measure.js, plus gyro xyz and acc xyz when motion.latest() has them. */
+  sample(item, motion) {
     if (!this.token) return
     if (item[0] - this.lastSample < 1 / SAMPLE_HZ) return
     this.lastSample = item[0]
-    this.queue.push(item)
+    const sent = motion && motion.length >= 6 ? item.concat(motion.slice(0, 6)) : item
+    this.queue.push(sent)
     if (this.queue.length > MAX_QUEUE) this.queue.splice(0, this.queue.length - MAX_QUEUE)
   }
 

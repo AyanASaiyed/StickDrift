@@ -134,7 +134,7 @@ function frame() {
     live.event(e.type, e)
     record.trial(e)
   })
-  live.sample(sample)
+  live.sample(sample, motion.latest())
   if (activeName) record.sample(sample, pad, motion.latest())
   let ui
   if (active) {

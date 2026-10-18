@@ -109,12 +109,13 @@ class LiveSession:
             for item in items:
                 if isinstance(item, dict):
                     changed |= self._event(item)
-                elif isinstance(item, list) and len(item) in (13, 17) and self.level:
-                    # garden: 13 values; web lobby: 17, adding the in-game hand position
+                elif isinstance(item, list) and len(item) in (13, 17, 23) and self.level:
+                    # garden: 13 values; web lobby: 17, plus 6 gyro/acc values when the pad reports them
+                    core = item[:17]
                     self.seq += 1
-                    self.metrics.add(item)
-                    self.trial, self.phase = item[1], item[2]
-                    rows.append((self.id, self.seq, self.level, *item, *[None] * (17 - len(item))))
+                    self.metrics.add(core)
+                    self.trial, self.phase = core[1], core[2]
+                    rows.append((self.id, self.seq, self.level, *core, *[None] * (17 - len(core))))
                     self._keep_frame(item)
         return rows, changed
 
@@ -125,7 +126,11 @@ class LiveSession:
         if len(bucket["frames"]) >= MAX_FRAMES:
             bucket["truncated"] = True
             return
-        bucket["frames"].append(dict(zip(_FRAME_KEYS, item[:17])))
+        frame = dict(zip(_FRAME_KEYS, item[:17]))
+        if len(item) >= 23:
+            frame["gyro_x"], frame["gyro_y"], frame["gyro_z"] = item[17], item[18], item[19]
+            frame["acc_x"], frame["acc_y"], frame["acc_z"] = item[20], item[21], item[22]
+        bucket["frames"].append(frame)
 
     def _keep_event(self, event: dict):
         if event.get("type") not in KEEP_EVENTS or self.level not in LOBBY_GAMES:
