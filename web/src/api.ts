@@ -108,7 +108,7 @@ export interface ResidentRow {
   trend_right_ms: (number | null)[]
 }
 
-export type PatternKey = 'parkinson' | 'stroke' | 'essential_tremor' | 'diabetes'
+export type PatternKey = 'parkinson' | 'stroke' | 'essential_tremor'
 /** Older sessions may omit a pattern the current model no longer returns. */
 export type PatternScores = Partial<Record<PatternKey, number | null>>
 

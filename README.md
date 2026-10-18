@@ -77,10 +77,9 @@ A temporal convolutional network that scores garden recordings 0–100 for resem
 
 - **Parkinson's:** slowed, smaller movements in both hands;
 - **Stroke:** one hand clearly weaker or slower than the other;
-- **Essential tremor:** rhythmic shake while the hand moves;
-- **Diabetes:** reaches that land past or short, then correct.
+- **Essential tremor:** rhythmic shake while the hand moves.
 
-The labels are the model's own output names. Each score is resemblance to that pattern, never a diagnosis; the assistant and report may use these four names only in that sense and still refuse any other condition name.
+The labels are the model's own output names. Each score is resemblance to that pattern, never a diagnosis; the assistant and report may use these three names only in that sense and still refuse any other condition name.
 
 These are pattern resemblance, not disease probabilities. The model is trained on teammate-recorded and synthetic data only. **No trained checkpoint is committed.** Until `runs/tcn/model.pt` exists, garden visits are saved without a judgement. See [Training the pattern model](#training-the-pattern-model).
 
