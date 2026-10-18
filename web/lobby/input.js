@@ -2,6 +2,8 @@
 //   left stick = axes 0/1, right stick = axes 2/3, Cross = button 0, Circle = 1, Triangle = 3, L1 = 4, R1 = 5.
 // Keyboard is only a fallback for machines without a pad: WASD = left stick, IJKL = right stick,
 // Space = Cross, O/Backspace = Circle, T = Triangle, Q/E = L1/R1.
+import { motion } from './motion.js'
+
 const DEADZONE = 0.2
 
 // Standard Gamepad mapping (W3C). Fixed width so every recording row has the same columns.
@@ -45,7 +47,8 @@ export class Input {
   /** -> { move:[dx,dy,mag], look:[x,y], enter, cam, back (one-shot presses), zoom (-1/0/1), source } */
   read() {
     const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()) : []
-    const gp = pads.find((p) => p && p.connected)
+    // A DualSense opened over WebHID (motion.js) is read from its own reports; the Gamepad API copy can freeze.
+    const gp = motion.pad() || pads.find((p) => p && p.connected)
     let lx = 0, ly = 0, rx = 0, ry = 0, enter = false, cam = false, back = false, l1 = false, r1 = false
     let source = 'none'
     if (gp) {

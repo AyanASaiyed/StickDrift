@@ -858,6 +858,7 @@ class RecordLevel(BaseModel):
     score: Optional[float] = None
     stars: Optional[int] = None
     source: Literal["gamepad", "keyboard", "none"] = "none"
+    motion: Literal["webhid", "none"] = "none"
     trials: List[Dict[str, Any]] = Field(default_factory=list, max_length=500)
     rows: List[List[Any]] = Field(max_length=20000)
 
@@ -885,7 +886,7 @@ def lobby_record_level(body: RecordLevel):
     """Write one finished game (apple, fish, or rat) into that visit's folder."""
     try:
         return write_level(body.live_id, body.folder, body.level, body.completed, body.duration_s,
-                           body.score, body.stars, body.source, body.trials, body.rows)
+                           body.score, body.stars, body.source, body.trials, body.rows, motion=body.motion)
     except RecordingError as error:
         raise _recording_error(error) from error
 
