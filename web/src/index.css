@@ -155,17 +155,9 @@ kbd {
   color: var(--ink);
   text-decoration: none;
 }
-.mark {
-  width: 32px;
-  height: 32px;
+.wordmark .stamp-mark {
   flex: none;
-}
-.mark-head { fill: var(--ink); }
-.mark-bridge {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3.5;
-  stroke-linecap: round;
+  border-radius: 8px;
 }
 
 /* Profile menu */
@@ -1030,3 +1022,15 @@ td.partial { color: var(--accent); font-weight: 600; }
 .game-glossary dt { font-weight: 600; font-size: 0.92rem; }
 .game-glossary dd { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .game-table tbody th { width: 46%; }
+
+/* reconstructed hands (hand_replay/): the GIF is drawn on a white surface, so its frame stays white in dark mode */
+.hand-replay { margin: 14px 0 0; max-width: 400px; display: flex; flex-direction: column; gap: 8px; }
+.hand-replay-frame { aspect-ratio: 4 / 3; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #ffffff; }
+.hand-replay-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.hand-replay-wait { background: color-mix(in srgb, var(--line) 35%, var(--surface)); }
+.hand-replay figcaption { display: flex; flex-direction: column; gap: 2px; font-size: 0.95rem; }
+.hand-toggle { font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--accent); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.hand-toggle:hover, .hand-toggle[aria-expanded='true'] { border-color: var(--accent); }
+.hand-row td { border-top: 0; padding-top: 0; white-space: normal; }
+.hand-row .hand-replay { margin-top: 0; }

@@ -39,7 +39,6 @@
   background: color-mix(in srgb, var(--bg) 88%, #000);
   border-bottom: 1px solid var(--line);
 }
-[data-room='night'] .mark-bridge { stroke: var(--stamp); }
 [data-room='night'] .menu-button { background: var(--surface); }
 [data-room='night'] .avatar { background: var(--accent); color: var(--accent-ink); }
 [data-room='night'] .menu-list { background: var(--surface); border-radius: 8px; }

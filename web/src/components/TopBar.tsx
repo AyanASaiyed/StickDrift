@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../auth'
+import { StampMark } from './StampMark'
 
 function ProfileMenu() {
   const { me, logout } = useAuth()
@@ -84,11 +85,7 @@ export function TopBar() {
     <header className="topbar">
       <div className="wrap topbar-inner">
         <Link to={home} className="wordmark">
-          <svg viewBox="0 0 32 32" aria-hidden className="mark">
-            <path d="M8 13c0 7 3.5 11 8 11s8-4 8-11" className="mark-bridge" />
-            <circle cx="8" cy="9.5" r="4" className="mark-head" />
-            <circle cx="24" cy="9.5" r="4" className="mark-head" />
-          </svg>
+          <StampMark size={36} decorative />
           Stick Drift
         </Link>
         {!loading &&

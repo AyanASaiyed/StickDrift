@@ -58,7 +58,7 @@ The original pygame game (`garden-v3`): four chapters of apple picking with both
 - **Resident page** (`/caregiver/residents/:id`):
   - **Overview.** Status banner and any potential concerns. Each concern shows what changed, what to check first, possible everyday reasons, and its research basis.
   - **Trends.** One line per hand across visits: time to pick an apple, time on the fishing lane, time to slam a rat (and garden or earlier sessions when the resident has them).
-  - **Game visits.** The latest visit as one card per game, plus a table of every visit.
+  - **Game visits.** The latest visit as one card per game, plus a table of every visit. Visits recorded since hand replays were added also have a short **reconstructed hands** GIF (the 3D hands and controller during the busiest few seconds, shake drawn ×10); it is also shown at the end of the live view.
   - **Ask the assistant.** Questions about this resident, answered from their recorded measurements.
 
 ### AI assistant and guardrails
@@ -107,6 +107,14 @@ python seed_accounts.py            # optional: logins for existing residents + a
 uvicorn app.main:app --port 8000
 ```
 
+**2b. Game and model environment.** When a lobby visit ends, the API runs the pattern model (`visit.report`) and draws the reconstructed-hands GIF (`hand_replay.from_capture`) in the root Python 3.14 environment, so install it once from the repository root:
+
+```bash
+uv sync                            # numpy, torch, scipy, matplotlib, pillow, ...
+```
+
+The API looks for `../.venv/bin/python`. On Windows that file does not exist, so set `STICKDRIFT_GAME_PYTHON` in `backend/.env` to the full path of `.venv\Scripts\python.exe`. Without this environment the visit is still saved, but it has no pattern scores and no hand replay.
+
 **3. Web app.**
 
 ```bash
@@ -134,7 +142,7 @@ For the cross-laptop setup, each laptop runs its own API and web app against the
 | `GEMINI_MODEL` | Optional model override (default `gemini-3.8-flash`, with fallbacks) |
 | `CORS_ORIGINS` | Allowed web origins, comma separated (default `http://localhost:5173`) |
 | `GARDEN_RECORDING_TIMEZONE` | Timezone of garden CSV timestamps (default `America/Toronto`) |
-| `STICKDRIFT_GAME_PYTHON`, `STICKDRIFT_API_URL` | Where the API finds Python for the garden game and model, and its own URL |
+| `STICKDRIFT_GAME_PYTHON`, `STICKDRIFT_API_URL` | Where the API finds the root uv environment's Python (garden game, pattern model, hand replays; default `../.venv/bin/python`, on Windows set it to `.venv\Scripts\python.exe`), and its own URL |
 
 ### Running the garden game
 
@@ -180,6 +188,7 @@ Data lives in Tiger Data (managed PostgreSQL with TimescaleDB), so it leaves the
 | `raw_samples` | Hypertable of in-game stick samples with target and in-game hand positions, tagged by game; the training data |
 | `garden_level_results`, `garden_imports` | Imported garden recordings |
 | `live_sessions`, `live_samples` | Short-term buffer for the live view, cleared after a day; finished visits are copied to `sessions` and `raw_samples` first |
+| `session_hand_replays` | One reconstructed-hands GIF (under ~1.5 MB) per lobby visit, plus which game and window it shows; the API creates this table on first use |
 
 Lobby visits are stored as free play: each visit is shown on its own and does not feed a statistical baseline yet. The multi-day histories of the demo residents are **synthetic and labelled as such**.
 
@@ -202,6 +211,8 @@ backend/
   scripts/                   Synthetic demo data, garden import, garden scoring
   seed_accounts.py           Demo logins
 tcn/                         Pattern model: data preparation, network, training, scoring
+visit/                       End-of-visit report for lobby visits (dashboard numbers and pattern scores)
+hand_replay/                 Reconstructed hands + controller GIFs from recordings and from a finished lobby visit
 Controller Data - Zain/      DualSense reader and the pygame garden game
 blender_hub/                 Blender version of the lobby
 Context.MD                   Project context, guardrails and decision log
@@ -221,6 +232,7 @@ All caregiver routes need a caregiver login; `/me/*` routes need a resident logi
 | POST / GET | `/me/garden/launch`, `/me/garden` | Launch the desktop garden game on this computer and check its state |
 | GET | `/caregiver/residents`, `/caregiver/residents/{id}` | Residents with risk; one resident's visits, insights and concerns |
 | GET | `/caregiver/live`, `/caregiver/live/{id}` | Live and recently finished sessions; one session's state and samples |
+| GET | `/caregiver/sessions/{id}/hand-replay.gif` | A lobby visit's reconstructed-hands GIF (404 when it has none) |
 | WS | `/caregiver/live/{id}/ws` | Push stream of one live session |
 | POST | `/caregiver/assistant` | Ask the assistant about all residents or one |
 | GET | `/health` | Database reachable |

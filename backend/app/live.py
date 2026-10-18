@@ -19,6 +19,7 @@ import secrets
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -30,6 +31,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from . import hand_replays
 from .auth import current_caregiver, current_senior
 from .db import pool
 from .live_metrics import SessionMetrics, game_summary
@@ -428,6 +430,9 @@ def my_garden(me: dict = Depends(current_senior)):
 # Rat Catching, stores that document, and drops the frames.
 
 LOBBY_IDLE_S = 60        # a lobby tab that stopped posting this long ago is forgotten
+REPORT_TIMEOUT_S = 180
+REPLAY_TIMEOUT_S = 120   # drawing the reconstructed-hands GIF (hand_replay.from_capture)
+REPLAY_WAIT_S = 600      # how long a drawn GIF waits for the visit's session_id before it is dropped
 
 
 def _forget(s: LiveSession):
@@ -458,7 +463,7 @@ def _run_report(capture: dict) -> dict:
         text=True,
         capture_output=True,
         cwd=ROOT,
-        timeout=180,
+        timeout=REPORT_TIMEOUT_S,
     )
     if out.returncode != 0:
         detail = out.stderr.strip().splitlines()
@@ -467,6 +472,72 @@ def _run_report(capture: dict) -> dict:
     if _holds_frames(report):
         raise RuntimeError("visit report still held the raw frames")
     return report
+
+
+def _run_hand_replay(capture: dict) -> Tuple[bytes, dict]:
+    """Draw the visit's reconstructed-hands GIF; returns its bytes and the details from_capture printed."""
+    python = str(GAME_PYTHON) if GAME_PYTHON.is_file() else sys.executable
+    with tempfile.TemporaryDirectory(prefix="stickdrift-hands-") as tmp:
+        gif_path = Path(tmp) / "hands.gif"
+        out = subprocess.run(
+            [python, "-m", "hand_replay.from_capture", "--out", str(gif_path)],
+            input=json.dumps(capture),
+            text=True,
+            capture_output=True,
+            cwd=ROOT,
+            timeout=REPLAY_TIMEOUT_S,
+            env={**os.environ, "MPLBACKEND": "Agg"},
+        )
+        if out.returncode != 0:
+            detail = out.stderr.strip().splitlines()
+            raise RuntimeError(detail[-1] if detail else "hand replay failed")
+        return gif_path.read_bytes(), json.loads(out.stdout.strip().splitlines()[-1])
+
+
+class _HandReplay:
+    """Draws the GIF beside the visit report, then stores it once the visit's session_id is known.
+
+    Every failure stays in here and is only logged: the visit, its status and its scores never wait on it.
+    """
+
+    def __init__(self, live_id: UUID, capture: dict):
+        self.live_id = live_id
+        # own frame lists, so nothing that clears the capture can empty them under this thread
+        self.capture = {name: {"frames": list(bucket.get("frames") or [])} for name, bucket in capture.items()}
+        self.session_id: Optional[UUID] = None
+        self.known = threading.Event()
+        self.thread = threading.Thread(target=self._run, name=f"hand-replay-{live_id}", daemon=True)
+        self.thread.start()
+
+    def deliver(self, session_id: Optional[UUID]):
+        self.session_id = session_id
+        self.known.set()
+
+    def _run(self):
+        try:
+            gif, meta = _run_hand_replay(self.capture)
+        except Exception as error:
+            log.warning("No hand replay for live session %s: %s", self.live_id, error)
+            return
+        finally:
+            self.capture = None
+        if not self.known.wait(REPLAY_WAIT_S) or self.session_id is None:
+            log.warning("Dropping the hand replay for live session %s: the visit was not saved", self.live_id)
+            return
+        try:
+            hand_replays.store(self.session_id, gif, meta)
+            with pool.connection() as conn:
+                conn.execute("SELECT pg_notify(%s, %s)", (CHANNEL, json.dumps({"i": str(self.live_id), "st": 1})))
+        except Exception:
+            log.exception("Storing the hand replay for visit %s failed", self.session_id)
+
+
+def _start_hand_replay(s: LiveSession, capture: dict) -> Optional[_HandReplay]:
+    try:
+        return _HandReplay(s.id, capture)
+    except Exception:
+        log.exception("Could not start the hand replay for live session %s", s.id)
+        return None
 
 
 def _store_visit(s: LiveSession, report: dict) -> UUID:
@@ -531,6 +602,7 @@ def _attach_report(session_id: UUID, report: dict):
 
 
 def _finish_visit(s: LiveSession, capture: dict, session_id: Optional[UUID] = None):
+    replay = _start_hand_replay(s, capture)
     try:
         report = _run_report(capture)
         if session_id is not None:
@@ -555,6 +627,8 @@ def _finish_visit(s: LiveSession, capture: dict, session_id: Optional[UUID] = No
     finally:
         capture.clear()
         _persist(s)
+        if replay is not None:
+            replay.deliver(session_id)
 
 
 def _end_lobby(s: LiveSession, status: str = "ended"):
@@ -815,17 +889,33 @@ def live_list(_: dict = Depends(current_caregiver)):
     return [_brief(r) for r in rows]
 
 
+def _replay_pending(row: dict) -> bool:
+    """A finished lobby visit whose hand GIF may still be drawing (it runs beside the report)."""
+    if "lobby" not in (row["levels"] or []) or row["hand_replay"] is not None:
+        return False
+    if row["status"] == "scoring":
+        return not row["stale"]
+    ago = row["ended_ago_s"]
+    return (row["status"] in ("finished", "ended") and row["db_session_id"] is not None
+            and ago is not None and float(ago) < REPLAY_TIMEOUT_S + 15)
+
+
 def state(live_id: UUID) -> Optional[dict]:
     """Everything about a live session except its samples, or None if it doesn't exist."""
     with pool.connection() as conn:
+        replay = hand_replays.meta_sql("live_sessions.db_session_id") if hand_replays.exists(conn) else "NULL::jsonb"
         row = conn.execute(
-            f"SELECT {BRIEF_COLUMNS}, trial, phase, seq, metrics, result FROM live_sessions WHERE live_id = %s",
+            f"""SELECT {BRIEF_COLUMNS}, trial, phase, seq, metrics, result,
+                       EXTRACT(EPOCH FROM (now() - ended_at)) AS ended_ago_s, {replay} AS hand_replay
+                FROM live_sessions WHERE live_id = %s""",
             (STALE_S, live_id),
         ).fetchone()
     if row is None:
         return None
     return {**_brief(row), "trial": row["trial"], "phase": row["phase"], "seq": row["seq"],
-            "metrics": row["metrics"] or SessionMetrics().summary(), "result": row["result"]}
+            "metrics": row["metrics"] or SessionMetrics().summary(), "result": row["result"],
+            "hand_replay_ready": row["hand_replay"] is not None, "hand_replay": row["hand_replay"],
+            "hand_replay_pending": _replay_pending(row)}
 
 
 def samples_since(live_id: UUID, since: int, limit: int) -> List[list]:

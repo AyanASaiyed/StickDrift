@@ -96,7 +96,7 @@ export function useLiveFeed(id: string) {
         if (lastSeq.current === 0) showNow(s.samples)
         else enqueue(s.samples)
         const done = DONE.includes(s.status)
-        if (!done || !s.result) timer = window.setTimeout(poll, done ? 3000 : 250)
+        if (!done || !s.result || s.hand_replay_pending) timer = window.setTimeout(poll, done ? 3000 : 250)
       } catch (e) {
         if (stop) return
         setError((e as Error).message)

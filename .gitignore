@@ -9,6 +9,9 @@ venv/
 .DS_Store
 # Local project data and context for hreem
 hreem-folder/
+
+# Recordings and generated datasets stay on disk; do not sync them
+data/
 runs/*
 !runs/tcn/
 runs/tcn/*
