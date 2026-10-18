@@ -62,7 +62,7 @@ def finish_visit(capture, score=None, checkpoint=None):
         "levels_completed": sum(block is not None and block.get("finished") for block in games.values()),
         "games": games,
         "model": model,
-        "dashboard": _dashboard(fused, by_game, games.get("rat")),
+        "dashboard": {**_dashboard(fused, by_game, games.get("rat")), "motion": _has_motion(capture)},
         "live": _chart(games.get("apple"), games.get("fish")),
     }
 
@@ -502,6 +502,15 @@ def _rounds(slams, misses):
     return [by_round[key] for key in sorted(by_round, key=lambda number: (number is None, number or 0))]
 
 
+def _has_motion(capture):
+    """Whether the controller's gyro was recorded: without it a shake cannot be told from a wandering hand."""
+    for name in ("apple", "fish"):
+        for frame in ((capture.get(name) or {}).get("frames") or [])[::25]:
+            if any(frame.get(key) not in (None, 0, 0.0) for key in ("gyro_x", "gyro_y", "gyro_z")):
+                return True
+    return False
+
+
 def _dashboard(scores, by_game, rat):
     """What the caregiver sees after the visit: fused pattern scores and the rat-game score."""
     scored = isinstance(scores, dict) and any(value is not None for value in scores.values())
@@ -764,6 +773,10 @@ def _model_row(frame, activity):
                 "cursor_lx", "cursor_ly", "cursor_rx", "cursor_ry"):
         value = frame.get(key)
         row[key] = "" if value is None or value == "" else value
+    # whether each hand is on its lane: the model reads this as staying on the path, and without it
+    # every fishing visit looks like a hand that never was on the path
+    row["reached_l"] = 0 if frame.get("on_l") in (None, "") else frame.get("on_l")
+    row["reached_r"] = 0 if frame.get("on_r") in (None, "") else frame.get("on_r")
     return row
 
 

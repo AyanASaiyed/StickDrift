@@ -126,6 +126,8 @@ export interface TcnResult {
   levels: TcnLevel[]
   meaning: string
   is_synthetic: boolean
+  /** false when the controller's gyro was not recorded for this visit */
+  motion?: boolean | null
 }
 
 export interface HandLive {

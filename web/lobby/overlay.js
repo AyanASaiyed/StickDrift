@@ -116,6 +116,29 @@ motionBtn.addEventListener('click', () => {
   motionBtn.blur()
   motion.connect()
 })
+// a banner, not just the small button: without the sensor a tremor can't be told from a wandering path
+const banner = document.createElement('div')
+banner.id = 'motion-banner'
+banner.hidden = true
+banner.innerHTML = '<b></b><span></span><button type="button"></button>'
+document.body.appendChild(banner)
+const bannerBtn = banner.querySelector('button')
+bannerBtn.addEventListener('click', () => motion.connect())
 motion.onChange((on) => {
+  const text = banner.querySelector('span')
+  if (!motion.supported) {
+    banner.querySelector('b').textContent = 'Motion sensors need Chrome or Edge'
+    text.textContent = 'Without them, a shaking controller can look like a hand wandering off the path.'
+    bannerBtn.hidden = true
+    banner.hidden = false
+  } else if (!on) {
+    banner.querySelector('b').textContent = 'Motion sensors are off'
+    text.textContent = 'Connect the controller so a shake is recorded. Otherwise tremor can be mistaken for something else.'
+    bannerBtn.textContent = 'Connect controller'
+    bannerBtn.hidden = false
+    banner.hidden = false
+  } else {
+    banner.hidden = true
+  }
   motionBtn.style.display = motion.supported && !on ? '' : 'none'
 })

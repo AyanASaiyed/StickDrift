@@ -244,6 +244,12 @@ function LatestJudgement({ visit }: { visit: GameSession }) {
         Latest visit <span className="muted section-sub">{formatDateTime(visit.started_at)}</span>
       </h2>
       {scored && scores && <PatternBars scores={scores} levels={visit.tcn?.levels} />}
+      {scored && visit.tcn?.motion === false && (
+        <p className="muted">
+          The controller’s motion sensor was not recorded on this visit, so a shake in the hands can be mistaken for a
+          hand wandering off the path. Treat “Hand weaves off a moving path” with care.
+        </p>
+      )}
       {!scored && visit.tcn?.levels?.some((level) => level.error) && (
         <p className="error">The pattern model could not score Apple Picking and Harbour Fishing for this visit.</p>
       )}

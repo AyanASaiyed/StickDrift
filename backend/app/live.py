@@ -507,6 +507,7 @@ def _report_metrics(report: dict) -> dict:
         "tcn": {
             "scores": dashboard.get("scores") if "scores" in dashboard else model.get("scores"),
             "levels": dashboard.get("levels") or [],
+            "motion": dashboard.get("motion"),
             "by_game": model.get("by_game") or {},
             "meaning": model.get("meaning"),
             "schema_version": report.get("schema_version"),
