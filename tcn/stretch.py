@@ -195,6 +195,9 @@ def _stretch(
     path = float(np.hypot(np.diff(slow_x), np.diff(slow_y)).sum())
     speed_ratio = path / duration / travel
     amplitude = travel if amplitude_override is None else amplitude_override
+    move_speed = travel / max(duration, 1e-3)
+    gyro_slice = gyro_resid[:, start:end]
+    gyro_level = float(np.sqrt(np.mean(gyro_slice * gyro_slice))) if gyro_slice.size else 0.0
     along, across, has_target = _miss(prepared, aim_pair, start, end, in_task)
     series = np.vstack(
         [
@@ -210,7 +213,10 @@ def _stretch(
         ]
     )
     fixed = _fixed(series, segment.stretch_steps)
-    constants = np.asarray([speed_ratio, amplitude, latency_s, has_cue, 1.0], dtype=np.float32)
+    constants = np.asarray(
+        [speed_ratio, amplitude, latency_s, has_cue, 1.0, gyro_level, move_speed],
+        dtype=np.float32,
+    )
     constant_rows = np.repeat(constants[:, None], segment.stretch_steps, axis=1)
     values = np.vstack([fixed, constant_rows])
     if values.shape[0] != len(HAND_CHANNELS):

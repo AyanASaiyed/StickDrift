@@ -9,7 +9,7 @@ forces those scores to add up to 100.
 import torch
 from torch import nn
 
-from tcn.config import DROPOUT, HAND_SCORES, HIDDEN, KERNEL, LEVELS
+from tcn.config import DROPOUT, HAND_CHANNELS, HAND_SCORES, HIDDEN, KERNEL, LEVELS
 
 
 class TemporalBlock(nn.Module):
@@ -51,7 +51,21 @@ class PatternTCN(nn.Module):
         self.blocks = nn.ModuleList(
             TemporalBlock(hidden, kernel, 2**level, dropout) for level in range(levels)
         )
-        self.head = nn.Linear(hidden, n_scores)
+        # Tremor reads the gyroscope on top of the shared features. Impairment
+        # reads this hand's speed and whether later reaches got smaller.
+        # Stroke is the gap between the two hands' impairment, so a speed
+        # difference becomes a stroke score. Parkinson is the impairment
+        # they share.
+        self.tremor_head = nn.Linear(hidden + 1, 1)
+        self.impair_head = nn.Linear(hidden + 2, 1)
+        self.diabetes_head = nn.Linear(hidden, 1)
+        self.gyro_index = HAND_CHANNELS.index("gyro_level")
+        self.speed_index = HAND_CHANNELS.index("move_speed")
+        self.shrink_index = HAND_CHANNELS.index("shrink_ratio")
+        _favor(self.tremor_head, [2.5])
+        _favor(self.impair_head, [-2.5, -1.5])
+        if n_scores != 3:
+            raise ValueError("The pattern network scores tremor, impairment, and diabetes.")
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
         """Score a batch of single-hand stretches.
@@ -67,7 +81,24 @@ class PatternTCN(nn.Module):
         else:
             weights = mask.unsqueeze(1)
             pooled = (hidden * weights).sum(dim=-1) / weights.sum(dim=-1).clamp(min=1.0)
-        return torch.sigmoid(self.head(pooled)) * 100.0
+        gyro = x[:, self.gyro_index].abs().mean(dim=-1, keepdim=True)
+        speed = x[:, self.speed_index].mean(dim=-1, keepdim=True)
+        shrink = x[:, self.shrink_index].mean(dim=-1, keepdim=True)
+        tremor = self.tremor_head(torch.cat([pooled, gyro], dim=1))
+        impairment = self.impair_head(torch.cat([pooled, speed, shrink], dim=1))
+        diabetes = self.diabetes_head(pooled)
+        return torch.sigmoid(torch.cat([tremor, impairment, diabetes], dim=1)) * 100.0
+
+
+def _favor(layer: nn.Linear, feature_weights: list[float]) -> None:
+    """Start with a normal readout, then give the trait columns a head start."""
+    nn.init.xavier_uniform_(layer.weight)
+    nn.init.zeros_(layer.bias)
+    count = len(feature_weights)
+    with torch.no_grad():
+        layer.weight[:, -count:] = 0.0
+        for index, weight in enumerate(feature_weights):
+            layer.weight[0, -count + index] = weight
 
 
 def _groups(channels: int) -> int:

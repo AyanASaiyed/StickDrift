@@ -49,6 +49,10 @@ HAND_CHANNELS = (
     "latency_s",
     "has_cue",
     "shrink_ratio",
+    # How hard the controller itself is shaking, and how fast this hand
+    # actually moved. The tremor and impairment heads read these directly.
+    "gyro_level",
+    "move_speed",
 )
 
 # Network outputs for a single hand. Recording scores are derived from these.
@@ -66,7 +70,7 @@ LEVELS = 6
 KERNEL = 3
 DROPOUT = 0.1
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 SCORE_MEANING = "0-100 pattern resemblance, not a disease probability"
 
 
