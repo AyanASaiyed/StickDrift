@@ -4,7 +4,8 @@ Gemini writes the narrative as structured JSON in a clinical-documentation regis
 (objective observations kept apart from interpretation, graded hedging, explicit
 limitations). The facts, tables, charts, scope statement and disclaimer are built
 deterministically, so the model never touches them. Every Gemini draft is checked:
-a disease name, a number that is not in the facts, or emotive wording sends it back
+a condition name (other than the pattern model's own pattern names), a number that
+is not in the facts, or emotive wording sends it back
 for one revision and then falls back to a template built from the same facts.
 """
 import json
@@ -66,8 +67,10 @@ population norm) and flag any simulated data.
 Hard rules
 - Use ONLY the FACTS block. Quote numbers exactly as written there (for example 0.82 s, 75%, -2 pts). Do not \
 compute, round or invent numbers, dates, doses, diagnoses, history or caregiver actions.
-- NEVER name or imply a disease or diagnosis (for example stroke, Parkinson's, dementia, MS, tremor disorder, \
-neuropathy). Describe the functional change only ("slower left-hand responses").
+- The pattern model scores resemblance to patterns named Parkinson's, stroke, essential tremor, diabetes \
+and ataxia. Use those names only as pattern resemblance ("resembled the Parkinson's pattern, 34/100"). NEVER \
+state or imply that the resident has a disease, and never name any other condition (for example dementia, MS, \
+neuropathy). Otherwise describe the functional change ("slower left-hand responses").
 - Possible contributors are everyday, non-diagnostic factors (tiredness, pain, medication change, vision, \
 setup), offered for the clinician to consider, never as conclusions.
 - If an irregularity involves new one-sided weakness, facial droop or speech difficulty, a consideration must \
@@ -144,7 +147,8 @@ def _strings(v) -> List[str]:
 def _problems(draft: dict, facts: str, has_concerns: bool) -> Optional[str]:
     text = "\n".join(_strings(draft))
     if names_condition(text):
-        return "It named a medical condition. Describe only the measured functional change."
+        return ("It named a medical condition outside the pattern model's five pattern names. Describe only the "
+                "measured functional change.")
     extra = unverified(text, facts)
     if extra:
         return f"These numbers are not in the FACTS block: {', '.join(extra[:6])}. Use only numbers from FACTS."
@@ -221,7 +225,8 @@ INK = colors.HexColor("#1f2933")
 MUTED = colors.HexColor("#5b6773")
 ACCENT = colors.HexColor("#1f5f8b")
 RULE = colors.HexColor("#c9d1d9")
-BLUE, ORANGE, GREEN = colors.HexColor("#1f5f8b"), colors.HexColor("#c4701c"), colors.HexColor("#3b8a5a")
+# hands match the games and the site: red = left stick, blue = right stick
+RED, BLUE, GREEN = colors.HexColor("#e02424"), colors.HexColor("#2a78d6"), colors.HexColor("#3b8a5a")
 
 SS = getSampleStyleSheet()
 BODY = ParagraphStyle("body", parent=SS["BodyText"], fontName="Helvetica", fontSize=9.5, leading=13,
@@ -366,7 +371,7 @@ def _game_cell(g: dict, key: str) -> str:
 def _per_hand(rows: List[dict], get) -> List[tuple]:
     """Left and right series over visits (x = 1, 2, ...), skipping visits without a value."""
     out = []
-    for name, side, color in (("Left", "left", BLUE), ("Right", "right", ORANGE)):
+    for name, side, color in (("Left", "left", RED), ("Right", "right", BLUE)):
         pts = []
         for i, r in enumerate(rows):
             v = get(r, side)
@@ -448,10 +453,10 @@ def build_pdf(p: dict, draft: dict, source: str, note: Optional[str], tz: tzinfo
 
         by = {f["key"]: f for f in ins["findings"]}
         base = by["left_latency"]["baseline"] / 1000 if "left_latency" in by else None
-        charts += [_chart("Reaction test: median response time (s)", [("Left", left, BLUE), ("Right", right, ORANGE)],
+        charts += [_chart("Reaction test: median response time (s)", [("Left", left, RED), ("Right", right, BLUE)],
                           base, "%.2f"),
-                   _chart("Reaction test: accuracy (% correct)", [("Left", accs("left_correct", "left_valid"), BLUE),
-                          ("Right", accs("right_correct", "right_valid"), ORANGE),
+                   _chart("Reaction test: accuracy (% correct)", [("Left", accs("left_correct", "left_valid"), RED),
+                          ("Right", accs("right_correct", "right_valid"), BLUE),
                           ("Both", accs("both_correct", "both_valid"), GREEN)], None, "%.0f")]
         if base is not None:
             notes.append("Dashed line: the resident's usual left-hand response time (median of earlier sessions).")

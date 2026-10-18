@@ -10,6 +10,7 @@ import type {
 import {
   HANDS,
   HZ,
+  PATTERN_HINTS,
   PATTERN_LABELS,
   PATTERN_ORDER,
   handCursor,
@@ -618,7 +619,10 @@ export function PatternBars({
             v == null ? null : v >= 70 ? "check" : v >= 50 ? "watch" : null;
           return (
             <li key={k}>
-              <span className="pattern-label">{PATTERN_LABELS[k]}</span>
+              <span className="pattern-label">
+                {PATTERN_LABELS[k]}
+                <small className="pattern-hint">{PATTERN_HINTS[k]}</small>
+              </span>
               <span className="pattern-track" aria-hidden>
                 <span
                   className="pattern-fill"

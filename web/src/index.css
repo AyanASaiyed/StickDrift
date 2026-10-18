@@ -18,12 +18,15 @@
   --role-resident-ink: #ffffff;
   --role-care: #4a55b8;
   --role-care-ink: #ffffff;
-  --hand-left: #2a78d6;
-  --hand-right: #eb6834;
+  /* matches the games: red glove = left stick, blue glove = right stick */
+  --hand-left: #e02424;
+  --hand-right: #2a78d6;
   --hand-both: #1baf7a;
   --pat-1: #1baf7a;
   --pat-2: #6250d6;
   --pat-3: #eda100;
+  --pat-4: #d6457a;
+  --pat-5: #1b8fb0;
   --radius: 14px;
   --font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --topbar: 68px;
@@ -49,12 +52,14 @@
     --role-resident-ink: #0b2417;
     --role-care: #9aa5f0;
     --role-care-ink: #0f1330;
-    --hand-left: #3987e5;
-    --hand-right: #d95926;
+    --hand-left: #ff5c5c;
+    --hand-right: #4d94ec;
     --hand-both: #199e70;
     --pat-1: #199e70;
     --pat-2: #9085e9;
     --pat-3: #c98500;
+    --pat-4: #e8719a;
+    --pat-5: #4fb3d1;
     color-scheme: dark;
   }
 }
@@ -775,6 +780,7 @@ td.num {
 .pattern-list li { display: grid; grid-template-columns: 260px 1fr 70px 120px; gap: 12px; align-items: center; }
 @media (max-width: 760px) { .pattern-list li { grid-template-columns: 1fr auto; } .pattern-track { grid-column: 1 / -1; } }
 .pattern-label { font-weight: 700; }
+.pattern-hint { display: block; font-weight: 400; font-size: 0.82rem; color: var(--muted); margin-top: 1px; }
 .pattern-track { position: relative; height: 16px; border-radius: 8px; background: color-mix(in srgb, var(--line) 55%, transparent); }
 .pattern-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: var(--accent); }
 .pattern-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); opacity: 0.45; }

@@ -276,12 +276,22 @@ MODEL_WATCH = 50.0
 MODEL_CHECK = 70.0
 
 # Model output keys -> wording shown to caregivers. The keys come from tcn/config.py.
+# The pattern model's own outputs; each score is resemblance to that pattern, not a diagnosis.
+# Keep in step with web/src/components/liveData.ts.
 PATTERN_LABELS = {
-    "parkinson": "Slowed, smaller movements in both hands",
-    "stroke": "One-sided difference between hands",
-    "essential_tremor": "Shake during movement",
-    "diabetes": "Reaches land past or short, then correct",
-    "ataxia": "Hand weaves off a moving path",
+    "parkinson": "Parkinson's",
+    "stroke": "Stroke",
+    "essential_tremor": "Essential tremor",
+    "diabetes": "Diabetes",
+    "ataxia": "Ataxia",
+}
+
+PATTERN_HINTS = {
+    "parkinson": "slowed, smaller movements in both hands",
+    "stroke": "one hand clearly weaker or slower than the other",
+    "essential_tremor": "rhythmic shake while the hand moves",
+    "diabetes": "reaches land past or short, then correct",
+    "ataxia": "hand weaves off a moving path",
 }
 
 PATTERN_GUIDE = {
@@ -370,9 +380,9 @@ def add_model_concerns(insights: dict, garden_sessions: List[dict], kind: str = 
                      if (part.get("scores") or {}).get(key) is not None]
         concerns.append(_concern_raw(
             f"model_{key}" if kind == "garden" else f"model_{kind}_{key}",
-            f"Model pattern: {label.lower()}", "check" if score >= MODEL_CHECK else "watch",
+            f"Model pattern: {label}", "check" if score >= MODEL_CHECK else "watch",
             f"At the end of the {when} {noun}{simulated}, the movement pattern model rated it "
-            f"{score:.0f} out of 100 for resemblance to this pattern.",
+            f"{score:.0f} out of 100 for resemblance to this pattern ({PATTERN_HINTS[key]}).",
             [f"{label}: {score:.0f}/100 pattern resemblance ({noun}, {when})."] + per_part,
             contributors, checks,
         ))

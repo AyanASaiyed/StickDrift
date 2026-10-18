@@ -69,17 +69,19 @@ The assistant (Google Gemini, `backend/app/assistant.py`) receives only structur
 - Answers that name a disease or condition are replaced with a referral to a clinician.
 - If the API key is missing or Gemini is unavailable, a rule-based answer built directly from the records is returned instead.
 
-Potential concerns come from fixed rules (latest result vs that resident's own usual level) and, for garden visits, the pattern model below. They always use neutral movement wording, such as "One-sided difference between hands", never a diagnosis.
+Potential concerns come from fixed rules (latest result vs that resident's own usual level) and, for garden visits, the pattern model below. They name the model's pattern, such as "Stroke", as a resemblance score, never as a diagnosis.
 
 ### Pattern model (`tcn/`)
 
 A temporal convolutional network that scores garden recordings 0–100 for resemblance to five movement patterns. The labels caregivers see are:
 
-- slowed, smaller movements in both hands;
-- a one-sided difference between hands;
-- shake during movement;
-- reaches that land past or short, then correct;
-- a hand that weaves off a moving path.
+- **Parkinson's:** slowed, smaller movements in both hands;
+- **Stroke:** one hand clearly weaker or slower than the other;
+- **Essential tremor:** rhythmic shake while the hand moves;
+- **Diabetes:** reaches that land past or short, then correct;
+- **Ataxia:** a hand that weaves off a moving path.
+
+The labels are the model's own output names. Each score is resemblance to that pattern, never a diagnosis; the assistant and report may use these five names only in that sense and still refuse any other condition name.
 
 These are pattern resemblance, not disease probabilities. The model is trained on teammate-recorded and synthetic data only. **No trained checkpoint is committed.** Until `runs/tcn/model.pt` exists, garden visits are saved without a judgement. See [Training the pattern model](#training-the-pattern-model).
 
