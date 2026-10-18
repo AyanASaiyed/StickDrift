@@ -1,4 +1,4 @@
-# Stick Drift
+# 🕹️ Stick Drift
 
 Controller games for senior-living and long-term-care residents that help care teams notice when someone's movement changes.
 
@@ -6,9 +6,9 @@ A resident logs in, opens a small 3D game lobby, and plays short games with a PS
 
 The output is **a change worth checking**, never a diagnosis. Stick Drift does not name conditions, predict disease, or decide whether something is an emergency. A nurse or caregiver reads the numbers, adds context, and decides what happens next.
 
-> Built for Hack the Valley 11 (PointClickCare: Catch It Early).
+> 🏆 Built for Hack the Valley 11 (PointClickCare: Catch It Early). Live at [stickdrift.health](https://stickdrift.health).
 
-## How it works
+## ⚙️ How it works
 
 ```
 Resident's laptop                                         Caregiver's laptop (any computer)
@@ -19,49 +19,56 @@ Browser: 3D lobby + games ──samples──► FastAPI ──┐   ┌──�
                                           live buffer · NOTIFY · history · samples
 ```
 
-1. **Play.** The resident logs in and clicks **Open the lobby**. They walk Grandma around a 3D lobby with the left stick and step onto a pad to start a game.
-2. **Stream.** The lobby sends stick samples, in-game hand and target positions, and one result per attempt to the resident's API, about ten times a second. That API writes them to Tiger Data and sends a Postgres `NOTIFY`.
-3. **Watch live.** Any caregiver's API `LISTEN`s and pushes updates to their browser over a WebSocket. The live view shows the sticks, distance from target and measurements as they happen, about 0.1 s behind the resident.
-4. **Save.** When the visit ends, it becomes a permanent session in the resident's history with per-game, per-hand results. Only in-game samples are kept for analysis and training. Walking around the lobby, menus and countdowns are dropped.
-5. **Review.** Caregivers see each resident's visits, trends across visits, any potential concerns with recommended checks, and can ask the assistant questions grounded in the recorded numbers.
+1. 🎮 **Play.** The resident logs in and clicks **Open the lobby**. They walk Grandma around a 3D lobby with the left stick and step onto a pad to start a game.
+2. 📡 **Stream.** The lobby sends stick samples, in-game hand and target positions, and one result per attempt to the resident's API, about ten times a second. That API writes them to Tiger Data and sends a Postgres `NOTIFY`.
+3. 👀 **Watch live.** Any caregiver's API `LISTEN`s and pushes updates to their browser over a WebSocket. The live view shows the sticks, distance from target and measurements as they happen, about 0.1 s behind the resident.
+4. 💾 **Save.** When the visit ends, it becomes a permanent session in the resident's history with per-game, per-hand results. Only in-game samples are kept for analysis and training. Walking around the lobby, menus and countdowns are dropped.
+5. 📈 **Review.** Caregivers see each resident's visits, trends across visits, any potential concerns with recommended checks, and can ask the assistant questions grounded in the recorded numbers.
 
 The two laptops share nothing but the Tiger Data database. If the resident's API runs older code and sends no notifications, the caregiver's API reads new samples directly every 0.15 s, so the view stays live either way.
 
-## The games
+## 🎮 The games
 
-### Web lobby (main experience)
+### 🏠 Web lobby (main experience)
 
 A three.js lobby that runs in the browser at `/lobby.html`. Residents open it from their home page in a new tab.
 
 | Game | What the resident does | What it measures, per hand |
 | --- | --- | --- |
-| **Apple Picking** | Steer a red glove (left stick) and a blue glove (right stick) to matching apples, then carry them to the basket | Apples picked, time to pick, reaction time, peak speed, how far the stick was pushed |
-| **Harbour Fishing** | Trace a glowing lane with the fishing lure, one hand at a time | Distance from the lane, share of time on the lane, shake and its rhythm |
-| **Rat Catching** | Flick a stick up to slam the hand when the target rat runs underneath | Target rats caught, time to slam, reaction time |
+| 🍎 **Apple Picking** | Steer a red glove (left stick) and a blue glove (right stick) to matching apples, then carry them to the basket | Apples picked, time to pick, reaction time, peak speed, how far the stick was pushed |
+| 🎣 **Harbour Fishing** | Trace a glowing lane with the fishing lure, one hand at a time | Distance from the lane, share of time on the lane, shake and its rhythm |
+| 🐀 **Rat Catching** | Flick a stick up to slam the hand when the target rat runs underneath | Target rats caught, time to slam, reaction time |
 
 Controls: left stick walks, right stick moves the camera, Cross enters a game, Circle leaves it. A keyboard fallback exists (WASD, IJKL, Space, O); visits played that way are labelled **keyboard input** everywhere. Each game shows a score and 0–3 stars to the resident. Those are for fun and are separate from the caregiver measurements.
 
 The games move an in-game hand with the stick (velocity control), so distance from target compares that hand with its target, while speed and shake are read from the stick itself. The game logic lives in `web/lobby/*.js`. `web/lobby/measure.js` reads each game's state without changing it.
 
-### Mabel's Moonflower Garden (desktop game)
+In Chrome or Edge, **Enable motion sensors** in the lobby opens the DualSense over WebHID (`web/lobby/motion.js`) and adds its gyroscope and accelerometer to the recording. Without it the games still work from the Gamepad API alone.
+
+Each finished game is also written to `data/ultimate_data/<timestamp>_lobby/` (`backend/app/lobby_record.py`), the folder the pattern model trains on.
+
+### 🌙 Mabel's Moonflower Garden (desktop game)
 
 The original pygame game (`garden-v3`): four chapters of apple picking with both sticks, a left-stick and a right-stick butterfly flight, and watering with both sticks. It records every controller report (~500 Hz) to CSV, imports the recording into Tiger Data, and appears on the resident's page as **Garden visits**. The site no longer opens it, but it can still be run directly (see [Running the garden game](#running-the-garden-game)).
 
-### Blender lobby
+### 🧊 Blender lobby
 
 `blender_hub/hub_world.py` is the same lobby and games built inside Blender 5 (Windows only). It is a design reference and does not send data to Stick Drift. See [blender_hub/README.md](blender_hub/README.md).
 
-## What caregivers see
+## 🩺 What caregivers see
 
 - **Dashboard** (`/caregiver`). Every resident with a risk badge ("No concerns", "Keep an eye on", "Check soon"), who is playing right now, and visits that just finished.
 - **Live view** (`/caregiver/live/:id`). Each in-game hand against its target, a rolling 20-second chart (distance from target or stick tilt), and measurements updating as the resident plays.
 - **Resident page** (`/caregiver/residents/:id`):
   - **Overview.** Status banner and any potential concerns. Each concern shows what changed, what to check first, possible everyday reasons, and its research basis.
   - **Trends.** One line per hand across visits: time to pick an apple, time on the fishing lane, time to slam a rat (and garden or earlier sessions when the resident has them).
-  - **Game visits.** The latest visit as one card per game, plus a table of every visit. Visits recorded since hand replays were added also have a short **reconstructed hands** GIF (the 3D hands and controller during the busiest few seconds, shake drawn ×10); it is also shown at the end of the live view.
+  - **Game visits.** The latest visit as one card per game, the pattern chart for that visit, and a table of every visit. Visits recorded since hand replays were added also have a short **reconstructed hands** GIF (the 3D hands and controller during the busiest few seconds, shake drawn ×10); it is also shown at the end of the live view.
   - **Ask the assistant.** Questions about this resident, answered from their recorded measurements.
+  - **Clinician report (PDF).** A one-click summary of visits, per-hand results, pattern scores and concerns for a nurse or doctor (`backend/app/report.py`). Gemini writes the short narrative under the same checks as the assistant, with a template fallback.
 
-### AI assistant and guardrails
+The left hand is always red and the right hand always blue, in the games and on every chart.
+
+### 🤖 AI assistant and guardrails
 
 The assistant (Google Gemini, `backend/app/assistant.py`) receives only structured facts built from the database: measurements, changes from usual, concerns, recommended checks, and recent visits. Its answers are filtered before they are shown:
 
@@ -69,21 +76,23 @@ The assistant (Google Gemini, `backend/app/assistant.py`) receives only structur
 - Answers that name a disease or condition are replaced with a referral to a clinician.
 - If the API key is missing or Gemini is unavailable, a rule-based answer built directly from the records is returned instead.
 
-Potential concerns come from fixed rules (latest result vs that resident's own usual level) and, for garden visits, the pattern model below. They name the model's pattern, such as "Stroke", as a resemblance score, never as a diagnosis.
+Potential concerns come from fixed rules (latest result vs that resident's own usual level) and the pattern model below. A pattern score of 50 or more gives "Keep an eye on", and 70 or more gives "Check soon". Concerns name the model's pattern, such as "Stroke", as a resemblance score, never as a diagnosis.
 
-### Pattern model (`tcn/`)
+### 🧠 Pattern model (`tcn/`)
 
-A temporal convolutional network that scores garden recordings 0–100 for resemblance to movement patterns. The labels caregivers see are:
+A temporal convolutional network (PyTorch) that scores each visit 0–100 for resemblance to three movement patterns:
 
-- **Parkinson's:** slowed, smaller movements in both hands;
-- **Stroke:** one hand clearly weaker or slower than the other;
-- **Essential tremor:** rhythmic shake while the hand moves.
+- 🧓 **Parkinson's:** slowed, smaller movements in both hands;
+- ✋ **Stroke:** one hand clearly weaker or slower than the other;
+- 〰️ **Essential tremor:** rhythmic shake while the hand moves.
 
-The labels are the model's own output names. Each score is resemblance to that pattern, never a diagnosis; the assistant and report may use these three names only in that sense and still refuse any other condition name.
+One shared network reads short stretches of each hand's movement and gives two outputs per hand: tremor and impairment. Parkinson's is the impairment both hands share, stroke is the gap between the hands, and essential tremor is the higher tremor score of the two hands.
 
-These are pattern resemblance, not disease probabilities. The model is trained on teammate-recorded and synthetic data only. **No trained checkpoint is committed.** Until `runs/tcn/model.pt` exists, garden visits are saved without a judgement. See [Training the pattern model](#training-the-pattern-model).
+When a lobby visit ends, `visit/report.py` scores Apple Picking and Harbour Fishing with the model. Parkinson's and essential tremor are averaged across the two games; stroke comes from Apple Picking, the only game where both hands move together. **Rat Catching is not scored by the model.** Its correctness (target rats caught, misses, wrong slams) and reaction time are counted directly from the game's events. Garden visits are scored by `backend/scripts/score_garden.py`.
 
-## Running locally
+The model is trained locally by the team, on a laptop, from the lobby visits we played and recorded (plus synthetic data), and saved as `runs/tcn/model.pt`. That file is committed to the repo, and the backend loads it from disk each time it scores a visit, including at demo time. Nothing is trained or downloaded while the app runs. It was not trained on patients. The labels are the model's own output names; each score is resemblance to that pattern, never a diagnosis or a disease probability. The assistant and report may use these three names only in that sense and refuse any other condition name. The model no longer scores diabetes or ataxia, and the loader skips the old recordings for those patterns.
+
+## 🚀 Running locally
 
 You need Node 20+, Python 3.9+ for the backend, Python 3.14 with [uv](https://docs.astral.sh/uv/) for the games and model, Chrome or Edge, and a [Tiger Data](https://www.tigerdata.com/) service.
 
@@ -132,19 +141,19 @@ The Vite dev server proxies `/api` (including the live WebSocket) to `http://loc
 
 For the cross-laptop setup, each laptop runs its own API and web app against the same `DATABASE_URL`.
 
-### Environment variables (`backend/.env`)
+### 🔑 Environment variables (`backend/.env`)
 
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Tiger Data connection string (never commit it) |
 | `CAREGIVER_INVITE_CODE` | Access code required to register a caregiver; empty turns registration off |
-| `GEMINI_API_KEY` | Enables the AI assistant; without it the rule-based answers are used |
+| `GEMINI_API_KEY` | Enables the AI assistant and the PDF narrative; without it the rule-based and template text are used |
 | `GEMINI_MODEL` | Optional model override (default `gemini-3.8-flash`, with fallbacks) |
 | `CORS_ORIGINS` | Allowed web origins, comma separated (default `http://localhost:5173`) |
 | `GARDEN_RECORDING_TIMEZONE` | Timezone of garden CSV timestamps (default `America/Toronto`) |
 | `STICKDRIFT_GAME_PYTHON`, `STICKDRIFT_API_URL` | Where the API finds the root uv environment's Python (garden game, pattern model, hand replays; default `../.venv/bin/python`, on Windows set it to `.venv\Scripts\python.exe`), and its own URL |
 
-### Running the garden game
+### 🌻 Running the garden game
 
 From the repository root:
 
@@ -162,18 +171,26 @@ python -m scripts.import_garden ../data --dry-run
 python -m scripts.import_garden ../data
 ```
 
-### Training the pattern model
+### 🏋️ Training the pattern model
 
-The model trains in the root Python 3.14 environment on recordings whose folder names are the labels (see `tcn/labels.py`):
+The model trains in the root Python 3.14 environment (`uv sync`). Recordings are labelled by their folder names (Baseline, Parkinsons, Tremor, Stroke/Left Weak or Right Weak; see `tcn/labels.py`):
 
 ```bash
-uv run python -m tcn.synthetic                                   # writes data/Synthetic
-uv run python -c "from tcn import fit, load_examples; fit(load_examples('data'))"
+uv run python -m tcn.synthetic                                   # optional: writes data/Synthetic
+uv run python -c "from tcn import fit, load_training_examples; fit(load_training_examples('data'))"
 ```
 
-This writes `runs/tcn/model.pt`. Once that file exists, the API scores each garden visit with `backend/scripts/score_garden.py` when the game closes.
+`load_training_examples` reads the apple and fishing recordings under `data/ultimate_data` and leaves out Rat Catching. Training writes `runs/tcn/model.pt`; the checkpoint carries a schema version, so code and checkpoint from different versions refuse to load together. Restart the API after replacing it.
 
-## Data and privacy
+## ☁️ Deployment
+
+The public site runs on Cloudflare:
+
+- A **Cloudflare Worker** (`wrangler.jsonc`, `cloudflare/worker.js`) builds `web/` and serves `web/dist`. It forwards `/api/*` to the FastAPI backend named by the Worker secret `BACKEND_URL`, so the login cookie and the live WebSocket stay on one origin. Pushing to `main` redeploys it through Cloudflare's GitHub integration.
+- The backend runs on a laptop behind a named **Cloudflare Tunnel** (`api.stickdrift.health` → `localhost:8000`). Add the site's origins (`https://stickdrift.health`, the `workers.dev` URL) to `CORS_ORIGINS`, or the live WebSocket is refused.
+- The pattern model needs the root `.venv` on the backend machine. Without it, visits are saved but not scored.
+
+## 🔒 Data and privacy
 
 Data lives in Tiger Data (managed PostgreSQL with TimescaleDB), so it leaves the laptop:
 
@@ -192,7 +209,7 @@ Data lives in Tiger Data (managed PostgreSQL with TimescaleDB), so it leaves the
 
 Lobby visits are stored as free play: each visit is shown on its own and does not feed a statistical baseline yet. The multi-day histories of the demo residents are **synthetic and labelled as such**.
 
-## Project layout
+## 🗂️ Project layout
 
 ```
 web/
@@ -208,17 +225,23 @@ backend/
   app/live_metrics.py        Per-hand movement measurements (reach, tracking, shake, left-right difference)
   app/views.py, insights.py  Caregiver resident data, concerns and recommended checks
   app/assistant.py           Gemini assistant with grounding and wording checks
+  app/report.py              Clinician PDF report
+  app/lobby_record.py        Writes finished lobby games to data/ultimate_data for training
   scripts/                   Synthetic demo data, garden import, garden scoring
   seed_accounts.py           Demo logins
 tcn/                         Pattern model: data preparation, network, training, scoring
-visit/                       End-of-visit report for lobby visits (dashboard numbers and pattern scores)
+runs/tcn/model.pt            Trained pattern-model checkpoint
+visit/report.py              Scores a finished lobby visit (pattern model + Rat Catching counts)
 hand_replay/                 Reconstructed hands + controller GIFs from recordings and from a finished lobby visit
+study/                       Tools for the Noy et al. (2025) mirror-game tracking dataset
+tests/                       Python and Node tests (visit report, lobby recording, measurements, rat timing)
+cloudflare/, wrangler.jsonc  Cloudflare Worker that serves the site and proxies /api
 Controller Data - Zain/      DualSense reader and the pygame garden game
 blender_hub/                 Blender version of the lobby
 Context.MD                   Project context, guardrails and decision log
 ```
 
-### API
+### 🔌 API
 
 All caregiver routes need a caregiver login; `/me/*` routes need a resident login.
 
@@ -235,14 +258,16 @@ All caregiver routes need a caregiver login; `/me/*` routes need a resident logi
 | GET | `/caregiver/sessions/{id}/hand-replay.gif` | A lobby visit's reconstructed-hands GIF (404 when it has none) |
 | WS | `/caregiver/live/{id}/ws` | Push stream of one live session |
 | POST | `/caregiver/assistant` | Ask the assistant about all residents or one |
+| GET | `/caregiver/residents/{id}/report.pdf` | Clinician PDF report (`?tz=` prints times in the reader's zone) |
+| POST | `/lobby/record/start`, `/lobby/record/level`, `/lobby/record/end` | Save finished lobby games as training recordings |
 | GET | `/health` | Database reachable |
 
 `main.py` also keeps a lower-level `/participants` and `/sessions/{id}/…` API for recording sessions sample by sample, and `/garden/recordings` and `/sessions/{id}/garden-timeline` for imported garden data.
 
-## Limitations
+## ⚠️ Limitations
 
 - This is a hackathon prototype, not a medical device, and it has not been clinically validated. All thresholds are untested design choices, not clinical cutoffs.
 - A change in results can come from fatigue, sleep, medication, vision, unfamiliarity with game controllers, how the controller is held, or a faulty device.
 - Lobby measurements are sampled at about 60 Hz in the browser, including display and network delay. They are not precise to the millisecond and are not a pure motor-speed measure.
-- The pattern model is trained on teammate-simulated and synthetic recordings only, and no trained model is committed.
+- The pattern model is trained on teammate-simulated and synthetic recordings only. Its scores have not been checked against real patients.
 - Anyone with a sudden new neurological symptom needs normal urgent care. Nobody should wait on a game score.

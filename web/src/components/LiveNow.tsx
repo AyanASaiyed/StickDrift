@@ -29,7 +29,7 @@ function topPattern(b: LiveBrief) {
   const entries = PATTERN_ORDER.filter((k) => scores[k] != null).map((k) => [k, scores[k] as number] as const)
   if (!entries.length) return null
   const [key, value] = entries.sort((a, z) => z[1] - a[1])[0]
-  return { label: PATTERN_LABELS[key], value }
+  return { label: PATTERN_LABELS[key] ?? key, value }
 }
 
 /** Live and recently finished garden sessions. With participantId, only that resident's. */
@@ -101,7 +101,7 @@ export function LiveNow({ participantId, compact }: { participantId?: string; co
                   <strong>{b.name}</strong> ·{' '}
                   {b.levels.includes('lobby')
                     ? `played ${b.levels_done.length} of ${chapterCount(b.levels)} games`
-                    : SHORT[b.status].toLowerCase()}
+                    : (SHORT[b.status] ?? b.status ?? '').toLowerCase()}
                   {b.rat?.score != null ? ` · Rat Catching ${b.rat.score} pts` : ''}
                   {top && top.value >= 50 ? ` · ${top.label.toLowerCase()} ${Math.round(top.value)}/100` : ''}
                   <span className="live-card-cta"> Open →</span>
