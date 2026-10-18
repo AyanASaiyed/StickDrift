@@ -43,7 +43,7 @@ Music and effects are synthesised in the browser with the Web Audio API (`audio.
 Each game has its own generated music loop (lobby, apple, fishing with lapping water, rat chase), plus effects for walking,
 entering pads, countdowns, picking/dropping apples, tracing, the splash, rat squeaks, the slam, and result fanfares
 (more stars = longer fanfare, plus a sparkle for a new high score). The speaker button (bottom right) or the **M** key mutes;
-the choice is remembered. Sound starts after you click Start (browsers block audio before a click).
+the choice is remembered. There is no start screen: the lobby opens straight into the garden. Browsers keep sound locked until the first click, key press or button press, so the music begins at that point.
 
 ## Exit door
 

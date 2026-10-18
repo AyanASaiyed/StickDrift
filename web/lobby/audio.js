@@ -1,6 +1,6 @@
 // Music and sound effects, all synthesised with the Web Audio API - no audio files to download or license.
 //
-//   audio.init()            call from a click (browsers keep audio locked until then)
+//   audio.autoStart()       build the graph at page load; the first click / key / button press unlocks it
 //   audio.setTrack(name)    'lobby' | 'apple' | 'fish' | 'rat' | null   (cross-fades)
 //   audio.sfx.<name>(...)   one-shot effects, see the SFX table at the bottom
 //   M key / the speaker button toggle mute (remembered in localStorage)
@@ -37,7 +37,22 @@ class AudioEngine {
     })
   }
 
-  /** Create the audio graph. Must be called from a user gesture (the Start click). */
+  /** Build the graph now (browsers keep it suspended) and unlock it on the first click, key press or controller input. */
+  autoStart() {
+    this.init()
+    for (const e of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(e, () => this.nudge())
+  }
+
+  /** Try to resume a suspended context. Called on any input; throttled because a refused resume() is just a no-op. */
+  nudge() {
+    if (!this.ctx || this.ctx.state !== 'suspended' || document.hidden) return
+    const now = performance.now()
+    if (now - (this.lastNudge || 0) < 400) return
+    this.lastNudge = now
+    this.ctx.resume()
+  }
+
+  /** Create the audio graph. Playing only begins once the browser lets the context run (after a user gesture). */
   init() {
     if (this.ctx) return this.ctx.resume()
     const AC = window.AudioContext || window.webkitAudioContext

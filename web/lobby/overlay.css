@@ -96,16 +96,6 @@ body { font-family: var(--body); }
 #label { position: fixed; transform: translate(-50%, 0); pointer-events: none; z-index: 2; padding: 3px 14px; border-radius: 999px; font: 600 17px var(--display); color: var(--text); background: var(--ink); border: 1px solid var(--edge); }
 #label:empty { display: none; }
 
-/* ---- start screen ---- */
-#start { position: fixed; inset: 0; display: grid; place-items: center; z-index: 5; background: radial-gradient(circle at 50% 35%, rgba(34, 52, 44, 0.96), rgba(8, 11, 10, 0.98)); color: var(--text); text-align: center; }
-#start .box { max-width: min(92vw, 520px); padding: 0 12px; }
-#start h1 { margin: 0 0 6px; font: 700 clamp(38px, 6vw, 60px)/1 var(--display); background: linear-gradient(180deg, #fff, #ffd98a); -webkit-background-clip: text; background-clip: text; color: transparent; }
-#start .sub { margin: 0 0 22px; font: 500 20px var(--display); color: var(--muted); }
-#start ul { list-style: none; margin: 0 0 22px; padding: 0; text-align: left; display: inline-block; font-size: 17px; line-height: 1.7; }
-#start li b { font: 600 15px var(--display); color: var(--gold); display: inline-block; min-width: 120px; }
-#start .kb { font-size: 14px; color: var(--muted); margin: 0 0 20px; }
-#start button { padding: 12px 40px; font: 600 22px var(--display); border: 0; border-radius: 999px; background: linear-gradient(180deg, #ffd24a, #ffb300); color: #3a2400; cursor: pointer; box-shadow: 0 6px 0 #b87800, 0 12px 24px rgba(0, 0, 0, 0.35); }
-#start button:active { transform: translateY(3px); box-shadow: 0 3px 0 #b87800; }
 
 /* ---- sound button ---- */
 #mute { right: 18px; bottom: 14px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border-radius: 50%; color: var(--text); cursor: pointer; pointer-events: auto; }

@@ -96,6 +96,7 @@ const clock = new THREE.Clock()
 let running = false
 let slow = 0, fast = 0, uiAcc = 1, lastView = null
 let leaving = false // set once the player has gone through the exit door
+let liveStarted = false
 
 /** Frame-time governor: ~1 s of slow frames lowers the render resolution one step; ~4 s of fast frames raises it. */
 function adapt(dt) {
@@ -118,6 +119,11 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
   if (!running) return
   const pad = input.read()
+  if (!liveStarted && pad.source !== 'none') { // open the caregiver's live session once we know what the player is using
+    liveStarted = true
+    live.start(pad.source !== 'gamepad', ['lobby', 'apple', 'fish', 'rat'])
+  }
+  if (pad.enter || pad.back || pad.cam || pad.zoom || pad.move[2] > 0 || pad.look[0] || pad.look[1]) audio.nudge()
   live.source(pad.source)
   if (leaving) {
     renderer.render(hub.scene, hub.camera) // keep the last frame under the goodbye screen
@@ -171,20 +177,17 @@ async function init() {
   for (const v of [hub, ...Object.values(games)]) renderer.compile(v.scene, v.camera)
   refreshScores()
   // handy for debugging / automated checks
-  window.__lobby = { hub, games, input, live, record, get active() { return active }, startGame, leaveGame, renderer, renderUi }
+  window.__lobby = { hub, games, input, live, record, audio, get active() { return active }, startGame, leaveGame, renderer, renderUi }
+  // no start screen: begin straight away. Audio starts suspended and is unlocked by the first click / key / button press.
+  audio.autoStart()
+  audio.setTrack('lobby')
+  running = true
+  clock.getDelta()
   window.addEventListener('pagehide', () => {
     if (activeName) record.end({ completed: levelDone(active), score: active.points?.(), stars: active.stars?.() }, true)
     record.finish(true)
   })
 }
 
-$('go').addEventListener('click', () => {
-  $('start').style.display = 'none'
-  audio.init() // browsers only allow sound after a click
-  audio.setTrack('lobby')
-  running = true
-  clock.getDelta()
-  live.start(input.read().source !== 'gamepad', ['lobby', 'apple', 'fish', 'rat'])
-})
 init()
 requestAnimationFrame(frame)
