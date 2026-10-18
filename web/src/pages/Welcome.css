@@ -1,4 +1,4 @@
-/* Welcome page: reuses the log-in page's stage, orbs, card and buttons (Auth.css); this adds the role cards and the steps. */
+/* Welcome page: reuses the log-in page's stage, orbs, card and buttons (Auth.css); this adds the role cards. */
 .wl-side {
   min-width: 0;
 }
@@ -36,74 +36,4 @@
 }
 .wl-btn:hover {
   color: var(--acc-ink);
-}
-
-/* how a visit works: one calm list, not three equal cards */
-.wl-how {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: clamp(24px, 6vw, 88px);
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: clamp(24px, 4vw, 56px) clamp(16px, 4vw, 32px) clamp(48px, 8vw, 110px);
-}
-.wl-how h2 {
-  margin: 0;
-  max-width: 10ch;
-  font: 600 clamp(2rem, 4vw, 3rem) / 1.05 var(--display);
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-}
-.wl-how ol {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.wl-how li {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 20px;
-  padding: 22px 18px;
-  margin: 0 -18px;
-  border-radius: 22px;
-  transition: background 0.4s var(--ease);
-}
-.wl-how li:hover {
-  background: color-mix(in srgb, var(--acc) 9%, transparent);
-}
-.wl-ico {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--acc) 15%, transparent);
-  color: var(--acc);
-  transition: transform 0.5s var(--ease);
-}
-.wl-how li:hover .wl-ico {
-  transform: rotate(-6deg) scale(1.06);
-}
-.wl-how h3 {
-  margin: 2px 0 6px;
-  font-size: 1.2rem;
-}
-.wl-how p {
-  margin: 0;
-  max-width: 52ch;
-  color: var(--muted);
-  line-height: 1.55;
-  text-wrap: pretty;
-}
-
-@media (max-width: 900px) {
-  .wl-how {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-  .wl-how h2 {
-    max-width: none;
-  }
 }

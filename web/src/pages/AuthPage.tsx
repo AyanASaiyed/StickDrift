@@ -25,14 +25,14 @@ type Mode = 'login' | 'signup'
 const COPY = {
   resident: {
     login: {
-      title: 'Back to the *garden.*',
+      title: 'Back to the *games.*',
       stage: 'Log in and pick up where you left off. Three games are waiting.',
       card: 'Resident log in',
-      lede: 'Welcome back. Log in to visit Mabel’s garden.',
+      lede: 'Welcome back. Log in to pick up your games.',
       cta: 'Log in',
     },
     signup: {
-      title: 'Your own corner of the *garden.*',
+      title: 'Your own place to *play.*',
       stage: 'A nickname is all you need. Please don’t use your real name.',
       card: 'Create a resident account',
       lede: 'Set up your own account to play the games.',

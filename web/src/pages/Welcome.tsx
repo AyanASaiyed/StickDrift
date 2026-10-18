@@ -1,29 +1,11 @@
 import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowRight, ArrowUpRight, ChartLineUp, Door, HandPalm, Plant, ShieldCheck } from '@phosphor-icons/react'
+import { ArrowRight, ArrowUpRight, Plant, ShieldCheck } from '@phosphor-icons/react'
 import { Headline } from '../components/Headline'
 import './Auth.css'
 import './Welcome.css'
 
 const GAMES = ['Apple Picking', 'Harbour Fishing', 'Rat Catching']
-
-const STEPS = [
-  {
-    icon: HandPalm,
-    title: 'Two sticks, two hands',
-    text: 'Each thumbstick moves one hand, so every game gives both a turn.',
-  },
-  {
-    icon: Door,
-    title: 'Short, and easy to stop',
-    text: 'A game takes about a minute. Use the door at the edge of the garden to finish whenever you like.',
-  },
-  {
-    icon: ChartLineUp,
-    title: 'Your care team can help',
-    text: 'Your care team sees how each visit went and anything worth checking in on.',
-  },
-]
 
 /** A role card: nested bezel, border that lights up under the cursor, and a beam running round the edge. */
 function RoleCard({
@@ -107,10 +89,10 @@ export default function Welcome() {
             frame.current?.style.setProperty('--ry', '0deg')
           }}
         >
-          <Headline text="A visit to Mabel’s *garden.*" />
+          <Headline text="Games you play with *two thumbs.*" />
           <p className="au-lede" data-in style={{ '--d': 4 } as CSSProperties}>
-            Walk around a little garden with your PS5 controller and pick a game: apple picking, harbour fishing or rat
-            catching. It takes a few minutes, and you can rest any time.
+            Short games for a PS5 controller, with one stick for each hand. Pick one and play at your own pace. Your care
+            team can see how each visit went.
           </p>
           <div ref={frame} className="au-frame" data-in style={{ '--d': 6 } as CSSProperties}>
             <div>
@@ -136,7 +118,7 @@ export default function Welcome() {
               icon={<Plant size={20} weight="light" aria-hidden />}
               badge="Resident"
               title="I’m here to play"
-              text="Step into the garden and take a short visit."
+              text="Open the lobby and pick a game."
               primary={{ to: '/login', label: 'Resident log in' }}
               secondary={{ to: '/signup', label: 'New here? Create an account' }}
               delay={2}
@@ -155,24 +137,6 @@ export default function Welcome() {
         </div>
       </div>
 
-      <section className="wl-how" aria-labelledby="wl-how-title">
-        <h2 id="wl-how-title" data-in style={{ '--d': 5 } as CSSProperties}>
-          How a visit works
-        </h2>
-        <ol>
-          {STEPS.map(({ icon: Icon, title, text }, i) => (
-            <li key={title} data-in style={{ '--d': 6 + i } as CSSProperties}>
-              <span className="wl-ico" aria-hidden>
-                <Icon size={26} weight="light" />
-              </span>
-              <div>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
     </main>
   )
 }
