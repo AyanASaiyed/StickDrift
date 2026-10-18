@@ -1,71 +1,52 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { Eye, EyeSlash, WarningCircle } from '@phosphor-icons/react'
 import type { Hand } from '../api'
 import { useAuth } from '../auth'
+import { Lantern } from '../components/Lantern'
+import { StampMark } from '../components/StampMark'
+import { useNightRoom } from '../components/useNightRoom'
+import '../components/room.css'
+import './Auth.css'
 
 type Who = 'resident' | 'caregiver'
 type Mode = 'login' | 'signup'
 
 const COPY = {
   resident: {
-    badge: 'Resident',
-    login: { title: 'Resident log in', lede: 'Welcome back. Log in to visit Mabel’s garden.', cta: 'Log in' },
-    signup: { title: 'Create a resident account', lede: 'Set up your own account to play the garden game.', cta: 'Create my account' },
+    login: { title: 'Resident log in', lede: 'Welcome back. Log in to pick up your games.', cta: 'Log in', line: 'Back to the games' },
+    signup: { title: 'Create a resident account', lede: 'Set up your own account to play the games.', cta: 'Create my account', line: 'Your own place to play' },
     path: { login: '/login', signup: '/signup' },
   },
   caregiver: {
-    badge: 'Care team',
-    login: { title: 'Care team log in', lede: 'See residents’ results, trends and anything worth checking in on.', cta: 'Log in to the care dashboard' },
-    signup: { title: 'Register as care team', lede: 'You’ll need the access code from your care team lead.', cta: 'Register' },
+    login: {
+      title: 'Care team log in',
+      lede: 'See residents’ results, trends and anything worth checking in on.',
+      cta: 'Log in to the care dashboard',
+      line: 'See how everyone is doing',
+    },
+    signup: { title: 'Register as care team', lede: 'The code keeps residents’ results private.', cta: 'Register', line: 'Join your care team' },
     path: { login: '/caregiver/login', signup: '/caregiver/signup' },
   },
 } as const
 
-function RoleIcon({ who }: { who: Who }) {
-  return who === 'resident' ? (
-    <svg viewBox="0 0 24 24" aria-hidden className="role-icon">
-      <path d="M12 21v-7" />
-      <path d="M12 14c-4 0-6-2.5-6-6 4 0 6 2 6 6Z" />
-      <path d="M12 14c4 0 6-2.5 6-6-4 0-6 2-6 6Z" />
-    </svg>
-  ) : (
-    <svg viewBox="0 0 24 24" aria-hidden className="role-icon">
-      <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6l-8-3Z" />
-      <path d="M12 8.5v5M9.5 11h5" />
-    </svg>
-  )
-}
-
-/** "Who are you?" switch shown on every login and signup page, so the two worlds are never confused. */
-function RoleSwitch({ who, mode, from }: { who: Who; mode: Mode; from: string }) {
+/** A labelled field on the paper: the label sits above the box, large enough to read without squinting. */
+function Field({
+  id,
+  label,
+  hint,
+  right,
+  ...input
+}: { id: string; label: string; hint?: string; right?: ReactNode } & InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <nav className="role-switch" aria-label="Who is signing in?">
-      {(['resident', 'caregiver'] as Who[]).map((w) => (
-        <Link
-          key={w}
-          to={COPY[w].path[mode]}
-          state={w === 'resident' ? { from } : undefined}
-          className={`role-tab role-tab-${w} ${who === w ? 'on' : ''}`}
-          aria-current={who === w ? 'page' : undefined}
-        >
-          <RoleIcon who={w} />
-          <span>
-            <small>I’m a</small>
-            {w === 'resident' ? 'Resident' : 'Care team member'}
-          </span>
-        </Link>
-      ))}
-    </nav>
-  )
-}
-
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="field">
+    <div className="af">
       <label htmlFor={id}>{label}</label>
-      {children}
+      <div className="af-box">
+        <input id={id} aria-describedby={hint ? `${id}-hint` : undefined} {...input} />
+        {right}
+      </div>
       {hint && (
-        <p id={`${id}-hint`} className="hint">
+        <p id={`${id}-hint`} className="af-hint">
           {hint}
         </p>
       )}
@@ -73,7 +54,19 @@ function Field({ id, label, hint, children }: { id: string; label: string; hint?
   )
 }
 
+/** 0-4 from length and variety. A nudge, not a rule: the server only needs 8 characters. */
+function strength(pw: string): number {
+  if (!pw) return 0
+  let s = pw.length >= 8 ? 1 : 0
+  if (pw.length >= 12) s += 1
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s += 1
+  if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) s += 1
+  return Math.min(4, Math.max(pw.length >= 3 ? 1 : 0, s))
+}
+const LEVELS = ['', 'Short', 'Okay', 'Good', 'Strong']
+
 export default function AuthPage({ who, mode }: { who: Who; mode: Mode }) {
+  useNightRoom()
   const { me, loginSenior, signupSenior, loginCaregiver, signupCaregiver } = useAuth()
   const navigate = useNavigate()
   const from = (useLocation().state as { from?: string } | null)?.from ?? (who === 'caregiver' ? '/caregiver' : '/')
@@ -118,113 +111,142 @@ export default function AuthPage({ who, mode }: { who: Who; mode: Mode }) {
         : 'I’m new here · Create a resident account'
       : isSignup
         ? 'I already have an account · Log in'
-        : 'I’m new to the care team · Register';
+        : 'I’m new to the care team · Register'
+  const level = strength(password)
 
   return (
-    <main className={`wrap page-pad auth-page auth-${who}`}>
-      <RoleSwitch who={who} mode={mode} from={from} />
+    <main className={`room au-page ${who === 'resident' ? 'dye-resident' : 'dye-care'}`}>
+      {/* .door: the lantern lights up while you are writing in the form beside it */}
+      <div className="au-grid door">
+        <aside className="au-side">
+          <Lantern shape={who === 'resident' ? 'column' : 'moon'} cord={who === 'resident' ? 70 : 110} delay={150}>
+            <b>{who === 'resident' ? 'Resident' : 'Care team'}</b>
+            <small>{text.line}</small>
+          </Lantern>
+        </aside>
 
-      <form className="panel auth" onSubmit={submit} noValidate>
-        <p className="role-badge">
-          <RoleIcon who={who} /> {COPY[who].badge}
-        </p>
-        <h1>{text.title}</h1>
-        <p className="muted">{text.lede}</p>
+        <section className="au-sheet" aria-labelledby="au-title">
+          <StampMark size={44} />
+          <nav className="au-tags" aria-label="Who is signing in?">
+            {(['resident', 'caregiver'] as Who[]).map((w) => (
+              <Link
+                key={w}
+                to={COPY[w].path[mode]}
+                state={w === 'resident' ? { from } : undefined}
+                className="au-tag"
+                aria-current={who === w ? 'page' : undefined}
+              >
+                {w === 'resident' ? 'Resident' : 'Care team'}
+              </Link>
+            ))}
+          </nav>
 
-        {who === 'caregiver' && isSignup && (
-          <Field id="display" label="Your name (shown to your team)" hint="Optional. Leave blank to use your username.">
-            <input
-              id="display"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              autoComplete="name"
-              maxLength={40}
-              aria-describedby="display-hint"
+          <h1 id="au-title">{text.title}</h1>
+          <p className="au-lede">{text.lede}</p>
+
+          <form onSubmit={submit} noValidate>
+            {who === 'caregiver' && isSignup && (
+              <Field
+                id="display"
+                label="Your name (shown to your team)"
+                hint="Optional. Leave blank to use your username."
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                autoComplete="name"
+                maxLength={40}
+              />
+            )}
+
+            <Field
+              id="username"
+              label="Username"
+              hint={isSignup ? (who === 'resident' ? 'A nickname or code, 3–24 characters. Please don’t use your real name.' : '3–24 characters.') : undefined}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              autoCapitalize="none"
+              maxLength={24}
+              required
+              autoFocus
             />
-          </Field>
-        )}
 
-        <Field
-          id="username"
-          label="Username"
-          hint={isSignup ? (who === 'resident' ? 'A nickname or code, 3–24 characters. Please don’t use your real name.' : '3–24 characters.') : undefined}
-        >
-          <input
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            autoCapitalize="none"
-            maxLength={24}
-            required
-            autoFocus
-            aria-describedby={isSignup ? 'username-hint' : undefined}
-          />
-        </Field>
-
-        <Field id="password" label="Password" hint={isSignup ? 'At least 8 characters.' : undefined}>
-          <div className="password">
-            <input
+            <Field
               id="password"
+              label="Password"
+              hint={isSignup ? 'At least 8 characters.' : undefined}
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={isSignup ? 'new-password' : 'current-password'}
               maxLength={128}
               required
-              aria-describedby={isSignup ? 'password-hint' : undefined}
+              right={
+                <button
+                  type="button"
+                  className="af-show"
+                  onClick={() => setShowPassword((s) => !s)}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeSlash size={24} weight="light" aria-hidden /> : <Eye size={24} weight="light" aria-hidden />}
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              }
             />
-            <button type="button" className="btn btn-quiet btn-small" onClick={() => setShowPassword((s) => !s)}>
-              {showPassword ? 'Hide' : 'Show'}
+            {isSignup && (
+              <div className="af-meter" aria-live="polite">
+                {[1, 2, 3, 4].map((n) => (
+                  <i key={n} className={level >= n ? 'on' : ''} />
+                ))}
+                <span>{LEVELS[level]}</span>
+              </div>
+            )}
+
+            {who === 'caregiver' && isSignup && (
+              <Field
+                id="code"
+                label="Care team access code"
+                hint="Ask your care team lead. It keeps residents’ results private."
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                autoComplete="off"
+                autoCapitalize="characters"
+                maxLength={128}
+                required
+              />
+            )}
+
+            {who === 'resident' && isSignup && (
+              <fieldset className="af-hand">
+                <legend>Which hand do you usually write with?</legend>
+                <div>
+                  {(['left', 'right', 'unknown'] as Hand[]).map((h) => (
+                    <label key={h} className={hand === h ? 'on' : ''}>
+                      <input type="radio" name="hand" value={h} checked={hand === h} onChange={() => setHand(h)} />
+                      {h === 'unknown' ? 'Not sure' : h[0].toUpperCase() + h.slice(1)}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {error && (
+              <p className="af-error" role="alert" key={error}>
+                <WarningCircle size={26} weight="light" aria-hidden />
+                {error}
+              </p>
+            )}
+
+            <button type="submit" className="stamp af-submit" disabled={busy || !ready}>
+              {busy ? 'One moment…' : text.cta}
             </button>
-          </div>
-        </Field>
+          </form>
 
-        {who === 'caregiver' && isSignup && (
-          <Field id="code" label="Care team access code" hint="Ask your care team lead. It keeps residents’ results private.">
-            <input
-              id="code"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              autoComplete="off"
-              autoCapitalize="characters"
-              maxLength={128}
-              required
-              aria-describedby="code-hint"
-            />
-          </Field>
-        )}
-
-        {who === 'resident' && isSignup && (
-          <fieldset className="field">
-            <legend>Which hand do you usually write with?</legend>
-            <div className="segmented">
-              {(['left', 'right', 'unknown'] as Hand[]).map((h) => (
-                <label key={h} className={hand === h ? 'on' : ''}>
-                  <input type="radio" name="hand" value={h} checked={hand === h} onChange={() => setHand(h)} />
-                  {h === 'unknown' ? 'Not sure' : h[0].toUpperCase() + h.slice(1)}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
-
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-
-        <button type="submit" className="btn btn-big btn-role" disabled={busy || !ready}>
-          {busy ? 'One moment…' : text.cta}
-        </button>
-
-        <div className="auth-swap">
-          <Link className="btn btn-outline-role" to={COPY[who].path[swapMode]} state={who === 'resident' ? { from } : undefined}>
+          <Link className="au-swap" to={COPY[who].path[swapMode]} state={who === 'resident' ? { from } : undefined}>
             {swapLabel}
           </Link>
-        </div>
-      </form>
+        </section>
+      </div>
     </main>
   )
 }

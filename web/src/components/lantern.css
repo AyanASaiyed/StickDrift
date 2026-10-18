@@ -1,0 +1,131 @@
+/* Lanterns hang on a cord, sway a little, switch on one after another, and brighten when their door is hovered or focused. */
+.lt {
+  --w: 260px;
+  position: relative;
+  width: var(--w);
+  margin: 0 auto;
+  padding-top: var(--cord);
+}
+.lt-moon {
+  --w: 320px;
+}
+
+/* the cord: a fixed length runs up out of the page to the pivot, and the rest swings with the lantern */
+.lt::before,
+.lt-swing::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background: color-mix(in srgb, var(--rib) 80%, transparent);
+}
+.lt::before {
+  top: -600px;
+  height: 600px;
+}
+.lt-swing::before {
+  top: calc(var(--cord) * -1);
+  height: calc(var(--cord) + 4px);
+}
+
+/* light thrown on the wall */
+.lt-spill {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--cord) + 50%);
+  width: 190%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--mid) 42%, transparent), transparent);
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 0.6s var(--ease), scale 0.6s var(--ease);
+  animation: lt-on 1.8s var(--ease) both;
+  animation-delay: var(--delay);
+}
+.door:hover .lt-spill,
+.door:focus-within .lt-spill {
+  opacity: 0.95;
+  scale: 1.06;
+}
+
+.lt-swing {
+  position: relative;
+  transform-origin: 50% calc(var(--cord) * -1);  /* the pivot is where the cord leaves the ceiling */
+  animation: lt-sway 8s ease-in-out infinite alternate;
+  animation-delay: calc(var(--delay) * -1);
+}
+@keyframes lt-sway {
+  from {
+    transform: rotate(-1.4deg);
+  }
+  to {
+    transform: rotate(1.4deg);
+  }
+}
+.lt-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 18px 22px rgba(6, 2, 12, 0.5));
+}
+
+.lt-cord {
+  fill: none;
+  stroke: var(--rib);
+  stroke-width: 2;
+}
+.lt-rib {
+  fill: none;
+  stroke: color-mix(in srgb, var(--rib) 70%, #5a3a1a);
+  stroke-width: 2.2;
+  opacity: 0.75;
+}
+.lt-cap {
+  fill: var(--rib);
+}
+.lt-bulb {
+  opacity: 0.6;
+  transition: opacity 0.5s var(--ease);
+  animation: lt-on 1.8s var(--ease) both;
+  animation-delay: var(--delay);
+}
+.door:hover .lt-bulb,
+.door:focus-within .lt-bulb {
+  opacity: 1;
+}
+@keyframes lt-on {
+  from {
+    opacity: 0.05;
+  }
+}
+
+/* what is printed on the paper */
+.lt-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14%;
+  text-align: center;
+  color: var(--paper-ink);
+  pointer-events: none;
+}
+.lt-moon .lt-label {
+  padding: 0 19%;
+}
+.lt-label b {
+  font: 900 clamp(1.7rem, 2.6vw, 2.2rem) / 1.05 var(--display);
+  letter-spacing: -0.01em;
+}
+.lt-label small {
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}

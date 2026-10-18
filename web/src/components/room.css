@@ -1,0 +1,108 @@
+/* The "evening room" the welcome and log-in pages sit in. While one of those pages is mounted, <html data-room="night">
+   swaps the app tokens for a dim aubergine room so the top bar and page read as one space, whatever the system theme is. */
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap');
+
+:root[data-room='night'] {
+  --bg: #1b1224;
+  --surface: #261a33;
+  --ink: #f4ede6;
+  --muted: #cdc1d6;
+  --line: #43325a;
+  --accent: #f0a79c;
+  --accent-ink: #2a1320;
+  --role-resident: #8fe0a6;
+  --role-resident-ink: #0f2a1b;
+  --role-care: #b3acff;
+  --role-care-ink: #181347;
+  color-scheme: dark;
+}
+:root[data-room='night'] body {
+  background: var(--bg);
+}
+
+/* shared by every page in the room */
+.room {
+  --room-bg: #1b1224;
+  --paper: #f5eee4;
+  --paper-ink: #261a2e;
+  --paper-muted: #55485f;
+  --rib: #c9a77a;
+  --stamp: #d93a2b;
+  --stamp-ink: #fff3ea;
+  --display: 'Zen Maru Gothic', 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100dvh - var(--topbar, 68px));
+  overflow: clip;
+  color: var(--ink);
+}
+.room *::selection {
+  background: var(--stamp);
+  color: var(--stamp-ink);
+}
+
+/* dyed washi: the colours a lantern glows */
+.dye-resident {
+  --core: #fff6d2;
+  --mid: #8fe0a6;
+  --edge: #247a53;
+}
+.dye-care {
+  --core: #f3efff;
+  --mid: #a8a0f6;
+  --edge: #4439b0;
+}
+
+/* a vermilion stamp that presses in */
+.stamp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--stamp);
+  color: var(--stamp-ink);
+  font: 700 1.3rem / 1.1 var(--display);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #8f1f16, 0 10px 18px rgba(8, 3, 14, 0.45);
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), filter 0.18s var(--ease);
+}
+.stamp::before {
+  /* the carved double border of a hanko impression */
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 2px solid color-mix(in srgb, var(--stamp-ink) 55%, transparent);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.stamp:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+.stamp:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #8f1f16, 0 4px 10px rgba(8, 3, 14, 0.45);
+}
+.stamp:focus-visible {
+  outline: 4px solid var(--ink);
+  outline-offset: 4px;
+}
+.stamp:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room *,
+  .room *::before,
+  .room *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
