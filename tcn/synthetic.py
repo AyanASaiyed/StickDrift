@@ -68,9 +68,9 @@ def _person(
     ataxia: float = 0.0,
     weak_hand: str | None = None,
 ) -> Condition:
-    shared = _motion_strength(parkinson)
-    sided = _motion_strength(stroke)
-    shake = _motion_strength(tremor)
+    shared = parkinson / 100.0
+    sided = stroke / 100.0
+    shake = tremor / 100.0
     gain_left = 1.0 - 0.22 * shared
     gain_right = 1.0 - 0.22 * shared
     if weak_hand == "left":
@@ -94,11 +94,6 @@ def _person(
     )
 
 
-def _motion_strength(score: float) -> float:
-    """How strongly a labeled score is acted. The label itself stays unchanged."""
-    return (score / 100.0) * MOTION_SCALE
-
-
 def _levels(parkinson: float, stroke: float, tremor: float, diabetes: float, ataxia: float) -> tuple[str, ...]:
     """Apple cannot show ataxia. Fishing cannot show diabetes. Rat is not generated."""
     normal = parkinson == stroke == tremor == diabetes == ataxia == 0
@@ -110,10 +105,6 @@ def _levels(parkinson: float, stroke: float, tremor: float, diabetes: float, ata
     return tuple(levels)
 
 
-# A stored label of 100 is drawn with this fraction of the full cartoon.
-# 0.5 makes today's half-strength movement the example for a score of 100,
-# so a milder real play lands higher on the dashboard.
-MOTION_SCALE = 0.5
 _SEVERITIES = (25.0, 50.0, 75.0, 100.0)
 _DISEASES = (
     ("Parkinson", "parkinson", None),
@@ -231,7 +222,7 @@ def _aimed(condition, hand, start, goal, elapsed, index, diabetes: bool):
         unit = (elapsed - condition.latency_s) / condition.move_s
         scale = _ease(unit)
         if diabetes and condition.diabetes > 0.0:
-            scale = _diabetes_scale(unit, _motion_strength(condition.diabetes), index)
+            scale = _diabetes_scale(unit, condition.diabetes / 100.0, index)
     aimed = (
         start[0] + (goal[0] - start[0]) * gain * scale,
         start[1] + (goal[1] - start[1]) * gain * scale,
@@ -253,7 +244,7 @@ def _fish_cursor(condition, hand, center, time_s):
     point = (center[0] * gain, center[1] * gain)
     if condition.ataxia <= 0.0:
         return _wobble(condition, hand, point, time_s)
-    amount = 0.06 + 0.28 * _motion_strength(condition.ataxia)
+    amount = 0.06 + 0.28 * condition.ataxia / 100.0
     side = amount * math.sin(2.0 * math.pi * 0.28 * time_s)
     lead = amount * 0.7 * math.sin(2.0 * math.pi * 0.18 * time_s + 0.6)
     tx, ty = center
