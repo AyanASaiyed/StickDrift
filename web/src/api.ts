@@ -337,6 +337,10 @@ export interface GardenSecond {
   disconnected_count: number
 }
 
+const OFFLINE = 'Sorry, the servers are currently offline.'
+// 502/503/504 come from the proxy and 530 from Cloudflare's tunnel when the backend is switched off.
+const isOffline = (status: number) => [502, 503, 504, 530].includes(status)
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
@@ -345,8 +349,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { 'Content-Type': 'application/json', ...init?.headers },
     })
   } catch {
-    throw new ApiError(0, "Can't reach the Stick Drift server. Is the backend running?")
+    throw new ApiError(0, OFFLINE)
   }
+  if (isOffline(res.status)) throw new ApiError(res.status, OFFLINE)
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     const detail =
@@ -368,8 +373,9 @@ async function download(path: string): Promise<{ blob: Blob; filename: string; s
   try {
     res = await fetch(`${API}${path}`)
   } catch {
-    throw new ApiError(0, "Can't reach the Stick Drift server. Is the backend running?")
+    throw new ApiError(0, OFFLINE)
   }
+  if (isOffline(res.status)) throw new ApiError(res.status, OFFLINE)
   if (!res.ok) throw new ApiError(res.status, 'The report could not be created. Try again in a moment.')
   const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')
   return { blob: await res.blob(), filename: match?.[1] ?? 'stick-drift-summary.pdf', source: res.headers.get('X-Report-Source') ?? '' }
